@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  IslandCart — EC2 instance role/profile, least-privilege for exactly what
+  the backend needs: read/write the receipts bucket, read SSM parameters
+  under /islandcart/*, send email via SES. Depends on storage.yaml (imports
+  its bucket ARN) — deploy storage.yaml first.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: islandcart-test
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-instance-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: receipts-bucket-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub
+                  - "${BucketArn}/*"
+                  - BucketArn: !ImportValue
+                      Fn::Sub: "${EnvironmentName}-ReceiptsBucketArn"
+        - PolicyName: ssm-parameter-read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/islandcart/*"
+        - PolicyName: ses-send
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                # SES doesn't expose a per-identity ARN until a sender
+                # address/domain is verified — tighten this to that
+                # identity's ARN once you know it (see infra/README.md).
+                Resource: "*"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${EnvironmentName}-instance-profile"
+      Roles:
+        - !Ref InstanceRole
+
+Outputs:
+  InstanceProfileName:
+    Value: !Ref InstanceProfile
+    Export:
+      Name: !Sub "${EnvironmentName}-InstanceProfileName"

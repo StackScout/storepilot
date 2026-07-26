@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(command -v nvm)",
+      "Read(//Users/nilangavirajith/.nvm/versions/**)",
+      "Bash(command -v fnm)",
+      "Bash(command -v n)",
+      "Bash(command -v volta)",
+      "Bash(curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh)",
+      "Bash(bash)",
+      "Bash(node -e \"const m = require\\('lucide-react'\\); console.log\\(typeof m.ShoppingCart, typeof m.Search, typeof m.Star, typeof m.Menu, typeof m.LayoutDashboard, typeof m.Package, typeof m.ClipboardList, typeof m.Settings, typeof m.Wallet, typeof m.Store, typeof m.MapPin, typeof m.Plus, typeof m.Minus, typeof m.Trash2, typeof m.ChevronRight, typeof m.CheckCircle2, typeof m.Truck, typeof m.PackageCheck, typeof m.XCircle, typeof m.Clock, typeof m.BadgeCheck, typeof m.Filter, typeof m.SlidersHorizontal, typeof m.Upload, typeof m.ArrowLeft, typeof m.Home, typeof m.LogOut, typeof m.User\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000 --max-time 5)",
+      "WebFetch(domain:support.payhere.lk)",
+      "WebSearch",
+      "Bash(git mv *)",
+      "Bash(mv src/hooks/use-seller-store.ts src/hooks/use-seller-store.tsx)",
+      "Bash(xargs -I{} echo {})"
+    ]
+  }
+}

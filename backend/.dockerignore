@@ -1,0 +1,6 @@
+build/
+.gradle/
+.kotlin/
+uploads/
+src/main/resources/config.yml
+.git

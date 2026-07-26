@@ -1,0 +1,73 @@
+# Runs on the EC2 instance (see ../cloudformation/compute.yaml). All secret
+# values come from the .env file bootstrap.sh writes from SSM Parameter
+# Store — never hardcoded here, never committed. Deployed via
+# ../scripts/sync-and-deploy.sh, which rsyncs the repo to the instance and
+# runs `docker compose -f infra/docker/docker-compose.prod.yml up -d --build`.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: islandcart
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - islandcart-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../../backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      DB_URL: jdbc:postgresql://postgres:5432/islandcart
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      PAYHERE_MERCHANT_ID: ${PAYHERE_MERCHANT_ID}
+      PAYHERE_MERCHANT_SECRET: ${PAYHERE_MERCHANT_SECRET}
+      PAYHERE_SANDBOX: ${PAYHERE_SANDBOX:-true}
+      PAYHERE_NOTIFY_URL: ${PAYHERE_NOTIFY_URL}
+      PAYHERE_RETURN_URL_BASE: ${PAYHERE_RETURN_URL_BASE}
+      NOTIFICATIONS_FRONTEND_BASE_URL: ${FRONTEND_ORIGIN}
+      NOTIFICATIONS_SES_SENDER_EMAIL: ${SES_SENDER_EMAIL}
+      AWS_REGION: ${AWS_REGION}
+      RECEIPTS_S3_BUCKET_NAME: ${RECEIPTS_S3_BUCKET_NAME}
+      APP_CORS_ALLOWED_ORIGINS: ${FRONTEND_ORIGIN}
+    # No AWS access key/secret here — the container inherits the EC2
+    # instance role's credentials via the SDK's default provider chain.
+
+  frontend:
+    build:
+      context: ../../app
+      args:
+        NEXT_PUBLIC_API_URL: ${BACKEND_ORIGIN}
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  islandcart-postgres-data:
+  caddy-data:
+  caddy-config:

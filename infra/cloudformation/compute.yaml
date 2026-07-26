@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  IslandCart — the single EC2 instance running the whole stack via Docker
+  Compose (Postgres + backend + frontend + Caddy). Depends on security.yaml
+  and iam.yaml (imports their exports) — deploy those first. UserData only
+  installs Docker and writes the .env file (secrets pulled from SSM); it
+  does NOT start the app — code isn't on the instance yet at boot time, see
+  scripts/sync-and-deploy.sh.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: islandcart-test
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: >
+      A public subnet in your default VPC (find one with: aws ec2
+      describe-subnets --filters Name=vpc-id,Values=<VpcId> --query
+      "Subnets[0].SubnetId").
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: An EC2 key pair you've already created, for SSH access.
+  InstanceType:
+    Type: String
+    Default: t3.small
+    Description: >
+      t3.micro (1GB RAM) is too small for Postgres + a JVM + Node running
+      together — see infra/README.md.
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      IamInstanceProfile:
+        Fn::ImportValue: !Sub "${EnvironmentName}-InstanceProfileName"
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-SecurityGroupId"
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 20
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-instance"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+
+          # --- Docker + Compose plugin ---
+          dnf install -y docker
+          systemctl enable --now docker
+          usermod -aG docker ec2-user
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+            -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+          # --- App directory (code is rsynced here later by
+          # scripts/sync-and-deploy.sh, run from your own machine) ---
+          mkdir -p /opt/islandcart/infra/docker
+
+          # --- Derive this instance's public origin from its own Elastic
+          # IP via the sslip.io trick, so Caddy can get a real Let's
+          # Encrypt cert with no domain purchase or Route53 hosted zone
+          # needed (see infra/README.md). ---
+          PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+          SITE_HOST="$(echo "$PUBLIC_IP" | tr '.' '-').sslip.io"
+          SITE_ADDRESS="https://$SITE_HOST"
+
+          # --- Secrets from SSM Parameter Store — put there ahead of time
+          # by scripts/put-secrets.sh (CloudFormation itself can't create
+          # SecureString parameters natively, see infra/README.md). ---
+          get_param() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text --region ${AWS::Region}; }
+
+          cat > /opt/islandcart/infra/docker/.env <<EOF
+          DB_USERNAME=$(get_param /islandcart/db-username)
+          DB_PASSWORD=$(get_param /islandcart/db-password)
+          PAYHERE_MERCHANT_ID=$(get_param /islandcart/payhere-merchant-id)
+          PAYHERE_MERCHANT_SECRET=$(get_param /islandcart/payhere-merchant-secret)
+          PAYHERE_SANDBOX=true
+          PAYHERE_NOTIFY_URL=$SITE_ADDRESS/api/payments/payhere/notify
+          PAYHERE_RETURN_URL_BASE=$SITE_ADDRESS/orders
+          SES_SENDER_EMAIL=$(get_param /islandcart/ses-sender-email)
+          AWS_REGION=${AWS::Region}
+          RECEIPTS_S3_BUCKET_NAME=${EnvironmentName}-receipts
+          SITE_ADDRESS=$SITE_ADDRESS
+          FRONTEND_ORIGIN=$SITE_ADDRESS
+          BACKEND_ORIGIN=$SITE_ADDRESS
+          EOF
+
+          chown -R ec2-user:ec2-user /opt/islandcart
+          echo "Bootstrap complete. Public origin: $SITE_ADDRESS"
+          echo "Next: run scripts/sync-and-deploy.sh from your machine to ship the code and start the stack."
+
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Instance
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-eip"
+
+Outputs:
+  PublicIp:
+    Value: !Ref ElasticIp
+  SiteAddress:
+    Description: The app's public HTTPS address once scripts/sync-and-deploy.sh has run.
+    Value: !Sub
+      - "https://${DashedIp}.sslip.io"
+      - DashedIp: !Join ["-", !Split [".", !Ref ElasticIp]]

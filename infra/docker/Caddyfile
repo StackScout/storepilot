@@ -1,0 +1,17 @@
+# SITE_ADDRESS comes from the environment (see .env, written by
+# bootstrap.sh) — default is the free sslip.io trick so Caddy can get a
+# real Let's Encrypt cert without owning a domain: an address like
+# https://<elastic-ip-with-dashes>.sslip.io resolves to that IP with no DNS
+# setup needed. Swap in a real domain later by pointing an A record at the
+# instance's Elastic IP and changing this one value.
+{$SITE_ADDRESS} {
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+	handle /actuator/* {
+		reverse_proxy backend:8080
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

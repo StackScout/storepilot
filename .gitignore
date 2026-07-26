@@ -1,0 +1,9 @@
+# OS / editor cruft — app/ and backend/ each have their own .gitignore
+# for their respective toolchains; this one only covers things that can
+# show up anywhere in the tree.
+.DS_Store
+.idea/
+*.swp
+
+# Real values for AWS deploys — never committed, see infra/README.md.
+/infra/.env.deploy

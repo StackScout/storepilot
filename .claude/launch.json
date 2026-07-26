@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "velenda-app",
+      "runtimeExecutable": "/Users/nilangavirajith/.nvm/versions/node/v20.20.2/bin/node",
+      "runtimeArgs": [
+        "/Users/nilangavirajith/Documents/Projects/Claude Workspace/app/node_modules/next/dist/bin/next",
+        "dev",
+        "/Users/nilangavirajith/Documents/Projects/Claude Workspace/app"
+      ],
+      "port": 3000
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  IslandCart — private S3 bucket for bank-transfer receipt uploads
+  (S3ReceiptStorageService). No public access; the backend reads/writes via
+  its EC2 instance role (see iam.yaml) and serves receipts to buyers/
+  sellers through short-lived presigned URLs, never a public bucket policy.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: islandcart-test
+    Description: Used as a prefix for resource names/tags.
+
+Resources:
+  ReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-receipts"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: islandcart
+
+Outputs:
+  BucketName:
+    Value: !Ref ReceiptsBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-ReceiptsBucketName"
+  BucketArn:
+    Value: !GetAtt ReceiptsBucket.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-ReceiptsBucketArn"

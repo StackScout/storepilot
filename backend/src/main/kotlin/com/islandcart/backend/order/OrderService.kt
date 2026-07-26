@@ -216,7 +216,13 @@ class OrderService(
                 ),
             )
         } else {
-            // Stays pending/unpaid — the buyer can upload a corrected receipt and try again.
+            // Stays pending/unpaid. Clearing receiptUrl (rather than leaving the
+            // rejected one in place) puts the order back into the same "no
+            // receipt on file" state as before any upload — which is what
+            // re-enables both the buyer-cancel guard in
+            // cancelBankTransferOrder and the upload form on the frontend, and
+            // makes the order eligible for reminder emails again.
+            order.receiptUrl = null
             order.timeline.add(
                 OrderTimelineEntry(
                     order = order,
@@ -236,9 +242,11 @@ class OrderService(
      * POST /api/orders/{id}/cancel — buyer-initiated cancel, reachable
      * unauthenticated (same "order ID is proof enough" model as GET/receipt
      * upload). Deliberately narrow: only a bank-transfer order still pending
-     * with no receipt uploaded yet can be self-cancelled this way — once a
-     * receipt is uploaded the seller is expected to act on it, not have it
-     * pulled out from under them by the buyer. COD/PayHere orders have no
+     * with no receipt *currently on file* can be self-cancelled this way —
+     * once a receipt is uploaded the seller is expected to act on it, not
+     * have it pulled out from under them by the buyer. A rejected receipt
+     * doesn't count as "on file" (verifyBankTransfer clears it), so cancel
+     * is available again after a rejection. COD/PayHere orders have no
      * buyer-initiated cancel path.
      */
     @Transactional
@@ -254,6 +262,7 @@ class OrderService(
             throw ConflictException("A receipt has already been uploaded for order $id — contact the seller instead")
         }
 
+        val hadRejectedReceipt = order.timeline.any { it.label == "Payment receipt rejected" }
         order.status = OrderStatus.CANCELLED
         order.timeline.add(
             OrderTimelineEntry(
@@ -261,7 +270,11 @@ class OrderService(
                 status = OrderStatus.CANCELLED,
                 label = "Cancelled by buyer",
                 timestamp = Instant.now(),
-                note = "Cancelled before a payment receipt was uploaded",
+                note = if (hadRejectedReceipt) {
+                    "Cancelled after the payment receipt was rejected"
+                } else {
+                    "Cancelled before a payment receipt was uploaded"
+                },
             ),
         )
         return orderRepository.save(order).toResponse(receiptStorageService)

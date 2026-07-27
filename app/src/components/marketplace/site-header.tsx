@@ -7,6 +7,7 @@ import { Logo } from "@/components/shared/logo";
 import { SearchBar } from "@/components/marketplace/search-bar";
 import { CartDrawer } from "@/components/marketplace/cart-drawer";
 import { MobileNav } from "@/components/marketplace/mobile-nav";
+import { AccountMenu } from "@/components/marketplace/account-menu";
 import { useBuyerAccountLink } from "@/hooks/use-buyer-account-link";
 
 export function SiteHeader() {
@@ -25,14 +26,13 @@ export function SiteHeader() {
             <Button render={<Link href="/onboarding" />} variant="outline" className="hidden md:inline-flex">
               Sell on IslandCart
             </Button>
-            <Button
-              render={<Link href={buyerName ? "/account" : "/account/login"} />}
-              variant="ghost"
-              size="icon"
-              aria-label={buyerName ? `Account: ${buyerName}` : "Sign in"}
-            >
-              <User className="size-4.5" />
-            </Button>
+            {buyerName ? (
+              <AccountMenu buyerName={buyerName} />
+            ) : (
+              <Button render={<Link href="/account/login" />} variant="ghost" size="icon" aria-label="Sign in">
+                <User className="size-4.5" />
+              </Button>
+            )}
             <CartDrawer />
           </div>
         </div>

@@ -26,8 +26,9 @@ data class ProductResponse(
     val priceLkr: Int,
     val compareAtPriceLkr: Int?,
     val stockQuantity: Int,
+    val trackStock: Boolean,
     val status: String,
-    val sku: String,
+    val sku: String?,
     val rating: Double,
     val reviewCount: Int,
     val createdAt: Instant,
@@ -52,10 +53,8 @@ data class ProductFormInput(
     val compareAtPriceLkr: Int?,
     @field:PositiveOrZero(message = "Stock quantity must be zero or more")
     val stockQuantity: Int,
-    @field:NotBlank(message = "Enter a SKU")
-    val sku: String,
+    val trackStock: Boolean = true,
+    val sku: String?,
     @field:NotBlank(message = "Select a status")
     val status: String,
-    @field:NotBlank(message = "Provide an image URL")
-    val imageUrl: String,
 )

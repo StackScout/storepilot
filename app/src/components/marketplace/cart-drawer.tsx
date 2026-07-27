@@ -89,7 +89,7 @@ export function CartDrawer() {
                         <QuantityStepper
                           size="sm"
                           quantity={item.quantity}
-                          max={item.stockQuantity}
+                          max={item.trackStock ? item.stockQuantity : undefined}
                           onChange={(q) => updateQuantity(item.productId, q)}
                         />
                       )}

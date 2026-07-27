@@ -30,4 +30,14 @@ object ProductSpecifications {
                 )
             }
         }
+
+    fun priceBetween(minPriceLkr: Int?, maxPriceLkr: Int?): Specification<Product> =
+        Specification { root, _, cb ->
+            when {
+                minPriceLkr != null && maxPriceLkr != null -> cb.between(root.get("priceLkr"), minPriceLkr, maxPriceLkr)
+                minPriceLkr != null -> cb.greaterThanOrEqualTo(root.get("priceLkr"), minPriceLkr)
+                maxPriceLkr != null -> cb.lessThanOrEqualTo(root.get("priceLkr"), maxPriceLkr)
+                else -> null
+            }
+        }
 }

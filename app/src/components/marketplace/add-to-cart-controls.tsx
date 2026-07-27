@@ -23,7 +23,8 @@ export function AddToCartControls({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [conflictOpen, setConflictOpen] = useState(false);
 
-  const isOutOfStock = product.status === "out-of-stock" || product.stockQuantity === 0;
+  const isOutOfStock =
+    product.status === "out-of-stock" || (product.trackStock && product.stockQuantity === 0);
 
   function handleAddToCart() {
     const added = addItem(product, quantity);
@@ -46,7 +47,7 @@ export function AddToCartControls({ product }: { product: Product }) {
         <QuantityStepper
           quantity={quantity}
           onChange={setQuantity}
-          max={product.stockQuantity}
+          max={product.trackStock ? product.stockQuantity : undefined}
         />
         <Button
           className="flex-1"

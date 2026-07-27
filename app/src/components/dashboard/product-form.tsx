@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,8 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUploader } from "@/components/dashboard/image-uploader";
+import { cn } from "@/lib/utils";
 import { CATEGORIES } from "@/mock/categories";
 import type { Product, ProductFormInput } from "@/types";
 
@@ -30,16 +33,18 @@ const productFormSchema = z.object({
   priceLkr: z.number().positive("Enter a valid price"),
   compareAtPriceLkr: z.union([z.number().positive(), z.nan()]).optional(),
   stockQuantity: z.number().int().min(0, "Stock can't be negative"),
-  sku: z.string().min(2, "Enter a SKU"),
+  trackStock: z.boolean(),
+  sku: z.string().optional(),
   status: z.enum(["active", "draft", "out-of-stock"]),
-  imageUrl: z.string().min(1, "Add a product image"),
 });
 
 interface ProductFormProps {
   initialProduct?: Product;
-  onSubmit: (input: ProductFormInput) => void;
+  onSubmit: (input: ProductFormInput, images: File[]) => void;
   isSubmitting: boolean;
   submitLabel?: string;
+  /** Store-wide switch (StoreSettings.stockManagementEnabled) — when false, the stock UI is hidden entirely and every product is submitted with trackStock=false. */
+  stockManagementEnabled: boolean;
 }
 
 export function ProductForm({
@@ -47,6 +52,7 @@ export function ProductForm({
   onSubmit,
   isSubmitting,
   submitLabel = "Save product",
+  stockManagementEnabled,
 }: ProductFormProps) {
   const {
     register,
@@ -63,24 +69,38 @@ export function ProductForm({
       priceLkr: initialProduct?.priceLkr ?? undefined,
       compareAtPriceLkr: initialProduct?.compareAtPriceLkr ?? undefined,
       stockQuantity: initialProduct?.stockQuantity ?? 0,
+      trackStock: initialProduct?.trackStock ?? true,
       sku: initialProduct?.sku ?? "",
       status: initialProduct?.status ?? "active",
-      imageUrl: initialProduct?.images[0]?.url ?? "",
     },
   });
 
   const category = watch("category");
   const status = watch("status");
-  const imageUrl = watch("imageUrl");
+  const trackStock = watch("trackStock");
+
+  const [images, setImages] = useState<File[]>([]);
+  const [imagesError, setImagesError] = useState<string | undefined>(undefined);
 
   function submit(values: z.infer<typeof productFormSchema>) {
-    onSubmit({
-      ...values,
-      compareAtPriceLkr:
-        values.compareAtPriceLkr && !Number.isNaN(values.compareAtPriceLkr)
-          ? values.compareAtPriceLkr
-          : undefined,
-    });
+    const hasExistingImages = (initialProduct?.images.length ?? 0) > 0;
+    if (images.length === 0 && !hasExistingImages) {
+      setImagesError("Add at least one product image");
+      return;
+    }
+    setImagesError(undefined);
+    onSubmit(
+      {
+        ...values,
+        compareAtPriceLkr:
+          values.compareAtPriceLkr && !Number.isNaN(values.compareAtPriceLkr)
+            ? values.compareAtPriceLkr
+            : undefined,
+        trackStock: stockManagementEnabled && values.trackStock,
+        stockQuantity: stockManagementEnabled && values.trackStock ? values.stockQuantity : 0,
+      },
+      images,
+    );
   }
 
   return (
@@ -90,9 +110,10 @@ export function ProductForm({
           <h2 className="font-semibold">Product details</h2>
 
           <ImageUploader
-            value={imageUrl}
-            onChange={(url) => setValue("imageUrl", url, { shouldValidate: true })}
-            error={errors.imageUrl?.message}
+            files={images}
+            onChange={setImages}
+            existingImages={initialProduct?.images}
+            error={imagesError}
           />
 
           <div className="space-y-1.5">
@@ -134,7 +155,7 @@ export function ProductForm({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="sku">SKU</Label>
+              <Label htmlFor="sku">SKU (optional)</Label>
               <Input id="sku" placeholder="e.g. CSC-CIN-100" {...register("sku")} />
               {errors.sku ? <p className="text-destructive text-xs">{errors.sku.message}</p> : null}
             </div>
@@ -145,7 +166,7 @@ export function ProductForm({
       <Card>
         <CardContent className="space-y-4">
           <h2 className="font-semibold">Pricing & inventory</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className={cn("grid gap-4", stockManagementEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
             <div className="space-y-1.5">
               <Label htmlFor="priceLkr">Price (LKR)</Label>
               <Input
@@ -168,19 +189,37 @@ export function ProductForm({
                 {...register("compareAtPriceLkr", { valueAsNumber: true })}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="stockQuantity">Stock quantity</Label>
-              <Input
-                id="stockQuantity"
-                type="number"
-                step="1"
-                {...register("stockQuantity", { valueAsNumber: true })}
-              />
-              {errors.stockQuantity ? (
-                <p className="text-destructive text-xs">{errors.stockQuantity.message}</p>
-              ) : null}
-            </div>
+            {stockManagementEnabled ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="stockQuantity">Stock quantity</Label>
+                <Input
+                  id="stockQuantity"
+                  type="number"
+                  step="1"
+                  disabled={!trackStock}
+                  {...register("stockQuantity", { valueAsNumber: true })}
+                />
+                {errors.stockQuantity ? (
+                  <p className="text-destructive text-xs">{errors.stockQuantity.message}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
+
+          {stockManagementEnabled ? (
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={trackStock}
+                onCheckedChange={(checked) => setValue("trackStock", checked === true)}
+              />
+              <span>
+                <span className="block text-sm font-medium">Track stock for this product</span>
+                <span className="text-muted-foreground block text-xs">
+                  When off, this product is treated as always available regardless of quantity.
+                </span>
+              </span>
+            </label>
+          ) : null}
 
           <div className="space-y-1.5">
             <Label htmlFor="status">Status</Label>
@@ -193,9 +232,11 @@ export function ProductForm({
                 <SelectItem value="draft">Draft</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-xs">
-              Products automatically show as &quot;Out of stock&quot; when quantity reaches 0.
-            </p>
+            {stockManagementEnabled && trackStock ? (
+              <p className="text-muted-foreground text-xs">
+                Products automatically show as &quot;Out of stock&quot; when quantity reaches 0.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>

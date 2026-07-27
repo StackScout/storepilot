@@ -30,7 +30,11 @@ export function useCartReconciliation() {
         ids.map((id, i) => ({
           productId: id,
           product: products[i]
-            ? { priceLkr: products[i]!.priceLkr, stockQuantity: products[i]!.stockQuantity }
+            ? {
+                priceLkr: products[i]!.priceLkr,
+                stockQuantity: products[i]!.stockQuantity,
+                trackStock: products[i]!.trackStock,
+              }
             : null,
         })),
       );

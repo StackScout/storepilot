@@ -22,10 +22,15 @@ interface CartState {
 export interface CartItemSync {
   productId: string;
   /** Present product state, or null if the product no longer exists. */
-  product: { priceLkr: number; stockQuantity: number } | null;
+  product: { priceLkr: number; stockQuantity: number; trackStock: boolean } | null;
 }
 
 const EMPTY_CART: Cart = { storeId: null, storeName: null, storeSlug: null, items: [] };
+
+/** stockQuantity is meaningless as a cap when trackStock is false — treat it as unlimited rather than 0. */
+function availableQuantity(stockQuantity: number, trackStock: boolean): number {
+  return trackStock ? stockQuantity : Infinity;
+}
 
 function toCartItem(product: Product, quantity: number): CartItem {
   return {
@@ -36,6 +41,7 @@ function toCartItem(product: Product, quantity: number): CartItem {
     unitPriceLkr: product.priceLkr,
     quantity,
     stockQuantity: product.stockQuantity,
+    trackStock: product.trackStock,
   };
 }
 
@@ -50,14 +56,15 @@ export const useCartStore = create<CartState>()(
           return false;
         }
 
+        const cap = availableQuantity(product.stockQuantity, product.trackStock);
         const existing = cart.items.find((i) => i.productId === product.id);
         const items = existing
           ? cart.items.map((i) =>
               i.productId === product.id
-                ? { ...i, quantity: Math.min(i.quantity + quantity, product.stockQuantity) }
+                ? { ...i, quantity: Math.min(i.quantity + quantity, cap) }
                 : i,
             )
-          : [...cart.items, toCartItem(product, Math.min(quantity, product.stockQuantity))];
+          : [...cart.items, toCartItem(product, Math.min(quantity, cap))];
 
         set({
           cart: {
@@ -71,12 +78,13 @@ export const useCartStore = create<CartState>()(
       },
 
       replaceCartWithItem: (product, quantity = 1) => {
+        const cap = availableQuantity(product.stockQuantity, product.trackStock);
         set({
           cart: {
             storeId: product.storeId,
             storeName: product.storeName,
             storeSlug: product.storeSlug,
-            items: [toCartItem(product, Math.min(quantity, product.stockQuantity))],
+            items: [toCartItem(product, Math.min(quantity, cap))],
           },
         });
       },
@@ -92,7 +100,7 @@ export const useCartStore = create<CartState>()(
             ...cart,
             items: cart.items.map((i) =>
               i.productId === productId
-                ? { ...i, quantity: Math.min(quantity, i.stockQuantity) }
+                ? { ...i, quantity: Math.min(quantity, availableQuantity(i.stockQuantity, i.trackStock)) }
                 : i,
             ),
           },
@@ -125,6 +133,7 @@ export const useCartStore = create<CartState>()(
                 isUnavailable: false,
                 unitPriceLkr: product.priceLkr,
                 stockQuantity: product.stockQuantity,
+                trackStock: product.trackStock,
               };
             }),
           },

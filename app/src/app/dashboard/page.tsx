@@ -16,16 +16,20 @@ import { ordersService, productsService } from "@/services";
 
 export default function DashboardOverviewPage() {
   const storeId = useSellerStoreId();
+  // Revenue/pending-count below are computed from this full set, not just
+  // one page — a large enough page size to cover realistic stores. A store
+  // that outgrows this needs a real backend aggregate query instead of
+  // summing a fetched page client-side; out of scope for now.
   const ordersQuery = useQuery({
-    queryKey: ["orders", storeId],
-    queryFn: () => ordersService.listOrdersByStore(storeId),
+    queryKey: ["orders", storeId, "overview"],
+    queryFn: () => ordersService.listOrdersByStore(storeId, undefined, 0, 1000),
   });
   const productsQuery = useQuery({
     queryKey: ["products", "store", storeId],
     queryFn: () => productsService.listProductsByStore(storeId),
   });
 
-  const orders = ordersQuery.data ?? [];
+  const orders = ordersQuery.data?.content ?? [];
   const products = productsQuery.data ?? [];
 
   const revenue = orders
@@ -36,7 +40,7 @@ export default function DashboardOverviewPage() {
     .reduce((sum, o) => sum + o.platformFeeLkr, 0);
   const pendingCount = orders.filter((o) => o.status === "pending").length;
   const lowStockProducts = products.filter(
-    (p) => p.status !== "out-of-stock" && p.stockQuantity <= 5,
+    (p) => p.trackStock && p.status !== "out-of-stock" && p.stockQuantity <= 5,
   );
 
   return (

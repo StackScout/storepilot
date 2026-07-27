@@ -26,6 +26,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { useCart } from "@/hooks/use-cart";
 import { useCartReconciliation } from "@/hooks/use-cart-reconciliation";
+import { useAuthSession } from "@/hooks/use-auth-session";
 import { cn } from "@/lib/utils";
 import { formatLkr } from "@/lib/currency";
 import { FLAT_SHIPPING_FEE_LKR, SRI_LANKA_DISTRICTS } from "@/lib/constants";
@@ -49,23 +50,20 @@ const checkoutSchema = z.object({
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 
-interface BuyerSession {
-  buyerId: string;
-  name: string;
-  email: string;
-}
-
-export function CheckoutForm({ buyerSession }: { buyerSession: BuyerSession | null }) {
+export function CheckoutForm() {
   const router = useRouter();
   const { cart, subtotal, isHydrated, clearCart } = useCart();
   useCartReconciliation();
   const availableItems = cart.items.filter((i) => !i.isUnavailable);
   const hasUnavailable = cart.items.some((i) => i.isUnavailable);
 
+  const { session } = useAuthSession();
+  const isSignedInBuyer = session.signedIn && session.role === "buyer";
+
   const { data: buyer } = useQuery({
-    queryKey: ["buyer", buyerSession?.buyerId],
-    queryFn: () => buyersService.getBuyerById(buyerSession!.buyerId),
-    enabled: !!buyerSession,
+    queryKey: ["buyer", "me"],
+    queryFn: () => buyersService.getCurrentBuyer(),
+    enabled: isSignedInBuyer,
   });
 
   // Which payment methods this store accepts — set in the seller's Store
@@ -96,7 +94,7 @@ export function CheckoutForm({ buyerSession }: { buyerSession: BuyerSession | nu
     formState: { errors },
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: { district: "", paymentMethod: "cod", email: buyerSession?.email ?? "" },
+    defaultValues: { district: "", paymentMethod: "cod", email: session.email ?? "" },
   });
 
   // Prefill from the signed-in buyer's saved address once it loads — a
@@ -114,6 +112,15 @@ export function CheckoutForm({ buyerSession }: { buyerSession: BuyerSession | nu
       paymentMethod: "cod",
     });
   }, [buyer, reset]);
+
+  // useAuthSession()'s data arrives asynchronously (a client fetch, unlike
+  // the old server-rendered session), so the email default above is only
+  // correct once this resolves — cover the case of a signed-in buyer with
+  // no saved address yet (the effect above never fires for them).
+  useEffect(() => {
+    if (buyer?.defaultShipping || !session.email) return;
+    setValue("email", session.email);
+  }, [session.email, buyer, setValue]);
 
   const district = watch("district");
   const paymentMethod = watch("paymentMethod");
@@ -149,12 +156,13 @@ export function CheckoutForm({ buyerSession }: { buyerSession: BuyerSession | nu
         shipping,
         paymentMethod: values.paymentMethod as PaymentMethod,
         email: values.email,
-        buyerId: buyerSession?.buyerId,
       });
       // Save this address as the buyer's default for next time — best-effort,
-      // shouldn't block order placement if it fails.
-      if (buyerSession) {
-        buyersService.updateDefaultShipping(buyerSession.buyerId, shipping).catch(() => {});
+      // shouldn't block order placement if it fails. The order itself is
+      // linked to the signed-in buyer server-side, from the auth cookie —
+      // never a client-supplied id.
+      if (isSignedInBuyer) {
+        buyersService.updateDefaultShipping(shipping).catch(() => {});
       }
       return order;
     },

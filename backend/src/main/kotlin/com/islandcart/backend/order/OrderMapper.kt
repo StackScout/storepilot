@@ -1,7 +1,9 @@
 package com.islandcart.backend.order
 
-/** receiptUrl is resolved fresh on every call (never cached) — see ReceiptStorageService.resolveUrl. */
-fun Order.toResponse(receiptStorageService: ReceiptStorageService): OrderResponse =
+import com.islandcart.backend.common.storage.FileStorageService
+
+/** receiptUrl/courierReceiptUrl are resolved fresh on every call (never cached) — see ReceiptStorageService/FileStorageService.resolveUrl. */
+fun Order.toResponse(receiptStorageService: ReceiptStorageService, fileStorageService: FileStorageService): OrderResponse =
     OrderResponse(
         id = requireNotNull(id),
         orderNumber = orderNumber,
@@ -25,6 +27,9 @@ fun Order.toResponse(receiptStorageService: ReceiptStorageService): OrderRespons
         paymentMethod = paymentMethod.wireValue,
         paymentStatus = paymentStatus.wireValue,
         receiptUrl = receiptUrl?.let { receiptStorageService.resolveUrl(it) },
+        trackingNumber = trackingNumber,
+        courierServiceName = courierServiceName,
+        courierReceiptUrl = courierReceiptUrl?.let { fileStorageService.resolveUrl(it) },
         shipping = ShippingDetailsResponse(
             fullName = shipping.fullName,
             phone = shipping.phone,

@@ -30,6 +30,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
+	implementation("org.springframework.boot:spring-boot-starter-security")
+	implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-database-postgresql")
@@ -40,6 +42,14 @@ dependencies {
 	// credentials are needed to build or run locally.
 	implementation("software.amazon.awssdk:s3")
 	implementation("software.amazon.awssdk:ses")
+	// NOT aws-profile-gated: Cognito is the authorization server in every
+	// environment (local dev points at a real, free Cognito user pool —
+	// there's no local/mock auth implementation, unlike S3/SES).
+	implementation("software.amazon.awssdk:cognitoidentityprovider")
+	// Never called directly — the SDK's ProfileCredentialsProvider needs
+	// this on the classpath to resolve a role_arn/source_profile ("assume
+	// role") AWS CLI profile, e.g. local dev's AWS_PROFILE=islandcart-dev.
+	runtimeOnly("software.amazon.awssdk:sts")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("org.postgresql:postgresql")
 	testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")

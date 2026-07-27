@@ -15,7 +15,14 @@ import org.springframework.stereotype.Service
 class LoggingEmailService : EmailService {
     private val log = LoggerFactory.getLogger(EmailService::class.java)
 
-    override fun send(to: String, subject: String, body: String) {
-        log.info("[mock email] to={} subject=\"{}\"\n{}", to, subject, body)
+    override fun send(to: String, subject: String, body: String, attachment: EmailAttachment?) {
+        if (attachment != null) {
+            log.info(
+                "[mock email] to={} subject=\"{}\" attachment={} ({} bytes)\n{}",
+                to, subject, attachment.filename, attachment.bytes.size, body,
+            )
+        } else {
+            log.info("[mock email] to={} subject=\"{}\"\n{}", to, subject, body)
+        }
     }
 }

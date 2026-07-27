@@ -1,17 +1,69 @@
+"use client";
+
+import { Suspense } from "react";
 import Link from "next/link";
-import { Store } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { signInAsSeller } from "@/lib/actions/auth";
+import { authService } from "@/services";
 
-interface LoginPageProps {
-  searchParams: Promise<{ redirectTo?: string; error?: string }>;
+const loginSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(1, "Enter your password"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <SellerLoginForm />
+    </Suspense>
+  );
 }
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { redirectTo, error } = await searchParams;
+function SellerLoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+  const queryClient = useQueryClient();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
+
+  const mutation = useMutation({
+    mutationFn: async (values: LoginFormValues) => {
+      const session = await authService.login(values.email, values.password);
+      // See the equivalent check in account/login/page.tsx — authService.login()
+      // is role-agnostic, so a buyer-only account would otherwise authenticate
+      // here and then get silently bounced back by proxy.ts's /dashboard gate.
+      if (session.role !== "seller") {
+        await authService.logout();
+        throw new Error("This account isn't registered as a seller. Try the buyer or admin sign-in instead.");
+      }
+      return session;
+    },
+    onSuccess: () => {
+      // React Query's own cache (auth-session, buyer/store lookups, ...) is
+      // separate from Next's router cache — router.refresh() alone won't
+      // clear a "signed out" result some component cached before login.
+      queryClient.clear();
+      router.push(redirectTo);
+      router.refresh();
+    },
+    onError: (error: Error) => toast.error(error.message || "Invalid email or password"),
+  });
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">
@@ -27,20 +79,22 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
       <Card>
         <CardContent>
-          <form action={signInAsSeller} className="space-y-4">
-            <input type="hidden" name="redirectTo" value={redirectTo ?? "/dashboard"} />
+          <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" placeholder="you@yourstore.lk" required />
+              <Input id="email" type="email" placeholder="you@yourstore.lk" {...register("email")} />
+              {errors.email ? <p className="text-destructive text-xs">{errors.email.message}</p> : null}
             </div>
-            {error === "missing-email" ? (
-              <p className="text-destructive text-xs">Enter your email to continue.</p>
-            ) : null}
-            <p className="text-muted-foreground text-xs">
-              This is a demo sign-in — any email signs you in as the sample seller account.
-            </p>
-            <Button type="submit" size="lg" className="w-full">
-              Continue
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" {...register("password")} />
+              {errors.password ? (
+                <p className="text-destructive text-xs">{errors.password.message}</p>
+              ) : null}
+            </div>
+            <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              Sign in
             </Button>
           </form>
         </CardContent>
@@ -48,8 +102,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
       <p className="text-muted-foreground mt-6 text-center text-sm">
         New seller?{" "}
-        <Link href="/onboarding" className="text-primary font-medium underline-offset-4 hover:underline">
-          Create your store
+        <Link href="/register" className="text-primary font-medium underline-offset-4 hover:underline">
+          Create your account
         </Link>
       </p>
     </div>

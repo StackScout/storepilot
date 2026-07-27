@@ -5,15 +5,14 @@ const nextConfig: NextConfig = {
   // image — see app/Dockerfile and infra/docker/docker-compose.prod.yml.
   output: "standalone",
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "picsum.photos",
-        port: "",
-        pathname: "/**",
-        search: "",
-      },
-    ],
+    // Product/store images and documents come from the backend's own origin
+    // (local disk) or an S3 presigned URL (aws profile) — both hosts are
+    // only known at runtime, and the backend/S3 endpoint is frequently a
+    // private/internal address the Next.js image-optimizer proxy can't
+    // reach anyway (it blocks fetches that resolve to a private IP as an
+    // SSRF guard). Skipping optimization sends src straight to the browser
+    // instead, which also makes remotePatterns unnecessary.
+    unoptimized: true,
   },
 };
 

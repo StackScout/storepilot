@@ -7,10 +7,11 @@ import { PopularStoresGrid } from "@/components/marketplace/popular-stores-grid"
 import { productsService, storesService } from "@/services";
 
 export default async function HomePage() {
-  const [featuredProducts, stores] = await Promise.all([
+  const [featuredProducts, storesPage] = await Promise.all([
     productsService.getFeaturedProducts(8),
-    storesService.listStores({ limit: 6 }),
+    storesService.listStores({ size: 6 }),
   ]);
+  const stores = storesPage.content;
 
   return (
     <div className="mx-auto max-w-7xl space-y-12 px-4 py-8 sm:px-6 lg:px-8">

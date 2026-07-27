@@ -1,5 +1,7 @@
 package com.islandcart.backend.store
 
+import com.islandcart.backend.common.storage.FileStorageService
+
 fun Store.toResponse(): StoreResponse =
     StoreResponse(
         id = requireNotNull(id),
@@ -19,9 +21,13 @@ fun Store.toResponse(): StoreResponse =
         joinedAt = requireNotNull(createdAt),
         followerCount = followerCount,
         verificationStatus = verificationStatus.wireValue,
+        facebookUrl = facebookUrl,
+        instagramUrl = instagramUrl,
+        tiktokUrl = tiktokUrl,
     )
 
-fun StoreSettings.toResponse(): StoreSettingsResponse =
+/** nicDocumentUrl/businessRegDocumentUrl are resolved fresh on every call (never cached) — see FileStorageService.resolveUrl. */
+fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSettingsResponse =
     StoreSettingsResponse(
         storeId = requireNotNull(store.id),
         contactEmail = contactEmail,
@@ -37,4 +43,7 @@ fun StoreSettings.toResponse(): StoreSettingsResponse =
         nicNumber = nicNumber,
         businessRegistrationNumber = businessRegistrationNumber,
         rejectionReason = rejectionReason,
+        nicDocumentUrl = nicDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        businessRegDocumentUrl = businessRegDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        stockManagementEnabled = stockManagementEnabled,
     )

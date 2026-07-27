@@ -64,6 +64,14 @@ class Order(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "buyer_id")
     var buyer: Buyer? = null,
+    /** Set together when the seller marks the order shipped — both required at that transition, see OrderService.updateStatus. */
+    @Column(name = "tracking_number")
+    var trackingNumber: String? = null,
+    @Column(name = "courier_service_name")
+    var courierServiceName: String? = null,
+    /** Optional — stored reference (local path or S3 key), resolved fresh at read time like receiptUrl. */
+    @Column(name = "courier_receipt_url")
+    var courierReceiptUrl: String? = null,
 ) : BaseEntity()
 
 /**

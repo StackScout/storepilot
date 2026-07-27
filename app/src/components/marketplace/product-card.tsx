@@ -12,7 +12,7 @@ export function ProductCard({
   priority?: boolean;
 }) {
   const isOutOfStock = product.status === "out-of-stock";
-  const isLowStock = !isOutOfStock && product.stockQuantity <= 5;
+  const isLowStock = !isOutOfStock && product.trackStock && product.stockQuantity <= 5;
 
   return (
     <Link

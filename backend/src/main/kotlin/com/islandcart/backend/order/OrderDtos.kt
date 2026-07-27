@@ -47,6 +47,9 @@ data class OrderResponse(
     val paymentMethod: String,
     val paymentStatus: String,
     val receiptUrl: String?,
+    val trackingNumber: String?,
+    val courierServiceName: String?,
+    val courierReceiptUrl: String?,
     val shipping: ShippingDetailsResponse,
     val timeline: List<OrderTimelineEntryResponse>,
     val createdAt: Instant,
@@ -74,7 +77,13 @@ data class CheckoutItemInput(
     val quantity: Int,
 )
 
-/** Mirrors src/types/order.ts's CheckoutInput — POST /api/orders. */
+/**
+ * Mirrors src/types/order.ts's CheckoutInput — POST /api/orders. No buyerId
+ * field: it was previously client-supplied and completely unverified,
+ * letting any caller link an order to an arbitrary buyer's history. The
+ * order's buyer link (if any) is derived server-side only, from
+ * CurrentActor.buyerOrNull() — null for a guest checkout.
+ */
 data class CheckoutInput(
     val storeId: UUID,
     @field:NotEmpty(message = "Cart is empty")
@@ -86,13 +95,15 @@ data class CheckoutInput(
     @field:Email(message = "Enter a valid email")
     @field:NotBlank(message = "Enter a valid email")
     val email: String,
-    val buyerId: UUID? = null,
 )
 
+/** trackingNumber/courierServiceName are required by OrderService.updateStatus specifically when status is "shipped" — not enforced here since that's conditional on the target status, not always mandatory. */
 data class OrderStatusUpdateInput(
     @field:NotBlank(message = "Status is required")
     val status: String,
     val note: String? = null,
+    val trackingNumber: String? = null,
+    val courierServiceName: String? = null,
 )
 
 /** POST /api/orders/{id}/verify-bank-transfer — seller accepts or rejects the buyer's uploaded receipt. */

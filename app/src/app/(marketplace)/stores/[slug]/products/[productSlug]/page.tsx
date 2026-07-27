@@ -7,6 +7,7 @@ import { PriceDisplay } from "@/components/shared/price-display";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { AddToCartControls } from "@/components/marketplace/add-to-cart-controls";
 import { ProductCard } from "@/components/marketplace/product-card";
+import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { productsService, storesService } from "@/services";
 
 interface ProductPageProps {
@@ -65,7 +66,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
             >
               {product.storeName}
             </Link>
-            <h1 className="text-2xl font-bold text-balance">{product.name}</h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-2xl font-bold text-balance">{product.name}</h1>
+              <CopyLinkButton
+                path={`/stores/${slug}/products/${product.slug}`}
+                className="shrink-0"
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <RatingStars rating={product.rating} reviewCount={product.reviewCount} />
               {store ? (
@@ -85,7 +92,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           {product.status !== "out-of-stock" && (
             <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
               <PackageCheck className="size-4 text-emerald-600" />
-              {product.stockQuantity <= 5
+              {product.trackStock && product.stockQuantity <= 5
                 ? `Only ${product.stockQuantity} left in stock`
                 : "In stock, ready to ship"}
             </p>
@@ -99,10 +106,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           <dl className="grid grid-cols-2 gap-3 border-t pt-5 text-sm">
-            <div>
-              <dt className="text-muted-foreground">SKU</dt>
-              <dd className="font-medium">{product.sku}</dd>
-            </div>
+            {product.sku ? (
+              <div>
+                <dt className="text-muted-foreground">SKU</dt>
+                <dd className="font-medium">{product.sku}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-muted-foreground">Category</dt>
               <dd className="font-medium capitalize">{product.category.replace("-", " ")}</dd>

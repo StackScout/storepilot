@@ -14,16 +14,23 @@ export default function NewProductPage() {
   const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
 
-  const { data: store, isLoading } = useQuery({
+  const { data: store, isLoading: isStoreLoading } = useQuery({
     queryKey: ["store", storeId],
     queryFn: () => storesService.getStoreById(storeId),
     staleTime: 0,
   });
 
+  const { data: settings, isLoading: isSettingsLoading } = useQuery({
+    queryKey: ["store-settings", storeId],
+    queryFn: () => storesService.getStoreSettings(storeId),
+  });
+
+  const isLoading = isStoreLoading || isSettingsLoading;
+
   const mutation = useMutation({
-    mutationFn: (input: ProductFormInput) => {
+    mutationFn: ({ input, images }: { input: ProductFormInput; images: File[] }) => {
       if (!store) throw new Error("Store not loaded yet");
-      return productsService.createProduct(store.id, store.name, store.slug, input);
+      return productsService.createProduct(store.id, store.name, store.slug, input, images);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -48,9 +55,10 @@ export default function NewProductPage() {
         <p className="text-muted-foreground text-sm">Add a new product to {store.name}.</p>
       </div>
       <ProductForm
-        onSubmit={(input) => mutation.mutate(input)}
+        onSubmit={(input, images) => mutation.mutate({ input, images })}
         isSubmitting={mutation.isPending}
         submitLabel="Create product"
+        stockManagementEnabled={settings?.stockManagementEnabled ?? true}
       />
     </div>
   );

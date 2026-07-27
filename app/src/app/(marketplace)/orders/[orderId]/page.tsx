@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2, Circle, Clock, Loader2, MessageCircle, PackageX, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Circle, Clock, FileText, Loader2, MessageCircle, PackageX, Truck, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -162,6 +162,30 @@ export default function OrderTrackingPage({
               </li>
             ))}
           </ol>
+
+          {order.trackingNumber && order.courierServiceName ? (
+            <>
+              <Separator />
+              <div className="bg-muted/50 space-y-1.5 rounded-lg p-4 text-sm">
+                <p className="flex items-center gap-1.5 font-medium">
+                  <Truck className="size-4" /> Shipped via {order.courierServiceName}
+                </p>
+                <p className="text-muted-foreground">
+                  Tracking number: <span className="text-foreground font-medium">{order.trackingNumber}</span>
+                </p>
+                {order.courierReceiptUrl ? (
+                  <a
+                    href={order.courierReceiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary flex items-center gap-1.5 underline-offset-4 hover:underline"
+                  >
+                    <FileText className="size-3.5" /> View courier receipt
+                  </a>
+                ) : null}
+              </div>
+            </>
+          ) : null}
 
           <Separator />
 

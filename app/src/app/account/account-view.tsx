@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { LogOut, MapPin, Package, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,12 +9,13 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
+import { EditAddressDialog } from "@/components/marketplace/edit-address-dialog";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { formatDate } from "@/lib/format";
-import { ordersService, buyersService, authService } from "@/services";
+import { ordersService, buyersService } from "@/services";
 
 export function AccountView() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const signOut = useSignOut();
 
   const { data: buyer } = useQuery({
     queryKey: ["buyer", "me"],
@@ -27,17 +27,11 @@ export function AccountView() {
     queryFn: () => ordersService.listMyOrders(),
   });
 
-  async function handleSignOut() {
-    await authService.logout();
-    queryClient.clear();
-    router.push("/account/login");
-  }
-
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">My account</h1>
-        <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
+        <Button type="button" variant="outline" size="sm" onClick={() => signOut()}>
           <LogOut className="size-3.5" /> Sign out
         </Button>
       </div>
@@ -57,9 +51,12 @@ export function AccountView() {
 
       <Card>
         <CardContent className="space-y-2">
-          <div className="flex items-center gap-2">
-            <MapPin className="text-muted-foreground size-4" />
-            <h2 className="font-semibold">Saved address</h2>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <MapPin className="text-muted-foreground size-4" />
+              <h2 className="font-semibold">Saved address</h2>
+            </div>
+            <EditAddressDialog defaultShipping={buyer?.defaultShipping} />
           </div>
           {buyer?.defaultShipping ? (
             <p className="text-muted-foreground text-sm">
@@ -68,7 +65,8 @@ export function AccountView() {
             </p>
           ) : (
             <p className="text-muted-foreground text-sm">
-              No saved address yet — it&apos;s saved automatically the first time you check out.
+              No saved address yet — it&apos;s saved automatically the first time you check out, or
+              you can add one now.
             </p>
           )}
         </CardContent>

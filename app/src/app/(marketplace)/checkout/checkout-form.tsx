@@ -157,12 +157,23 @@ export function CheckoutForm() {
         paymentMethod: values.paymentMethod as PaymentMethod,
         email: values.email,
       });
-      // Save this address as the buyer's default for next time — best-effort,
-      // shouldn't block order placement if it fails. The order itself is
-      // linked to the signed-in buyer server-side, from the auth cookie —
-      // never a client-supplied id.
-      if (isSignedInBuyer) {
-        buyersService.updateDefaultShipping(shipping).catch(() => {});
+      // Auto-save this address as the buyer's default, but only the first
+      // time (no saved address yet) — once they have one, only an explicit
+      // edit on the account page should change it, not whatever they
+      // happened to type for one particular order (e.g. shipping a gift
+      // elsewhere). Awaited — not fire-and-forget — because the PayHere
+      // path below navigates the browser away immediately afterwards
+      // (submitPayHereCheckout does a real form submit, not client routing),
+      // which would otherwise abort this request mid-flight. Still
+      // best-effort: a failure here must never block order placement, and
+      // the order itself is linked to the signed-in buyer server-side, from
+      // the auth cookie — never a client-supplied id.
+      if (isSignedInBuyer && !buyer?.defaultShipping) {
+        try {
+          await buyersService.updateDefaultShipping(shipping);
+        } catch {
+          // ignore — see comment above
+        }
       }
       return order;
     },

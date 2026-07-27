@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Logo } from "@/components/shared/logo";
 import { useBuyerAccountLink } from "@/hooks/use-buyer-account-link";
+import { useSignOut } from "@/hooks/use-sign-out";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -17,6 +18,7 @@ const LINKS = [
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const { buyerName } = useBuyerAccountLink();
+  const signOut = useSignOut();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -50,6 +52,20 @@ export function MobileNav() {
           >
             {buyerName ? `Hi, ${buyerName.split(" ")[0]}` : "Sign in / Register"}
           </SheetClose>
+          {buyerName ? (
+            <SheetClose
+              nativeButton
+              render={
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className="hover:bg-accent flex items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium"
+                />
+              }
+            >
+              <LogOut className="size-3.5" /> Sign out
+            </SheetClose>
+          ) : null}
         </nav>
         <div className="mt-auto space-y-2 p-2">
           <SheetClose

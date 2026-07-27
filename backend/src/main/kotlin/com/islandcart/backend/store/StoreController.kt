@@ -1,5 +1,6 @@
 package com.islandcart.backend.store
 
+import com.islandcart.backend.common.PageResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -10,7 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 /** Matches the endpoints documented in docs/api-contracts.md#stores and #admin. */
@@ -22,14 +25,21 @@ class StoreController(
     fun search(
         @RequestParam category: String?,
         @RequestParam query: String?,
-        @RequestParam limit: Int?,
-    ): List<StoreResponse> = storeService.search(category, query, limit)
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "24") size: Int,
+    ): PageResponse<StoreResponse> = storeService.search(category, query, page, size)
 
     @GetMapping("/api/stores/id/{id}")
     fun getById(@PathVariable id: UUID): StoreResponse = storeService.getById(id)
 
     @GetMapping("/api/stores/{slug}")
     fun getBySlug(@PathVariable slug: String): StoreResponse = storeService.getBySlug(slug)
+
+    @GetMapping("/api/me/store")
+    fun getMyStore(): ResponseEntity<StoreResponse> {
+        val store = storeService.getMyStore() ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(store)
+    }
 
     @GetMapping("/api/stores/{storeId}/settings")
     fun getSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {
@@ -41,7 +51,25 @@ class StoreController(
     fun upsertSettings(
         @PathVariable storeId: UUID,
         @RequestBody input: StoreSettingsInput,
-    ): StoreSettingsResponse = storeService.upsertSettings(storeId, input)
+    ): StoreSettingsResponse = storeService.updateSettingsAsSeller(storeId, input)
+
+    @PatchMapping("/api/stores/{storeId}/profile")
+    fun updateProfile(
+        @PathVariable storeId: UUID,
+        @RequestBody input: StoreProfileInput,
+    ): StoreResponse = storeService.updateProfileAsSeller(storeId, input)
+
+    @PostMapping("/api/stores/{storeId}/nic-document", consumes = ["multipart/form-data"])
+    fun uploadNicDocument(
+        @PathVariable storeId: UUID,
+        @RequestPart file: MultipartFile,
+    ): StoreSettingsResponse = storeService.uploadNicDocument(storeId, file)
+
+    @PostMapping("/api/stores/{storeId}/business-reg-document", consumes = ["multipart/form-data"])
+    fun uploadBusinessRegDocument(
+        @PathVariable storeId: UUID,
+        @RequestPart file: MultipartFile,
+    ): StoreSettingsResponse = storeService.uploadBusinessRegDocument(storeId, file)
 
     @PostMapping("/api/stores")
     fun create(@Valid @RequestBody input: StoreApplicationInput): ResponseEntity<StoreResponse> =

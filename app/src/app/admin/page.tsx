@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, ClipboardCheck, Landmark, MapPin, X } from "lucide-react";
+import { Check, ClipboardCheck, Landmark, LogOut, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +21,11 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
+import { NotificationsBell } from "@/components/admin/notifications-bell";
 import { formatLkr } from "@/lib/currency";
 import { formatDateTime } from "@/lib/format";
 import { getCategoryLabel } from "@/mock/categories";
-import { storesService, payoutsService } from "@/services";
+import { storesService, payoutsService, authService } from "@/services";
 import type { Store, StoreSettings } from "@/types";
 
 interface PendingApplication {
@@ -38,11 +40,18 @@ interface EligibleStore {
 }
 
 export default function AdminPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [rejectTarget, setRejectTarget] = useState<Store | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [payoutToMarkPaid, setPayoutToMarkPaid] = useState<string | null>(null);
   const [bankReference, setBankReference] = useState("");
+
+  async function handleSignOut() {
+    await authService.logout();
+    queryClient.clear();
+    router.push("/admin/login");
+  }
 
   const { data: pendingApplications, isLoading: pendingLoading } = useQuery<PendingApplication[]>({
     queryKey: ["admin-pending-stores"],
@@ -123,12 +132,19 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4 sm:p-8">
-      <div>
-        <h1 className="text-2xl font-bold">Platform admin</h1>
-        <p className="text-muted-foreground text-sm">
-          Seller verification and payout runs — the actions a real backend would gate behind a
-          proper admin role/auth (not implemented in this demo).
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Platform admin</h1>
+          <p className="text-muted-foreground text-sm">
+            Seller verification and payout runs.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <NotificationsBell />
+          <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
+            <LogOut className="size-3.5" /> Sign out
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -190,6 +206,40 @@ export default function AdminPage() {
                       <dt className="text-muted-foreground">Bank account</dt>
                       <dd className="font-medium">
                         {settings ? `${settings.bankName} · ${settings.bankAccountNumber}` : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">NIC document</dt>
+                      <dd className="font-medium">
+                        {settings?.nicDocumentUrl ? (
+                          <a
+                            href={settings.nicDocumentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            View file
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Business reg. document</dt>
+                      <dd className="font-medium">
+                        {settings?.businessRegDocumentUrl ? (
+                          <a
+                            href={settings.businessRegDocumentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            View file
+                          </a>
+                        ) : (
+                          "—"
+                        )}
                       </dd>
                     </div>
                   </dl>

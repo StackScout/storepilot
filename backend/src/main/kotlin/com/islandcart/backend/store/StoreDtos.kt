@@ -30,6 +30,9 @@ data class StoreResponse(
     val joinedAt: Instant,
     val followerCount: Int,
     val verificationStatus: String,
+    val facebookUrl: String?,
+    val instagramUrl: String?,
+    val tiktokUrl: String?,
 )
 
 /** Mirrors src/types/store.ts's StoreSettings. */
@@ -48,6 +51,9 @@ data class StoreSettingsResponse(
     val nicNumber: String,
     val businessRegistrationNumber: String?,
     val rejectionReason: String?,
+    val nicDocumentUrl: String?,
+    val businessRegDocumentUrl: String?,
+    val stockManagementEnabled: Boolean,
 )
 
 /** Mirrors src/types/store.ts's StoreApplicationInput — POST /api/stores (onboarding). */
@@ -88,6 +94,14 @@ data class StoreSettingsInput(
     val nicNumber: String? = null,
     val businessRegistrationNumber: String? = null,
     val rejectionReason: String? = null,
+    val stockManagementEnabled: Boolean? = null,
+)
+
+/** PATCH /api/stores/{storeId}/profile — seller-editable public social links. A field left null is untouched; send an empty string to clear a link. */
+data class StoreProfileInput(
+    val facebookUrl: String? = null,
+    val instagramUrl: String? = null,
+    val tiktokUrl: String? = null,
 )
 
 data class VerificationDecisionInput(

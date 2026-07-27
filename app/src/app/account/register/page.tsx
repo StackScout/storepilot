@@ -6,20 +6,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { createBuyerSession } from "@/lib/actions/auth";
-import { buyersService } from "@/services";
+import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
+import { authService } from "@/services";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Enter your full name"),
   email: z.string().email("Enter a valid email"),
-  phone: z.string().optional(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -36,6 +36,7 @@ function BuyerRegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/account";
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -44,19 +45,13 @@ function BuyerRegisterForm() {
   } = useForm<RegisterFormValues>({ resolver: zodResolver(registerSchema) });
 
   const mutation = useMutation({
-    mutationFn: async (values: RegisterFormValues) => {
-      // Buyer creation must happen client-side (mockDb is a localStorage
-      // no-op on the server) — mirrors seller onboarding's split.
-      const buyer = await buyersService.registerBuyer({
-        name: values.name,
-        email: values.email,
-        phone: values.phone || undefined,
-      });
-      await createBuyerSession(buyer.id, buyer.name, buyer.email);
-    },
+    mutationFn: (values: RegisterFormValues) =>
+      authService.register(values.name, values.email, values.password),
     onSuccess: () => {
       toast.success("Account created!");
+      queryClient.clear();
       router.push(redirectTo);
+      router.refresh();
     },
     onError: (error: Error) => toast.error(error.message || "Something went wrong. Please try again."),
   });
@@ -90,18 +85,25 @@ function BuyerRegisterForm() {
               {errors.email ? <p className="text-destructive text-xs">{errors.email.message}</p> : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone number (optional)</Label>
-              <Input id="phone" placeholder="07X XXX XXXX" {...register("phone")} />
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" {...register("password")} />
+              {errors.password ? (
+                <p className="text-destructive text-xs">{errors.password.message}</p>
+              ) : null}
             </div>
-            <p className="text-muted-foreground text-xs">
-              This is a demo account — no password is required, so anyone who knows your email
-              could sign in as you. Don&apos;t use real personal details.
-            </p>
             <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               Create account
             </Button>
           </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">or</span>
+            <div className="bg-border h-px flex-1" />
+          </div>
+
+          <GoogleSignInButton />
         </CardContent>
       </Card>
 

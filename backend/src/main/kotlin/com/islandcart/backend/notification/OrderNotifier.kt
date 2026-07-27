@@ -4,6 +4,7 @@ import com.islandcart.backend.order.Order
 import com.islandcart.backend.store.StoreSettingsRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.web.multipart.MultipartFile
 
 /**
  * Owns order-lifecycle email copy and picks the right recipient for each
@@ -76,6 +77,30 @@ class OrderNotifier(
         sendSafely(to = order.buyerEmail, subject = subject, body = body)
     }
 
+    /** [courierReceiptFile] (if any) is attached directly from the just-uploaded file — cheaper and simpler than reading it back from storage. */
+    fun orderShipped(order: Order, courierReceiptFile: MultipartFile?) {
+        val attachment = courierReceiptFile?.takeIf { !it.isEmpty }?.let {
+            EmailAttachment(
+                filename = it.originalFilename?.takeIf { name -> name.isNotBlank() } ?: "courier-receipt",
+                contentType = it.contentType ?: "application/octet-stream",
+                bytes = it.bytes,
+            )
+        }
+        sendSafely(
+            to = order.buyerEmail,
+            subject = "Your IslandCart order ${order.orderNumber} has shipped",
+            body = buildString {
+                appendLine("Good news — ${order.store.name} has handed your order ${order.orderNumber} to the courier.")
+                appendLine()
+                appendLine("Courier: ${order.courierServiceName}")
+                appendLine("Tracking number: ${order.trackingNumber}")
+                appendLine()
+                appendLine("Track your order: ${orderUrl(order)}")
+            },
+            attachment = attachment,
+        )
+    }
+
     fun receiptReminder(order: Order) {
         sendSafely(
             to = order.buyerEmail,
@@ -98,9 +123,9 @@ class OrderNotifier(
      * and move on, same principle as the buyer-default-shipping save in
      * OrderService#createOrder.
      */
-    private fun sendSafely(to: String, subject: String, body: String) {
+    private fun sendSafely(to: String, subject: String, body: String, attachment: EmailAttachment? = null) {
         try {
-            emailService.send(to, subject, body)
+            emailService.send(to, subject, body, attachment)
         } catch (e: Exception) {
             log.warn("Failed to send notification email to {} (subject=\"{}\") — not failing the triggering operation", to, subject, e)
         }

@@ -1,7 +1,10 @@
 package com.islandcart.backend.payout
 
 import com.islandcart.backend.common.ConflictException
+import com.islandcart.backend.common.ForbiddenException
 import com.islandcart.backend.common.NotFoundException
+import com.islandcart.backend.common.security.CurrentActor
+import com.islandcart.backend.common.storage.FileStorageService
 import com.islandcart.backend.order.Order
 import com.islandcart.backend.order.OrderRepository
 import com.islandcart.backend.order.OrderResponse
@@ -22,17 +25,29 @@ class PayoutService(
     private val orderRepository: OrderRepository,
     private val storeRepository: StoreRepository,
     private val receiptStorageService: ReceiptStorageService,
+    private val fileStorageService: FileStorageService,
+    private val currentActor: CurrentActor,
 ) {
-    fun listByStore(storeId: UUID): List<PayoutResponse> =
-        payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+    fun listByStore(storeId: UUID): List<PayoutResponse> {
+        requireSellerOwnsStore(storeId)
+        return payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+    }
 
     /**
      * Orders that are delivered + paid but not part of any payout (scheduled
      * or already paid) yet — money the platform is still holding on the
      * seller's behalf. Mirrors payouts.service.ts#getEligibleOrdersForPayout.
      */
-    fun getEligibleOrders(storeId: UUID): List<OrderResponse> =
-        eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService) }
+    fun getEligibleOrders(storeId: UUID): List<OrderResponse> {
+        requireSellerOwnsStore(storeId)
+        return eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+    }
+
+    private fun requireSellerOwnsStore(storeId: UUID) {
+        val seller = currentActor.requireSeller()
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+    }
 
     private fun eligibleOrderEntities(storeId: UUID): List<Order> {
         val alreadyIncluded = payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId)

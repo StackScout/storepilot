@@ -51,4 +51,12 @@ class StoreSettings(
     var businessRegistrationNumber: String? = null,
     @Column(name = "rejection_reason", columnDefinition = "text")
     var rejectionReason: String? = null,
+    /** Stored reference (local path or S3 key) from FileStorageService — resolve via resolveUrl() at read time, never persist a fixed URL. */
+    @Column(name = "nic_document_url")
+    var nicDocumentUrl: String? = null,
+    @Column(name = "business_reg_document_url")
+    var businessRegDocumentUrl: String? = null,
+    /** Store-wide switch — when false, no product in this store tracks stock, regardless of each Product.trackStock; the new-product page hides the stock UI entirely. */
+    @Column(name = "stock_management_enabled", nullable = false)
+    var stockManagementEnabled: Boolean = true,
 ) : BaseEntity()

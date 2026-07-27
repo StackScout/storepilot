@@ -17,6 +17,8 @@ import com.islandcart.backend.product.Product
 import com.islandcart.backend.product.ProductImage
 import com.islandcart.backend.product.ProductRepository
 import com.islandcart.backend.product.ProductStatus
+import com.islandcart.backend.seller.Seller
+import com.islandcart.backend.seller.SellerRepository
 import com.islandcart.backend.store.SellerType
 import com.islandcart.backend.store.Store
 import com.islandcart.backend.store.StoreAddress
@@ -59,6 +61,13 @@ private data class SeedStore(
     val followerCount: Int,
 )
 
+private data class SeedSeller(
+    val storeKey: String,
+    val cognitoSub: String,
+    val email: String,
+    val name: String,
+)
+
 private data class SeedProduct(
     val storeKey: String,
     val name: String,
@@ -93,6 +102,7 @@ class DataSeeder(
     private val buyerRepository: BuyerRepository,
     private val orderRepository: OrderRepository,
     private val payoutRepository: PayoutRepository,
+    private val sellerRepository: SellerRepository,
     private val jdbcTemplate: JdbcTemplate,
 ) : CommandLineRunner {
     private val log = LoggerFactory.getLogger(DataSeeder::class.java)
@@ -105,7 +115,8 @@ class DataSeeder(
         }
         log.info("Seeding database from frontend mock data...")
 
-        val storeIds = seedStores()
+        val sellers = seedSellers()
+        val storeIds = seedStores(sellers)
         seedStoreSettings(storeIds.getValue("store-01"))
         val productIds = seedProducts(storeIds)
         seedBuyer()
@@ -120,7 +131,34 @@ class DataSeeder(
         )
     }
 
-    private fun seedStores(): Map<String, UUID> {
+    /**
+     * One Seller row per seed store. store-01 (Ceylon Spice Co., the store
+     * every dashboard/order flow demo interacts with) is linked to the real
+     * `test-seller@islandcart.test` Cognito user created for local dev
+     * (see infra's manually-created Cognito pool) — logging in as that user
+     * manages store-01, the same role the old hardcoded
+     * CURRENT_SELLER_STORE_ID demo login played. The other 7 are placeholder
+     * rows with synthetic cognitoSub values — nobody needs to log in as
+     * them, they exist only to satisfy Store.sellerId and populate the
+     * marketplace catalogue.
+     */
+    private fun seedSellers(): Map<String, Seller> {
+        val seeds = listOf(
+            SeedSeller("store-01", "41b39d1a-0051-70ad-50b2-9dac620a0ff0", "test-seller@islandcart.test", "Ceylon Spice Co. Seller"),
+            SeedSeller("store-02", "seed-store-02", "seller-store-02@islandcart.test", "Kolam Batik House Seller"),
+            SeedSeller("store-03", "seed-store-03", "seller-store-03@islandcart.test", "Colombo Streetwear Seller"),
+            SeedSeller("store-04", "seed-store-04", "seller-store-04@islandcart.test", "Nuwara Glow Beauty Seller"),
+            SeedSeller("store-05", "seed-store-05", "seller-store-05@islandcart.test", "Lanka Gems & Jewels Seller"),
+            SeedSeller("store-06", "seed-store-06", "seller-store-06@islandcart.test", "TechHub Lanka Seller"),
+            SeedSeller("store-07", "seed-store-07", "seller-store-07@islandcart.test", "Village Basket Seller"),
+            SeedSeller("store-08", "seed-store-08", "seller-store-08@islandcart.test", "Home & Hearth Lanka Seller"),
+        )
+        return seeds.associate { s ->
+            s.storeKey to sellerRepository.save(Seller(cognitoSub = s.cognitoSub, email = s.email, name = s.name))
+        }
+    }
+
+    private fun seedStores(sellers: Map<String, Seller>): Map<String, UUID> {
         val seeds = listOf(
             SeedStore("store-01", "ceylon-spice-co", "Ceylon Spice Co.", "Farm-fresh spices & tea from the hills of Kandy", "We source cinnamon, tea and spices directly from small growers around Kandy and Matale, roasting and packing everything in small batches for freshness.", StoreCategory.FOOD_BEVERAGE, "Kandy", "Kandy", "Central", "+94771234501", 4.8, 214, 4, true, "2024-02-11", 1320),
             SeedStore("store-02", "kolam-batik-house", "Kolam Batik House", "Handmade batik, straight from the Galle Fort workshops", "Three generations of batik artisans creating hand-painted sarongs, dresses and home textiles using traditional wax-resist dyeing.", StoreCategory.HANDICRAFTS, "Galle", "Galle", "Southern", "+94771234502", 4.9, 156, 3, true, "2023-11-02", 980),
@@ -135,6 +173,7 @@ class DataSeeder(
         val ids = mutableMapOf<String, UUID>()
         for (s in seeds) {
             val store = Store(
+                seller = sellers.getValue(s.key),
                 slug = s.slug,
                 name = s.name,
                 tagline = s.tagline,

@@ -1,17 +1,27 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { createBuyerSession } from "@/lib/actions/auth";
-import { buyersService } from "@/services";
+import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
+import { authService } from "@/services";
+
+const loginSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(1, "Enter your password"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function BuyerLoginPage() {
   return (
@@ -25,17 +35,42 @@ function BuyerLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/account";
-  const [email, setEmail] = useState("");
+  const queryClient = useQueryClient();
+
+  // AuthController.googleCallback redirects here with this on failure
+  // (e.g. the Google popup was cancelled, or the code exchange failed).
+  useEffect(() => {
+    if (searchParams.get("error") === "google_auth_failed") {
+      toast.error("Google sign-in didn't work. Please try again.");
+    }
+  }, [searchParams]);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const buyer = await buyersService.getBuyerByEmail(email);
-      if (!buyer) {
-        throw new Error("No account found with that email.");
+    mutationFn: async (values: LoginFormValues) => {
+      const session = await authService.login(values.email, values.password);
+      // authService.login() authenticates against Cognito regardless of
+      // which login page called it — it has no notion of "buyer login" vs
+      // "seller login". Without this check, a seller-only account would
+      // authenticate successfully here, then get silently bounced back to
+      // this page by proxy.ts's role gate on /account/**, with no
+      // indication of what happened.
+      if (session.role !== "buyer") {
+        await authService.logout();
+        throw new Error("This account isn't registered as a buyer. Try the seller or admin sign-in instead.");
       }
-      await createBuyerSession(buyer.id, buyer.name, buyer.email);
+      return session;
     },
-    onSuccess: () => router.push(redirectTo),
+    onSuccess: () => {
+      queryClient.clear();
+      router.push(redirectTo);
+      router.refresh();
+    },
   });
 
   return (
@@ -52,43 +87,37 @@ function BuyerLoginForm() {
 
       <Card>
         <CardContent>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              mutation.mutate();
-            }}
-            className="space-y-4"
-          >
+          <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <Input id="email" type="email" placeholder="you@example.com" {...register("email")} />
+              {errors.email ? <p className="text-destructive text-xs">{errors.email.message}</p> : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" {...register("password")} />
+              {errors.password ? (
+                <p className="text-destructive text-xs">{errors.password.message}</p>
+              ) : null}
             </div>
             {mutation.isError ? (
               <p className="text-destructive text-xs">
-                {mutation.error instanceof Error ? mutation.error.message : "Something went wrong."}{" "}
-                <Link
-                  href={`/account/register${redirectTo !== "/account" ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`}
-                  className="underline"
-                >
-                  Create an account instead?
-                </Link>
+                {mutation.error instanceof Error ? mutation.error.message : "Something went wrong."}
               </p>
             ) : null}
-            <p className="text-muted-foreground text-xs">
-              This is a demo sign-in — no password required, just your account&apos;s email.
-            </p>
             <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Continue
+              Sign in
             </Button>
           </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">or</span>
+            <div className="bg-border h-px flex-1" />
+          </div>
+
+          <GoogleSignInButton />
         </CardContent>
       </Card>
 

@@ -87,7 +87,7 @@ export default function CartPage() {
                   ) : (
                     <QuantityStepper
                       quantity={item.quantity}
-                      max={item.stockQuantity}
+                      max={item.trackStock ? item.stockQuantity : undefined}
                       onChange={(q) => updateQuantity(item.productId, q)}
                     />
                   )}

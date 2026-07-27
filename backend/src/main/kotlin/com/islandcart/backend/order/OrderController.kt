@@ -1,5 +1,6 @@
 package com.islandcart.backend.order
 
+import com.islandcart.backend.common.PageResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -23,10 +24,12 @@ class OrderController(
     fun listByStore(
         @PathVariable storeId: UUID,
         @RequestParam status: String?,
-    ): List<OrderResponse> = orderService.listByStore(storeId, status)
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<OrderResponse> = orderService.listByStore(storeId, status, page, size)
 
-    @GetMapping("/api/buyers/{buyerId}/orders")
-    fun listByBuyer(@PathVariable buyerId: UUID): List<OrderResponse> = orderService.listByBuyer(buyerId)
+    @GetMapping("/api/me/orders")
+    fun listByCurrentBuyer(): List<OrderResponse> = orderService.listByCurrentBuyer()
 
     @GetMapping("/api/orders/lookup")
     fun lookup(
@@ -44,11 +47,12 @@ class OrderController(
     fun create(@Valid @RequestBody input: CheckoutInput): ResponseEntity<OrderResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(orderService.createOrder(input))
 
-    @PatchMapping("/api/orders/{id}/status")
+    @PatchMapping("/api/orders/{id}/status", consumes = ["multipart/form-data"])
     fun updateStatus(
         @PathVariable id: UUID,
-        @Valid @RequestBody input: OrderStatusUpdateInput,
-    ): OrderResponse = orderService.updateStatus(id, input)
+        @Valid @RequestPart("data") input: OrderStatusUpdateInput,
+        @RequestPart(value = "courierReceipt", required = false) courierReceipt: MultipartFile?,
+    ): OrderResponse = orderService.updateStatus(id, input, courierReceipt)
 
     @PostMapping("/api/orders/{id}/receipt", consumes = ["multipart/form-data"])
     fun uploadReceipt(

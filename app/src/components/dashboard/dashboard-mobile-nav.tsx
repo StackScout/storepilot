@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { DashboardSidebarContent } from "@/components/dashboard/dashboard-sidebar";
 
-export function DashboardMobileNav({ sellerEmail }: { sellerEmail?: string }) {
+export function DashboardMobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [lastPathname, setLastPathname] = useState(pathname);
@@ -24,7 +24,7 @@ export function DashboardMobileNav({ sellerEmail }: { sellerEmail?: string }) {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent side="left" className="w-72 p-0">
         <SheetTitle className="sr-only">Dashboard navigation</SheetTitle>
-        <DashboardSidebarContent sellerEmail={sellerEmail} />
+        <DashboardSidebarContent />
       </SheetContent>
       <Button
         variant="outline"

@@ -1,5 +1,7 @@
 package com.islandcart.backend.order
 
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -7,7 +9,14 @@ import java.time.Instant
 import java.util.UUID
 
 interface OrderRepository : JpaRepository<Order, UUID> {
+    /** Unpaged — used where the full set is genuinely needed (e.g. PayoutService's eligible-orders scan). See the Pageable overloads below for the seller dashboard's order list. */
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<Order>
+
+    fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus): List<Order>
+
+    fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Order>
+
+    fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus, pageable: Pageable): Page<Order>
 
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Order>
 

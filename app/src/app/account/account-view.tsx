@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, MapPin, Package, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,38 +10,36 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
-import { signOutBuyer } from "@/lib/actions/auth";
 import { formatDate } from "@/lib/format";
-import { ordersService, buyersService } from "@/services";
+import { ordersService, buyersService, authService } from "@/services";
 
-export function AccountView({
-  buyerId,
-  name,
-  email,
-}: {
-  buyerId: string;
-  name: string;
-  email: string;
-}) {
+export function AccountView() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
   const { data: buyer } = useQuery({
-    queryKey: ["buyer", buyerId],
-    queryFn: () => buyersService.getBuyerById(buyerId),
+    queryKey: ["buyer", "me"],
+    queryFn: () => buyersService.getCurrentBuyer(),
   });
 
   const { data: orders, isLoading } = useQuery({
-    queryKey: ["orders", "buyer", buyerId],
-    queryFn: () => ordersService.listOrdersByBuyer(buyerId),
+    queryKey: ["orders", "me"],
+    queryFn: () => ordersService.listMyOrders(),
   });
+
+  async function handleSignOut() {
+    await authService.logout();
+    queryClient.clear();
+    router.push("/account/login");
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">My account</h1>
-        <form action={signOutBuyer}>
-          <Button type="submit" variant="outline" size="sm">
-            <LogOut className="size-3.5" /> Sign out
-          </Button>
-        </form>
+        <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
+          <LogOut className="size-3.5" /> Sign out
+        </Button>
       </div>
 
       <Card>
@@ -49,8 +48,8 @@ export function AccountView({
             <User className="size-5" />
           </span>
           <div>
-            <p className="font-medium">{name}</p>
-            <p className="text-muted-foreground text-sm">{email}</p>
+            <p className="font-medium">{buyer?.name}</p>
+            <p className="text-muted-foreground text-sm">{buyer?.email}</p>
             {buyer?.phone ? <p className="text-muted-foreground text-sm">{buyer.phone}</p> : null}
           </div>
         </CardContent>

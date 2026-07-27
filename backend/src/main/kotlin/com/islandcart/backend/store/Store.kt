@@ -1,10 +1,14 @@
 package com.islandcart.backend.store
 
 import com.islandcart.backend.common.BaseEntity
+import com.islandcart.backend.seller.Seller
 import jakarta.persistence.Column
 import jakarta.persistence.Embeddable
 import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 
 /** Mirrors src/types/store.ts's StoreAddress — embedded, not its own table. */
@@ -27,6 +31,9 @@ class StoreAddress(
 @Entity
 @Table(name = "stores")
 class Store(
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "seller_id", nullable = false)
+    var seller: Seller,
     @Column(nullable = false, unique = true)
     var slug: String,
     @Column(nullable = false)
@@ -57,4 +64,10 @@ class Store(
     var followerCount: Int = 0,
     @Column(name = "verification_status", nullable = false)
     var verificationStatus: StoreVerificationStatus = StoreVerificationStatus.PENDING,
+    @Column(name = "facebook_url")
+    var facebookUrl: String? = null,
+    @Column(name = "instagram_url")
+    var instagramUrl: String? = null,
+    @Column(name = "tiktok_url")
+    var tiktokUrl: String? = null,
 ) : BaseEntity()

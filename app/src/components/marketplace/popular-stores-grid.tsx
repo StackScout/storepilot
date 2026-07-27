@@ -9,7 +9,7 @@ import type { Store } from "@/types";
 export function PopularStoresGrid({ initialStores }: { initialStores: Store[] }) {
   const { data: stores } = useQuery({
     queryKey: ["stores", "popular"],
-    queryFn: () => storesService.listStores({ limit: 6 }),
+    queryFn: async () => (await storesService.listStores({ size: 6 })).content,
     initialData: initialStores,
     staleTime: 0,
   });

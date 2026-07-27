@@ -1,23 +1,47 @@
-import { apiClient, toQueryString } from "@/lib/api-client";
+import { apiClient, resolveAssetUrl, toQueryString } from "@/lib/api-client";
 import type {
+  PageResponse,
   Store,
   StoreApplicationInput,
   StoreCategory,
+  StoreProfileInput,
   StoreSettings,
   StoreVerificationStatus,
 } from "@/types";
 
+/** Uploaded document URLs may be relative (local FileStorageService) or already absolute (S3 presigned) — normalize once here. */
+function normalizeStoreSettings(settings: StoreSettings): StoreSettings {
+  return {
+    ...settings,
+    nicDocumentUrl: settings.nicDocumentUrl ? resolveAssetUrl(settings.nicDocumentUrl) : settings.nicDocumentUrl,
+    businessRegDocumentUrl: settings.businessRegDocumentUrl
+      ? resolveAssetUrl(settings.businessRegDocumentUrl)
+      : settings.businessRegDocumentUrl,
+  };
+}
+
 export interface StoreQueryParams {
   category?: StoreCategory;
   query?: string;
-  limit?: number;
+  page?: number;
+  size?: number;
 }
 
-/** GET /stores — public marketplace listing: active stores only (backend-enforced). */
-export async function listStores(params: StoreQueryParams = {}): Promise<Store[]> {
-  const qs = toQueryString({ category: params.category, query: params.query });
-  const results = await apiClient.get<Store[]>(`/api/stores${qs}`);
-  return params.limit ? results.slice(0, params.limit) : results;
+const DEFAULT_PAGE_SIZE = 24;
+
+/**
+ * GET /stores — public marketplace listing: active stores only
+ * (backend-enforced), sorted by rating server-side. Filtering and
+ * pagination both happen in the SQL query — see backend StoreService#search.
+ */
+export async function listStores(params: StoreQueryParams = {}): Promise<PageResponse<Store>> {
+  const qs = toQueryString({
+    category: params.category,
+    query: params.query,
+    page: params.page ?? 0,
+    size: params.size ?? DEFAULT_PAGE_SIZE,
+  });
+  return apiClient.get<PageResponse<Store>>(`/api/stores${qs}`);
 }
 
 /** GET /stores/:slug — public storefront page: active stores only (backend-enforced). */
@@ -32,7 +56,8 @@ export async function getStoreById(id: string): Promise<Store | null> {
 
 /** GET /stores/:id/settings */
 export async function getStoreSettings(storeId: string): Promise<StoreSettings | null> {
-  return apiClient.getOrNull<StoreSettings>(`/api/stores/${storeId}/settings`);
+  const settings = await apiClient.getOrNull<StoreSettings>(`/api/stores/${storeId}/settings`);
+  return settings ? normalizeStoreSettings(settings) : null;
 }
 
 /** PATCH /stores/:id/settings — upsert, same as the backend service. */
@@ -40,15 +65,42 @@ export async function updateStoreSettings(
   storeId: string,
   patch: Partial<Omit<StoreSettings, "storeId">>,
 ): Promise<StoreSettings> {
-  return apiClient.patch<StoreSettings>(`/api/stores/${storeId}/settings`, patch);
+  const settings = await apiClient.patch<StoreSettings>(`/api/stores/${storeId}/settings`, patch);
+  return normalizeStoreSettings(settings);
 }
 
-/** POST /stores (seller onboarding) — creates a new store in "pending" verification status. */
+/** PATCH /stores/:id/profile — seller-editable public social links. */
+export async function updateStoreProfile(storeId: string, patch: StoreProfileInput): Promise<Store> {
+  return apiClient.patch<Store>(`/api/stores/${storeId}/profile`, patch);
+}
+
+/** POST /stores/:id/nic-document — upload/replace the seller's NIC proof. */
+export async function uploadNicDocument(storeId: string, file: File): Promise<StoreSettings> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const settings = await apiClient.postForm<StoreSettings>(`/api/stores/${storeId}/nic-document`, formData);
+  return normalizeStoreSettings(settings);
+}
+
+/** POST /stores/:id/business-reg-document — upload/replace the seller's business registration proof. */
+export async function uploadBusinessRegDocument(storeId: string, file: File): Promise<StoreSettings> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const settings = await apiClient.postForm<StoreSettings>(`/api/stores/${storeId}/business-reg-document`, formData);
+  return normalizeStoreSettings(settings);
+}
+
+/** POST /stores (seller onboarding) — creates a new store in "pending" verification status. Requires a signed-in account (any Cognito user); this call is what grants the seller role. */
 export async function createStore(input: StoreApplicationInput): Promise<Store> {
   return apiClient.post<Store>("/api/stores", input);
 }
 
-// --- Admin (mock, unauthenticated — see src/app/admin) ---
+/** GET /api/me/store — the signed-in seller's own store, or null if they haven't onboarded yet. */
+export async function getMyStore(): Promise<Store | null> {
+  return apiClient.getOrNull<Store>("/api/me/store");
+}
+
+// --- Admin (requires the admin Cognito role) ---
 
 /** GET /admin/stores?status= */
 export async function adminListStores(status?: StoreVerificationStatus): Promise<Store[]> {

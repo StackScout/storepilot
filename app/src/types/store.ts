@@ -39,6 +39,16 @@ export interface Store {
   joinedAt: string;
   followerCount: number;
   verificationStatus: StoreVerificationStatus;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  tiktokUrl?: string;
+}
+
+/** Input for PATCH /api/stores/{id}/profile — seller-editable public social links. */
+export interface StoreProfileInput {
+  facebookUrl?: string;
+  instagramUrl?: string;
+  tiktokUrl?: string;
 }
 
 /** Whether a seller is registering as a private individual or a registered business. */
@@ -63,6 +73,11 @@ export interface StoreSettings {
   businessRegistrationNumber?: string;
   /** Set by admin when verificationStatus is rejected, shown to the seller. */
   rejectionReason?: string;
+  /** Uploaded proof documents — resolved to a fetchable URL by the backend at read time. */
+  nicDocumentUrl?: string;
+  businessRegDocumentUrl?: string;
+  /** Store-wide switch — when false, no product in this store tracks stock, and the new-product page hides the stock UI entirely. */
+  stockManagementEnabled: boolean;
 }
 
 /** Input for creating a new Store at seller onboarding time. */

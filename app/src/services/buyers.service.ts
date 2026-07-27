@@ -1,22 +1,17 @@
 import { apiClient } from "@/lib/api-client";
-import type { Buyer, BuyerRegistrationInput, ShippingDetails } from "@/types";
+import type { Buyer, ShippingDetails } from "@/types";
 
-/** GET /buyers/by-email — a real lookup, unlike seller /login's mock (backend returns 200 + null body if not found). */
-export async function getBuyerByEmail(email: string): Promise<Buyer | null> {
-  return apiClient.get<Buyer | null>(`/api/buyers/by-email?email=${encodeURIComponent(email)}`);
+/**
+ * GET /api/me — the signed-in buyer's own profile, derived from the auth
+ * cookie server-side. Registration/login now go through auth.service.ts
+ * (real Cognito accounts) instead of a plain buyer-profile POST — there is
+ * no more "look up or create a buyer by email" here.
+ */
+export async function getCurrentBuyer(): Promise<Buyer | null> {
+  return apiClient.getOrNull<Buyer>("/api/me");
 }
 
-/** GET /buyers/:id */
-export async function getBuyerById(id: string): Promise<Buyer | null> {
-  return apiClient.getOrNull<Buyer>(`/api/buyers/${id}`);
-}
-
-/** POST /buyers (register) */
-export async function registerBuyer(input: BuyerRegistrationInput): Promise<Buyer> {
-  return apiClient.post<Buyer>("/api/buyers", input);
-}
-
-/** PATCH /buyers/:id/default-shipping */
-export async function updateDefaultShipping(buyerId: string, shipping: ShippingDetails): Promise<Buyer> {
-  return apiClient.patch<Buyer>(`/api/buyers/${buyerId}/default-shipping`, shipping);
+/** PATCH /api/me/default-shipping */
+export async function updateDefaultShipping(shipping: ShippingDetails): Promise<Buyer> {
+  return apiClient.patch<Buyer>("/api/me/default-shipping", shipping);
 }

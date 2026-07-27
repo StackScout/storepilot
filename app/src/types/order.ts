@@ -49,6 +49,11 @@ export interface Order {
   paymentStatus: PaymentStatus;
   /** Set once the buyer uploads a bank-transfer proof-of-payment; only ever present for paymentMethod === "bank-transfer". */
   receiptUrl?: string;
+  /** Set together when the seller marks the order shipped — both required at that transition. */
+  trackingNumber?: string;
+  courierServiceName?: string;
+  /** Optional proof-of-handover upload from the seller. */
+  courierReceiptUrl?: string;
   shipping: ShippingDetails;
   timeline: OrderTimelineEntry[];
   createdAt: string;
@@ -58,13 +63,13 @@ export interface Order {
   buyerId?: string;
 }
 
+/** No buyerId field — a signed-in buyer's order is linked server-side from their auth cookie, never a client-supplied id. */
 export interface CheckoutInput {
   storeId: string;
   items: { productId: string; quantity: number }[];
   shipping: ShippingDetails;
   paymentMethod: PaymentMethod;
   email: string;
-  buyerId?: string;
 }
 
 /** Server-generated payload for PayHere's Checkout API form redirect — hash is computed backend-side so the merchant secret never reaches the browser. */

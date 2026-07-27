@@ -1,44 +1,45 @@
-import { apiClient, toQueryString } from "@/lib/api-client";
-import type { Product, ProductFormInput, StoreCategory } from "@/types";
+import { apiClient, resolveAssetUrl, toQueryString } from "@/lib/api-client";
+import type { PageResponse, Product, ProductFormInput, StoreCategory } from "@/types";
+
+/** Image URLs coming back from the backend may be relative (local FileStorageService) or already absolute (S3 presigned, or picsum.photos seed data) — normalize once here. */
+function normalizeProduct(product: Product): Product {
+  return { ...product, images: product.images.map((img) => ({ ...img, url: resolveAssetUrl(img.url) })) };
+}
 
 export interface ProductQueryParams {
   category?: StoreCategory;
   query?: string;
   sort?: "newest" | "price-asc" | "price-desc" | "rating";
-  limit?: number;
+  minPriceLkr?: number;
+  maxPriceLkr?: number;
+  page?: number;
+  size?: number;
 }
 
-function sortProducts(products: Product[], sort: ProductQueryParams["sort"]): Product[] {
-  switch (sort) {
-    case "price-asc":
-      return [...products].sort((a, b) => a.priceLkr - b.priceLkr);
-    case "price-desc":
-      return [...products].sort((a, b) => b.priceLkr - a.priceLkr);
-    case "rating":
-      return [...products].sort((a, b) => b.rating - a.rating);
-    case "newest":
-    default:
-      return [...products].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-  }
-}
+const DEFAULT_PAGE_SIZE = 24;
 
 /**
- * GET /products — sort/limit applied client-side after fetching; the
- * backend's search endpoint only filters by category/query.
+ * GET /products — filtering, sorting, and pagination all happen server-side
+ * (see backend ProductService#search); this never fetches more than one
+ * page's worth of rows.
  */
-export async function listProducts(params: ProductQueryParams = {}): Promise<Product[]> {
-  const qs = toQueryString({ category: params.category, query: params.query });
-  const results = await apiClient.get<Product[]>(`/api/products${qs}`);
-  const sorted = sortProducts(results, params.sort);
-  return params.limit ? sorted.slice(0, params.limit) : sorted;
+export async function listProducts(params: ProductQueryParams = {}): Promise<PageResponse<Product>> {
+  const qs = toQueryString({
+    category: params.category,
+    query: params.query,
+    sort: params.sort,
+    minPriceLkr: params.minPriceLkr,
+    maxPriceLkr: params.maxPriceLkr,
+    page: params.page ?? 0,
+    size: params.size ?? DEFAULT_PAGE_SIZE,
+  });
+  const result = await apiClient.get<PageResponse<Product>>(`/api/products${qs}`);
+  return { ...result, content: result.content.map(normalizeProduct) };
 }
 
-/** GET /products/featured — top-rated products; no dedicated backend endpoint, sorted client-side. */
+/** GET /products/featured — top-rated products; no dedicated backend endpoint, just page 0 of a rating-sorted search. */
 export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
-  const results = await apiClient.get<Product[]>("/api/products");
-  return [...results].sort((a, b) => b.rating - a.rating).slice(0, limit);
+  return (await listProducts({ sort: "rating", page: 0, size: limit })).content;
 }
 
 /**
@@ -52,37 +53,56 @@ export async function getProductBySlug(
 ): Promise<Product | null> {
   const store = await apiClient.getOrNull<{ id: string }>(`/api/stores/${storeSlug}`);
   if (!store) return null;
-  const products = await apiClient.get<Product[]>(`/api/stores/${store.id}/products`);
+  const products = (await apiClient.get<Product[]>(`/api/stores/${store.id}/products`)).map(normalizeProduct);
   return products.find((p) => p.slug === productSlug) ?? null;
 }
 
 /** GET /products/:id */
 export async function getProductById(id: string): Promise<Product | null> {
-  return apiClient.getOrNull<Product>(`/api/products/${id}`);
+  const product = await apiClient.getOrNull<Product>(`/api/products/${id}`);
+  return product ? normalizeProduct(product) : null;
 }
 
 /** GET /stores/:storeId/products */
 export async function listProductsByStore(storeId: string): Promise<Product[]> {
-  return apiClient.get<Product[]>(`/api/stores/${storeId}/products`);
+  return (await apiClient.get<Product[]>(`/api/stores/${storeId}/products`)).map(normalizeProduct);
+}
+
+function buildProductFormData(input: ProductFormInput, images: File[]): FormData {
+  const formData = new FormData();
+  formData.append("data", new Blob([JSON.stringify(input)], { type: "application/json" }));
+  images.forEach((file) => formData.append("images", file));
+  return formData;
 }
 
 /**
  * POST /stores/:storeId/products — `storeName`/`storeSlug` are accepted for
  * call-site compatibility but unused: the backend derives both from the
- * store relation instead of trusting client-denormalized values.
+ * store relation instead of trusting client-denormalized values. `images`
+ * must contain at least one file — the backend rejects an empty list.
  */
 export async function createProduct(
   storeId: string,
   _storeName: string,
   _storeSlug: string,
   input: ProductFormInput,
+  images: File[],
 ): Promise<Product> {
-  return apiClient.post<Product>(`/api/stores/${storeId}/products`, input);
+  const product = await apiClient.postForm<Product>(`/api/stores/${storeId}/products`, buildProductFormData(input, images));
+  return normalizeProduct(product);
 }
 
-/** PATCH /products/:id */
-export async function updateProduct(id: string, input: ProductFormInput): Promise<Product> {
-  return apiClient.patch<Product>(`/api/products/${id}`, input);
+/**
+ * PATCH /products/:id — `images` empty means "keep the product's existing
+ * images"; non-empty replaces the whole set (see backend ProductService.update).
+ */
+export async function updateProduct(
+  id: string,
+  input: ProductFormInput,
+  images: File[] = [],
+): Promise<Product> {
+  const product = await apiClient.patchForm<Product>(`/api/products/${id}`, buildProductFormData(input, images));
+  return normalizeProduct(product);
 }
 
 /** DELETE /products/:id */

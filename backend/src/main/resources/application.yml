@@ -37,9 +37,19 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://cognito-idp.${COGNITO_REGION:ap-south-1}.amazonaws.com/${COGNITO_USER_POOL_ID}
 
 server:
   port: ${PORT:8080}
+  # Behind Caddy in production, the connection Spring sees is plain HTTP
+  # inside the docker network even though the outside world is HTTPS —
+  # without this, request.isSecure() (used to set the auth cookies' Secure
+  # flag) would always read false. Caddy sets X-Forwarded-Proto by default.
+  forward-headers-strategy: framework
 
 # Origins allowed to call /api/** (WebConfig) — comma-separated. Add the
 # deployed frontend's origin here in production; localhost:3000 stays as a
@@ -51,6 +61,19 @@ app:
 aws:
   region: ${AWS_REGION:us-east-1}
 
+# Cognito is the authorization server in every environment (not aws-profile
+# gated — there's no local/mock auth implementation, unlike S3/SES). Local
+# dev needs real AWS credentials with Cognito permissions on this pool (see
+# config.yml / the islandcart-dev CLI profile), since there's no emulator.
+cognito:
+  region: ${COGNITO_REGION:ap-south-1}
+  user-pool-id: ${COGNITO_USER_POOL_ID}
+  client-id: ${COGNITO_CLIENT_ID}
+  oauth-domain: ${COGNITO_OAUTH_DOMAIN:}
+  oauth-client-id: ${COGNITO_OAUTH_CLIENT_ID:}
+  oauth-client-secret: ${COGNITO_OAUTH_CLIENT_SECRET:}
+  oauth-redirect-uri: ${COGNITO_OAUTH_REDIRECT_URI:http://localhost:8080/api/auth/google/callback}
+
 # ReceiptStorageService: upload-dir/public-path are local-profile-only
 # (upload-dir is relative to the working directory unless absolute);
 # s3-bucket-name is aws-profile-only.
@@ -58,6 +81,14 @@ receipts:
   upload-dir: ${RECEIPTS_UPLOAD_DIR:uploads/receipts}
   public-path: /uploads/receipts
   s3-bucket-name: ${RECEIPTS_S3_BUCKET_NAME:}
+
+# FileStorageService: general-purpose uploads (seller verification documents,
+# product images, courier receipts) — same local/aws split as receipts above,
+# kept in a separate bucket/root so its lifecycle isn't tied to receipts.
+file-storage:
+  upload-dir: ${FILE_STORAGE_UPLOAD_DIR:uploads/files}
+  public-path: /uploads/files
+  s3-bucket-name: ${FILE_STORAGE_S3_BUCKET_NAME:}
 
 # Sandbox by default — see docs/features/payhere-checkout.md. notify-url
 # must be a publicly reachable URL (PayHere never calls localhost), so local
@@ -81,6 +112,7 @@ notifications:
   reminder-interval-hours: ${NOTIFICATIONS_REMINDER_INTERVAL_HOURS:24}
   reminder-check-interval-ms: ${NOTIFICATIONS_REMINDER_CHECK_INTERVAL_MS:3600000}
   ses-sender-email: ${NOTIFICATIONS_SES_SENDER_EMAIL:}
+  admin-notification-email: ${NOTIFICATIONS_ADMIN_EMAIL:admin@islandcart.test}
 
 management:
   endpoints:

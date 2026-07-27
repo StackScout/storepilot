@@ -1,28 +1,48 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE } from "@/lib/session";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+const ACCESS_TOKEN_COOKIE = "islandcart_access_token";
+
+const region = process.env.NEXT_PUBLIC_COGNITO_REGION;
+const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
+const issuer = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`;
+// createRemoteJWKSet caches the JWKS response internally, so this doesn't
+// hit the network on every request — safe to call once per module load.
+const jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
 
 /**
- * Optimistic auth check for the seller dashboard and buyer account area,
- * following the Next.js pattern (proxy reads the cookie only — no DB — real
- * authorization still happens server-side wherever data is fetched).
+ * Real JWT verification (signature + expiry + issuer), edge-safe via jose —
+ * replaces the old unsigned-base64-cookie decode. Still an "optimistic"
+ * check in the sense the Next.js docs describe: real authorization happens
+ * again server-side (the Spring backend re-validates the same JWT on every
+ * API call) — this is just fast route-gating so a signed-out visitor never
+ * even renders the seller/buyer/admin shell.
  */
-function readRole(request: NextRequest): string | null {
-  const raw = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!raw) return null;
+async function getGroups(request: NextRequest): Promise<string[]> {
+  const token = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+  if (!token) return [];
   try {
-    const payload = JSON.parse(Buffer.from(raw, "base64url").toString("utf-8"));
-    return typeof payload?.role === "string" ? payload.role : null;
+    const { payload } = await jwtVerify(token, jwks, { issuer });
+    const groups = payload["cognito:groups"];
+    return Array.isArray(groups) ? groups.filter((g): g is string => typeof g === "string") : [];
   } catch {
-    return null;
+    // Expired/invalid/malformed token — treat exactly like "signed out"
+    // rather than erroring the request.
+    return [];
   }
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const role = readRole(request);
-  const isSeller = role === "seller";
-  const isBuyer = role === "buyer";
+  const groups = await getGroups(request);
+  // A single account can hold more than one group (e.g. a seller who is
+  // also a buyer) — check membership, don't assume one exclusive "role".
+  const isSeller = groups.includes("seller");
+  const isBuyer = groups.includes("buyer");
+  const isAdmin = groups.includes("admin");
+  const isSignedIn = groups.length > 0;
   const isAccountAuthPage = pathname === "/account/login" || pathname === "/account/register";
+  const isAdminLoginPage = pathname === "/admin/login";
 
   if (pathname.startsWith("/dashboard") && !isSeller) {
     const loginUrl = new URL("/login", request.url);
@@ -30,8 +50,16 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname === "/login" && isSeller) {
+  if ((pathname === "/login" || pathname === "/register") && isSeller) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Onboarding requires *some* account (buyer or seller — it's what grants
+  // the seller role in the first place), not specifically an existing seller.
+  if (pathname === "/onboarding" && !isSignedIn) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirectTo", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   if (pathname.startsWith("/account") && !isAccountAuthPage && !isBuyer) {
@@ -44,9 +72,19 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/account", request.url));
   }
 
+  if (pathname.startsWith("/admin") && !isAdminLoginPage && !isAdmin) {
+    const loginUrl = new URL("/admin/login", request.url);
+    loginUrl.searchParams.set("redirectTo", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (isAdminLoginPage && isAdmin) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/account/:path*"],
+  matcher: ["/dashboard/:path*", "/login", "/register", "/onboarding", "/account/:path*", "/admin/:path*"],
 };

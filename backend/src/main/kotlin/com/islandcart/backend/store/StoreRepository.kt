@@ -8,6 +8,8 @@ interface StoreRepository : JpaRepository<Store, UUID>, JpaSpecificationExecutor
     fun findBySlug(slug: String): Store?
 
     fun findByVerificationStatus(status: StoreVerificationStatus): List<Store>
+
+    fun findBySellerId(sellerId: UUID): Store?
 }
 
 interface StoreSettingsRepository : JpaRepository<StoreSettings, UUID>

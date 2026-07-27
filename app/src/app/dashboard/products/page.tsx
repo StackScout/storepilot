@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { PriceDisplay } from "@/components/shared/price-display";
@@ -108,7 +109,9 @@ export default function DashboardProductsPage() {
                       <td className="px-6 py-3">
                         <PriceDisplay priceLkr={product.priceLkr} size="sm" />
                       </td>
-                      <td className="px-6 py-3">{product.stockQuantity}</td>
+                      <td className="px-6 py-3">
+                        {product.trackStock ? product.stockQuantity : "—"}
+                      </td>
                       <td className="px-6 py-3">
                         <Badge
                           variant={product.status === "active" ? "secondary" : "outline"}
@@ -123,6 +126,10 @@ export default function DashboardProductsPage() {
                       </td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-1">
+                          <CopyLinkButton
+                            path={`/stores/${product.storeSlug}/products/${product.slug}`}
+                            iconOnly
+                          />
                           <Button
                             render={<Link href={`/dashboard/products/${product.id}/edit`} />}
                             variant="ghost"

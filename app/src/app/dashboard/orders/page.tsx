@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -25,16 +26,26 @@ const FILTERS: { label: string; value: OrderStatus | "all" }[] = [
   { label: ORDER_STATUS_LABELS.cancelled, value: "cancelled" },
 ];
 
+const PAGE_SIZE = 20;
+
 export default function DashboardOrdersPage() {
   const storeId = useSellerStoreId();
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
+  const [page, setPage] = useState(0);
 
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ["orders", storeId],
-    queryFn: () => ordersService.listOrdersByStore(storeId),
+  const { data, isLoading } = useQuery({
+    queryKey: ["orders", storeId, filter, page],
+    queryFn: () =>
+      ordersService.listOrdersByStore(storeId, filter === "all" ? undefined : filter, page, PAGE_SIZE),
   });
 
-  const filteredOrders = (orders ?? []).filter((o) => filter === "all" || o.status === filter);
+  const filteredOrders = data?.content ?? [];
+  const totalPages = data?.totalPages ?? 0;
+
+  function handleFilterChange(next: OrderStatus | "all") {
+    setFilter(next);
+    setPage(0);
+  }
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -47,7 +58,7 @@ export default function DashboardOrdersPage() {
         {FILTERS.map((f) => (
           <button
             key={f.value}
-            onClick={() => setFilter(f.value)}
+            onClick={() => handleFilterChange(f.value)}
             className={cn(
               "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
               filter === f.value ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent",
@@ -110,6 +121,32 @@ export default function DashboardOrdersPage() {
           )}
         </CardContent>
       </Card>
+
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between">
+          <p className="text-muted-foreground text-sm">
+            Page {page + 1} of {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              <ChevronLeft className="size-3.5" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page + 1 >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next <ChevronRight className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

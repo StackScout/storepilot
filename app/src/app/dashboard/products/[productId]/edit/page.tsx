@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Loader2, PackageX } from "lucide-react";
 import { ProductForm } from "@/components/dashboard/product-form";
 import { EmptyState } from "@/components/shared/empty-state";
-import { productsService } from "@/services";
+import { productsService, storesService } from "@/services";
 import type { ProductFormInput } from "@/types";
 
 export default function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
@@ -20,8 +20,15 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
     queryFn: () => productsService.getProductById(productId),
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ["store-settings", product?.storeId],
+    queryFn: () => storesService.getStoreSettings(product!.storeId),
+    enabled: !!product,
+  });
+
   const mutation = useMutation({
-    mutationFn: (input: ProductFormInput) => productsService.updateProduct(productId, input),
+    mutationFn: ({ input, images }: { input: ProductFormInput; images: File[] }) =>
+      productsService.updateProduct(productId, input, images),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
@@ -51,9 +58,10 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
       </div>
       <ProductForm
         initialProduct={product}
-        onSubmit={(input) => mutation.mutate(input)}
+        onSubmit={(input, images) => mutation.mutate({ input, images })}
         isSubmitting={mutation.isPending}
         submitLabel="Save changes"
+        stockManagementEnabled={settings?.stockManagementEnabled ?? true}
       />
     </div>
   );

@@ -30,6 +30,11 @@ class GlobalExceptionHandler {
         ResponseEntity.status(HttpStatus.FORBIDDEN)
             .body(ApiError.of("FORBIDDEN_OWNERSHIP", ex.message ?: "Forbidden"))
 
+    @ExceptionHandler(UnauthenticatedException::class)
+    fun handleUnauthenticated(ex: UnauthenticatedException): ResponseEntity<ApiError> =
+        ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(ApiError.of("UNAUTHENTICATED", ex.message ?: "Invalid credentials"))
+
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgument(ex: IllegalArgumentException): ResponseEntity<ApiError> =
         ResponseEntity.status(HttpStatus.BAD_REQUEST)

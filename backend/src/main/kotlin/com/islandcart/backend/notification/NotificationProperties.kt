@@ -16,4 +16,6 @@ data class NotificationProperties(
     val reminderIntervalHours: Long = 24,
     /** "From" address for real sends — only read by SesEmailService (aws profile); must be SES-verified. */
     val sesSenderEmail: String = "",
+    /** Where admin-facing alerts (e.g. a seller changing payout bank details) are emailed — must be SES-verified too, same sandbox constraint as sesSenderEmail. */
+    val adminNotificationEmail: String = "",
 )

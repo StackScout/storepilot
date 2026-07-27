@@ -1,12 +1,6 @@
-import { getSession } from "@/lib/session";
 import { CheckoutForm } from "./checkout-form";
 
-export default async function CheckoutPage() {
-  const session = await getSession();
-  const buyerSession =
-    session?.role === "buyer"
-      ? { buyerId: session.buyerId, name: session.name, email: session.email }
-      : null;
-
-  return <CheckoutForm buyerSession={buyerSession} />;
+/** CheckoutForm resolves its own signed-in-buyer state client-side (there's no server-decodable session anymore, only a JWT the backend validates) — guest checkout works exactly the same either way. */
+export default function CheckoutPage() {
+  return <CheckoutForm />;
 }

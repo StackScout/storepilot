@@ -9,9 +9,3 @@ export interface Buyer {
   defaultShipping?: ShippingDetails;
   createdAt: string;
 }
-
-export interface BuyerRegistrationInput {
-  name: string;
-  email: string;
-  phone?: string;
-}

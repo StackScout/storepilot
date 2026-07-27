@@ -1,15 +1,22 @@
 package com.islandcart.backend.order
 
-import com.islandcart.backend.buyer.BuyerRepository
 import com.islandcart.backend.common.ConflictException
 import com.islandcart.backend.common.FLAT_SHIPPING_FEE_LKR
+import com.islandcart.backend.common.ForbiddenException
 import com.islandcart.backend.common.NotFoundException
 import com.islandcart.backend.common.PLATFORM_FEE_PERCENT
+import com.islandcart.backend.common.PageResponse
 import com.islandcart.backend.common.ShippingDetails
+import com.islandcart.backend.common.security.CurrentActor
+import com.islandcart.backend.common.storage.FileStorageService
+import com.islandcart.backend.common.storage.FileUploadPolicies
+import com.islandcart.backend.common.toPageResponse
 import com.islandcart.backend.common.wireValueOf
 import com.islandcart.backend.notification.OrderNotifier
 import com.islandcart.backend.product.ProductService
+import com.islandcart.backend.store.StoreRepository
 import com.islandcart.backend.store.StoreSettingsRepository
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -40,24 +47,46 @@ private val STATUS_LABELS = mapOf(
 @Transactional(readOnly = true)
 class OrderService(
     private val orderRepository: OrderRepository,
+    private val storeRepository: StoreRepository,
     private val storeSettingsRepository: StoreSettingsRepository,
-    private val buyerRepository: BuyerRepository,
     private val productService: ProductService,
     private val receiptStorageService: ReceiptStorageService,
+    private val fileStorageService: FileStorageService,
     private val orderNotifier: OrderNotifier,
+    private val currentActor: CurrentActor,
 ) {
-    fun listByStore(storeId: UUID, status: String?): List<OrderResponse> {
+    /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
+    fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
+        val seller = currentActor.requireSeller()
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+
         val statusEnum = status?.let { wireValueOf<OrderStatus>(it) }
-        return orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .filter { statusEnum == null || it.status == statusEnum }
-            .map { it.toResponse(receiptStorageService) }
+        val pageable = PageRequest.of(page, size)
+        val orders = if (statusEnum != null) {
+            orderRepository.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, statusEnum, pageable)
+        } else {
+            orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable)
+        }
+        return orders.toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
-    fun listByBuyer(buyerId: UUID): List<OrderResponse> =
-        orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.toResponse(receiptStorageService) }
+    /**
+     * GET /api/me/orders — buyerId always comes from CurrentActor, never a
+     * path/query param (that was the by-buyerId IDOR gap this replaced).
+     * Explicitly @Transactional (not the class default readOnly = true):
+     * requireBuyer() may JIT-provision a new row on a caller's first
+     * request, and that write fails under Postgres if nested inside a
+     * read-only transaction (see CurrentActor.buyerOrNull's doc comment).
+     */
+    @Transactional
+    fun listByCurrentBuyer(): List<OrderResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        return orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.toResponse(receiptStorageService, fileStorageService) }
+    }
 
     fun getById(id: UUID): OrderResponse =
-        orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }.toResponse(receiptStorageService)
+        orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }.toResponse(receiptStorageService, fileStorageService)
 
     /** GET /api/orders/lookup — order number (exact, case-insensitive) + last 9 digits of phone. */
     fun findByNumberAndPhone(orderNumber: String, phone: String): OrderResponse? {
@@ -65,7 +94,7 @@ class OrderService(
         val suffix = normalizedInput.takeLast(9)
         val order = orderRepository.findByOrderNumberIgnoreCase(orderNumber.trim()) ?: return null
         val storedPhone = order.shipping.phone?.replace(Regex("\\s+"), "") ?: return null
-        return if (storedPhone.endsWith(suffix)) order.toResponse(receiptStorageService) else null
+        return if (storedPhone.endsWith(suffix)) order.toResponse(receiptStorageService, fileStorageService) else null
     }
 
     /** POST /api/orders — checkout. */
@@ -94,7 +123,10 @@ class OrderService(
         // PayHere flips to paid asynchronously via the notify webhook once the
         // buyer actually completes payment in the popup.
         val paymentStatus = PaymentStatus.UNPAID
-        val buyer = input.buyerId?.let { buyerRepository.findById(it).orElse(null) }
+        // Guest checkout stays unauthenticated (order ID is the credential
+        // for later lookup) — this is null for a guest, never a
+        // client-supplied field (see CheckoutInput's doc comment).
+        val buyer = currentActor.buyerOrNull()
 
         val order = Order(
             orderNumber = generateOrderNumber(now),
@@ -138,13 +170,19 @@ class OrderService(
 
         orderNotifier.orderConfirmed(saved)
 
-        return saved.toResponse(receiptStorageService)
+        return saved.toResponse(receiptStorageService, fileStorageService)
     }
 
-    /** PATCH /api/orders/{id}/status */
+    /**
+     * PATCH /api/orders/{id}/status. [courierReceipt] is only meaningful
+     * when transitioning to "shipped" — an optional proof-of-handover
+     * upload, attached to the shipped-notification email in addition to
+     * being stored for later viewing on the order page.
+     */
     @Transactional
-    fun updateStatus(id: UUID, input: OrderStatusUpdateInput): OrderResponse {
+    fun updateStatus(id: UUID, input: OrderStatusUpdateInput, courierReceipt: MultipartFile?): OrderResponse {
         val order = orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }
+        requireSellerOwnsOrder(order)
         val status = wireValueOf<OrderStatus>(input.status)
 
         order.status = status
@@ -154,6 +192,24 @@ class OrderService(
         if (status == OrderStatus.CANCELLED && order.paymentStatus == PaymentStatus.PAID) {
             order.paymentStatus = PaymentStatus.REFUNDED
         }
+
+        if (status == OrderStatus.SHIPPED) {
+            val trackingNumber = input.trackingNumber?.trim()
+            val courierServiceName = input.courierServiceName?.trim()
+            require(!trackingNumber.isNullOrBlank()) { "Tracking number is required to mark an order as shipped" }
+            require(!courierServiceName.isNullOrBlank()) { "Courier service name is required to mark an order as shipped" }
+            order.trackingNumber = trackingNumber
+            order.courierServiceName = courierServiceName
+            if (courierReceipt != null && !courierReceipt.isEmpty) {
+                order.courierReceiptUrl = fileStorageService.store(
+                    "courier-receipts",
+                    courierReceipt,
+                    FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+                    FileUploadPolicies.DOCUMENT_MAX_BYTES,
+                )
+            }
+        }
+
         order.timeline.add(
             OrderTimelineEntry(
                 order = order,
@@ -163,7 +219,11 @@ class OrderService(
                 note = input.note,
             ),
         )
-        return orderRepository.save(order).toResponse(receiptStorageService)
+        val saved = orderRepository.save(order)
+        if (status == OrderStatus.SHIPPED) {
+            orderNotifier.orderShipped(saved, courierReceipt)
+        }
+        return saved.toResponse(receiptStorageService, fileStorageService)
     }
 
     /** POST /api/orders/{id}/receipt — buyer uploads proof of a bank transfer. */
@@ -189,13 +249,14 @@ class OrderService(
         )
         val saved = orderRepository.save(order)
         orderNotifier.receiptUploaded(saved)
-        return saved.toResponse(receiptStorageService)
+        return saved.toResponse(receiptStorageService, fileStorageService)
     }
 
     /** POST /api/orders/{id}/verify-bank-transfer — seller accepts or rejects the uploaded receipt. */
     @Transactional
     fun verifyBankTransfer(id: UUID, input: VerifyBankTransferInput): OrderResponse {
         val order = orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }
+        requireSellerOwnsOrder(order)
         if (order.paymentMethod != PaymentMethod.BANK_TRANSFER) {
             throw ConflictException("Order $id is not a bank transfer payment")
         }
@@ -235,7 +296,7 @@ class OrderService(
         }
         val saved = orderRepository.save(order)
         orderNotifier.bankTransferVerified(saved, input.approved, input.note)
-        return saved.toResponse(receiptStorageService)
+        return saved.toResponse(receiptStorageService, fileStorageService)
     }
 
     /**
@@ -277,12 +338,17 @@ class OrderService(
                 },
             ),
         )
-        return orderRepository.save(order).toResponse(receiptStorageService)
+        return orderRepository.save(order).toResponse(receiptStorageService, fileStorageService)
     }
 
     private fun generateOrderNumber(now: Instant): String {
         val datePart = ORDER_NUMBER_DATE_FORMAT.format(now.atZone(java.time.ZoneOffset.UTC))
         val randomPart = Random.nextInt(1000, 10000)
         return "SL-$datePart-$randomPart"
+    }
+
+    private fun requireSellerOwnsOrder(order: Order) {
+        val seller = currentActor.requireSeller()
+        if (order.store.seller.id != seller.id) throw ForbiddenException("You don't own order ${order.id}")
     }
 }

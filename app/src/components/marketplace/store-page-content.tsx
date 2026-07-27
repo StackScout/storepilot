@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, MapPin, MessageCircle, PackageX, Users } from "lucide-react";
+import { BadgeCheck, ExternalLink, MapPin, MessageCircle, PackageX, Users } from "lucide-react";
 import { StoreProductGrid } from "@/components/marketplace/store-product-grid";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -98,6 +98,23 @@ export function StorePageContent({
             <Users className="size-3.5" /> {store.followerCount.toLocaleString()} followers
           </span>
           <span>{getCategoryLabel(store.category)}</span>
+          {[
+            store.facebookUrl ? { href: store.facebookUrl, label: "Facebook" } : null,
+            store.instagramUrl ? { href: store.instagramUrl, label: "Instagram" } : null,
+            store.tiktokUrl ? { href: store.tiktokUrl, label: "TikTok" } : null,
+          ]
+            .filter((link) => link !== null)
+            .map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground flex items-center gap-1"
+              >
+                <ExternalLink className="size-3.5" /> {link.label}
+              </a>
+            ))}
         </div>
 
         <p className="text-muted-foreground max-w-3xl py-6 text-sm leading-relaxed">

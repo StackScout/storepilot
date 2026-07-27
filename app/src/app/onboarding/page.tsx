@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CATEGORIES } from "@/mock/categories";
 import { SRI_LANKA_DISTRICTS } from "@/lib/constants";
-import { createSellerSession } from "@/lib/actions/auth";
-import { storesService } from "@/services";
+import { storesService, authService } from "@/services";
 import type { SellerType, StoreCategory } from "@/types";
 
 const onboardingSchema = z
@@ -53,6 +53,7 @@ type OnboardingFormValues = z.infer<typeof onboardingSchema>;
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
@@ -74,11 +75,16 @@ export default function OnboardingPage() {
   const sellerType = watch("sellerType");
   const agreeToTerms = watch("agreeToTerms");
 
+  const [nicFile, setNicFile] = useState<File | null>(null);
+  const [businessRegFile, setBusinessRegFile] = useState<File | null>(null);
+
   const mutation = useMutation({
     mutationFn: async (values: OnboardingFormValues) => {
-      // Store/settings creation must happen client-side: Server Actions run
-      // in Node.js, where the localStorage-backed mock DB can't write (see
-      // src/lib/mock-db.ts) — only the session cookie is set server-side.
+      if (!nicFile) throw new Error("Upload a copy of your NIC to continue");
+      if (values.sellerType === "business" && !businessRegFile) {
+        throw new Error("Upload your Business Registration certificate to continue");
+      }
+
       const store = await storesService.createStore({
         name: values.storeName,
         category: values.category as StoreCategory,
@@ -88,6 +94,14 @@ export default function OnboardingPage() {
         district: values.district,
         whatsappNumber: values.whatsappNumber,
       });
+      // createStore just granted the caller's account the "seller" Cognito
+      // group, but the access token already in the browser was issued
+      // before that — cognito:groups only reflects current membership at
+      // the moment a token is issued, so without this refresh both the
+      // settings PATCH below (ROLE_SELLER-gated) and the dashboard (gated
+      // by proxy.ts checking that same stale token) would reject the
+      // still-buyer-only token.
+      await authService.refresh();
       await storesService.updateStoreSettings(store.id, {
         contactEmail: values.contactEmail,
         contactPhone: values.whatsappNumber,
@@ -100,13 +114,22 @@ export default function OnboardingPage() {
         codEnabled: true,
         onlinePaymentEnabled: true,
       });
-      await createSellerSession(store.id, values.contactEmail);
+      await storesService.uploadNicDocument(store.id, nicFile);
+      if (businessRegFile) {
+        await storesService.uploadBusinessRegDocument(store.id, businessRegFile);
+      }
     },
     onSuccess: () => {
       toast.success("Application submitted! Your store is pending review.");
+      // React Query cached the pre-onboarding auth-session (role: "buyer"
+      // only) — clear it so the dashboard's checks see the fresh "seller"
+      // role from the token authService.refresh() just reissued above.
+      queryClient.clear();
       router.push("/dashboard");
+      router.refresh();
     },
-    onError: () => toast.error("Something went wrong submitting your application. Please try again."),
+    onError: (error: Error) =>
+      toast.error(error.message || "Something went wrong submitting your application. Please try again."),
   });
 
   return (
@@ -261,20 +284,41 @@ export default function OnboardingPage() {
               ) : null}
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="nicDocument">NIC copy (photo or PDF)</Label>
+              <Input
+                id="nicDocument"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => setNicFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+
             {sellerType === "business" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="businessRegistrationNumber">Business Registration number</Label>
-                <Input
-                  id="businessRegistrationNumber"
-                  placeholder="e.g. PV 00219845"
-                  {...register("businessRegistrationNumber")}
-                />
-                {errors.businessRegistrationNumber ? (
-                  <p className="text-destructive text-xs">
-                    {errors.businessRegistrationNumber.message}
-                  </p>
-                ) : null}
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="businessRegistrationNumber">Business Registration number</Label>
+                  <Input
+                    id="businessRegistrationNumber"
+                    placeholder="e.g. PV 00219845"
+                    {...register("businessRegistrationNumber")}
+                  />
+                  {errors.businessRegistrationNumber ? (
+                    <p className="text-destructive text-xs">
+                      {errors.businessRegistrationNumber.message}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="businessRegDocument">Business Registration certificate (photo or PDF)</Label>
+                  <Input
+                    id="businessRegDocument"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => setBusinessRegFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </>
             ) : null}
           </CardContent>
         </Card>

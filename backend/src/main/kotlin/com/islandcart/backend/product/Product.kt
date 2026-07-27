@@ -46,10 +46,12 @@ class Product(
     var compareAtPriceLkr: Int? = null,
     @Column(name = "stock_quantity", nullable = false)
     var stockQuantity: Int,
+    /** When false, stockQuantity is ignored — status is never auto-forced to out-of-stock and decrementStock skips this product. Forced false whenever the owning store has stockManagementEnabled = false, regardless of what's stored here — see ProductService. */
+    @Column(name = "track_stock", nullable = false)
+    var trackStock: Boolean = true,
     @Column(nullable = false)
     var status: ProductStatus,
-    @Column(nullable = false)
-    var sku: String,
+    var sku: String? = null,
     @Column(nullable = false)
     var rating: Double = 0.0,
     @Column(name = "review_count", nullable = false)

@@ -92,7 +92,7 @@ export function StorePageContent({
         <div className="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-b pb-6 text-sm">
           <RatingStars rating={store.rating} reviewCount={store.reviewCount} />
           <span className="flex items-center gap-1">
-            <MapPin className="size-3.5" /> {store.address.city}, {store.address.province}
+            <MapPin className="size-3.5" /> {store.address.city}, {store.address.state}
           </span>
           <span className="flex items-center gap-1">
             <Users className="size-3.5" /> {store.followerCount.toLocaleString()} followers

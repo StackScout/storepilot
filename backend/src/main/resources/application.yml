@@ -57,6 +57,31 @@ server:
 app:
   cors-allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
+# Bootstrap values only — read once by DataSeeder to insert the single
+# platform_settings row if it doesn't exist yet (see PlatformSettings.kt and
+# PlatformProperties.kt's doc comments). After that first insert, the
+# running app reads the DB row, not these values, so editing this block
+# after go-live has no effect — update the platform_settings row instead.
+# Defaults below are Australia's — the near-term deployment target while
+# the Sri Lanka launch is on hold (see PlatformProperties.kt) — so leaving
+# these unset boots an AU-configured platform; a Sri Lanka deployment
+# overrides these via env vars instead.
+platform:
+  name: ${PLATFORM_NAME:IslandCart}
+  tagline: ${PLATFORM_TAGLINE:Australia's marketplace for small business sellers}
+  country-name: ${PLATFORM_COUNTRY_NAME:Australia}
+  country-code: ${PLATFORM_COUNTRY_CODE:AU}
+  currency-code: ${PLATFORM_CURRENCY_CODE:AUD}
+  currency-symbol: ${PLATFORM_CURRENCY_SYMBOL:$}
+  currency-locale: ${PLATFORM_CURRENCY_LOCALE:en-AU}
+  platform-fee-percent: ${PLATFORM_FEE_PERCENT:3.5}
+  flat-shipping-fee: ${PLATFORM_FLAT_SHIPPING_FEE:10}
+  default-cod-enabled: ${PLATFORM_DEFAULT_COD_ENABLED:true}
+  default-online-payment-enabled: ${PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED:false}
+  default-bank-transfer-enabled: ${PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED:true}
+  support-email: ${SUPPORT_EMAIL:hello@islandcart.au}
+  company-location: ${COMPANY_LOCATION:Sydney, Australia}
+
 # Shared AWS SDK config — only meaningful under the aws profile (S3/SES clients).
 aws:
   region: ${AWS_REGION:us-east-1}

@@ -13,7 +13,7 @@ export interface OrderItem {
   productId: string;
   productName: string;
   productImageUrl: string;
-  unitPriceLkr: number;
+  unitPrice: number;
   quantity: number;
 }
 
@@ -29,7 +29,7 @@ export interface ShippingDetails {
   phone: string;
   addressLine1: string;
   city: string;
-  district: string;
+  state: string;
   postalCode: string;
 }
 
@@ -40,10 +40,10 @@ export interface Order {
   storeName: string;
   storeSlug: string;
   items: OrderItem[];
-  subtotalLkr: number;
-  shippingFeeLkr: number;
-  platformFeeLkr: number;
-  totalLkr: number;
+  subtotal: number;
+  shippingFee: number;
+  platformFee: number;
+  total: number;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;

@@ -22,7 +22,7 @@ interface CartState {
 export interface CartItemSync {
   productId: string;
   /** Present product state, or null if the product no longer exists. */
-  product: { priceLkr: number; stockQuantity: number; trackStock: boolean } | null;
+  product: { price: number; stockQuantity: number; trackStock: boolean } | null;
 }
 
 const EMPTY_CART: Cart = { storeId: null, storeName: null, storeSlug: null, items: [] };
@@ -38,7 +38,7 @@ function toCartItem(product: Product, quantity: number): CartItem {
     productName: product.name,
     productSlug: product.slug,
     productImageUrl: product.images[0]?.url ?? "",
-    unitPriceLkr: product.priceLkr,
+    unitPrice: product.price,
     quantity,
     stockQuantity: product.stockQuantity,
     trackStock: product.trackStock,
@@ -131,7 +131,7 @@ export const useCartStore = create<CartState>()(
               return {
                 ...item,
                 isUnavailable: false,
-                unitPriceLkr: product.priceLkr,
+                unitPrice: product.price,
                 stockQuantity: product.stockQuantity,
                 trackStock: product.trackStock,
               };
@@ -154,5 +154,5 @@ export function cartItemCount(cart: Cart): number {
 export function cartSubtotal(cart: Cart): number {
   return cart.items
     .filter((i) => !i.isUnavailable)
-    .reduce((sum, i) => sum + i.unitPriceLkr * i.quantity, 0);
+    .reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
 }

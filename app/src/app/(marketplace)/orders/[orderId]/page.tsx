@@ -13,9 +13,10 @@ import { CancelOrderButton } from "@/components/marketplace/cancel-order-button"
 import { EmptyState } from "@/components/shared/empty-state";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, paymentMethodLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ordersService, storesService } from "@/services";
 import type { Order, Store, StoreSettings } from "@/types";
 
@@ -25,6 +26,8 @@ export default function OrderTrackingPage({
   params: Promise<{ orderId: string }>;
 }) {
   const { orderId } = use(params);
+  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [store, setStore] = useState<Store | null>(null);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
@@ -207,7 +210,7 @@ export default function OrderTrackingPage({
                     <p className="line-clamp-1 text-sm">{item.productName}</p>
                     <p className="text-muted-foreground text-xs">Qty {item.quantity}</p>
                   </div>
-                  <PriceDisplay priceLkr={item.unitPriceLkr * item.quantity} size="sm" />
+                  <PriceDisplay price={item.unitPrice * item.quantity} size="sm" />
                 </div>
               ))}
             </div>
@@ -218,15 +221,15 @@ export default function OrderTrackingPage({
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatLkr(order.subtotalLkr)}</span>
+              <span>{formatCurrency(order.subtotal, currency)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Shipping</span>
-              <span>{formatLkr(order.shippingFeeLkr)}</span>
+              <span>{formatCurrency(order.shippingFee, currency)}</span>
             </div>
             <div className="flex justify-between text-base font-semibold">
               <span>Total</span>
-              <span>{formatLkr(order.totalLkr)}</span>
+              <span>{formatCurrency(order.total, currency)}</span>
             </div>
             <p className="text-muted-foreground pt-1 text-xs">
               Paying by {paymentMethodLabel(order.paymentMethod)}
@@ -252,7 +255,7 @@ export default function OrderTrackingPage({
                 </div>
                 {storeSettings ? (
                   <div className="bg-muted/50 space-y-1 rounded-lg border p-3.5 text-sm">
-                    <p className="font-medium">Transfer {formatLkr(order.totalLkr)} to:</p>
+                    <p className="font-medium">Transfer {formatCurrency(order.total, currency)} to:</p>
                     <p>{storeSettings.bankName}</p>
                     <p>{storeSettings.bankAccountName}</p>
                     <p className="font-mono">{storeSettings.bankAccountNumber}</p>
@@ -301,7 +304,7 @@ export default function OrderTrackingPage({
             <h2 className="mb-2 font-semibold">Delivering to</h2>
             <p className="text-sm">{order.shipping.fullName}</p>
             <p className="text-muted-foreground text-sm">
-              {order.shipping.addressLine1}, {order.shipping.city}, {order.shipping.district}{" "}
+              {order.shipping.addressLine1}, {order.shipping.city}, {order.shipping.state}{" "}
               {order.shipping.postalCode}
             </p>
             <p className="text-muted-foreground text-sm">{order.shipping.phone}</p>

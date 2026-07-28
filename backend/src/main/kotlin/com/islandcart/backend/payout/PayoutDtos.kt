@@ -6,9 +6,9 @@ import java.util.UUID
 data class PayoutOrderRefResponse(
     val orderId: UUID,
     val orderNumber: String,
-    val subtotalLkr: Int,
-    val platformFeeLkr: Int,
-    val netLkr: Int,
+    val subtotal: Int,
+    val platformFee: Int,
+    val net: Int,
 )
 
 /** Shape matches src/types/payout.ts's Payout exactly. */
@@ -17,9 +17,9 @@ data class PayoutResponse(
     val storeId: UUID,
     val storeName: String,
     val orders: List<PayoutOrderRefResponse>,
-    val subtotalLkr: Int,
-    val platformFeeLkr: Int,
-    val netLkr: Int,
+    val subtotal: Int,
+    val platformFee: Int,
+    val net: Int,
     val status: String,
     val createdAt: Instant,
     val paidAt: Instant?,

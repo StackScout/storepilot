@@ -13,6 +13,10 @@ import type {
 function normalizeStoreSettings(settings: StoreSettings): StoreSettings {
   return {
     ...settings,
+    driverLicenceDocumentUrl: settings.driverLicenceDocumentUrl
+      ? resolveAssetUrl(settings.driverLicenceDocumentUrl)
+      : settings.driverLicenceDocumentUrl,
+    abnDocumentUrl: settings.abnDocumentUrl ? resolveAssetUrl(settings.abnDocumentUrl) : settings.abnDocumentUrl,
     nicDocumentUrl: settings.nicDocumentUrl ? resolveAssetUrl(settings.nicDocumentUrl) : settings.nicDocumentUrl,
     businessRegDocumentUrl: settings.businessRegDocumentUrl
       ? resolveAssetUrl(settings.businessRegDocumentUrl)
@@ -74,7 +78,23 @@ export async function updateStoreProfile(storeId: string, patch: StoreProfileInp
   return apiClient.patch<Store>(`/api/stores/${storeId}/profile`, patch);
 }
 
-/** POST /stores/:id/nic-document — upload/replace the seller's NIC proof. */
+/** POST /stores/:id/driver-licence-document — upload/replace the seller's driver's licence proof. */
+export async function uploadDriverLicenceDocument(storeId: string, file: File): Promise<StoreSettings> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const settings = await apiClient.postForm<StoreSettings>(`/api/stores/${storeId}/driver-licence-document`, formData);
+  return normalizeStoreSettings(settings);
+}
+
+/** POST /stores/:id/abn-document — upload/replace the seller's ABN registration proof. */
+export async function uploadAbnDocument(storeId: string, file: File): Promise<StoreSettings> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const settings = await apiClient.postForm<StoreSettings>(`/api/stores/${storeId}/abn-document`, formData);
+  return normalizeStoreSettings(settings);
+}
+
+/** POST /stores/:id/nic-document — upload/replace the seller's NIC proof (Sri Lanka deployments only). */
 export async function uploadNicDocument(storeId: string, file: File): Promise<StoreSettings> {
   const formData = new FormData();
   formData.append("file", file);
@@ -82,7 +102,7 @@ export async function uploadNicDocument(storeId: string, file: File): Promise<St
   return normalizeStoreSettings(settings);
 }
 
-/** POST /stores/:id/business-reg-document — upload/replace the seller's business registration proof. */
+/** POST /stores/:id/business-reg-document — upload/replace the seller's business registration proof (Sri Lanka deployments only). */
 export async function uploadBusinessRegDocument(storeId: string, file: File): Promise<StoreSettings> {
   const formData = new FormData();
   formData.append("file", file);

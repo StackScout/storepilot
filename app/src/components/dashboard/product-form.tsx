@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ImageUploader } from "@/components/dashboard/image-uploader";
 import { cn } from "@/lib/utils";
 import { CATEGORIES } from "@/mock/categories";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import type { Product, ProductFormInput } from "@/types";
 
 const productFormSchema = z.object({
@@ -30,8 +31,8 @@ const productFormSchema = z.object({
     "jewelry",
     "grocery",
   ]),
-  priceLkr: z.number().positive("Enter a valid price"),
-  compareAtPriceLkr: z.union([z.number().positive(), z.nan()]).optional(),
+  price: z.number().positive("Enter a valid price"),
+  compareAtPrice: z.union([z.number().positive(), z.nan()]).optional(),
   stockQuantity: z.number().int().min(0, "Stock can't be negative"),
   trackStock: z.boolean(),
   sku: z.string().optional(),
@@ -66,8 +67,8 @@ export function ProductForm({
       name: initialProduct?.name ?? "",
       description: initialProduct?.description ?? "",
       category: initialProduct?.category ?? "fashion",
-      priceLkr: initialProduct?.priceLkr ?? undefined,
-      compareAtPriceLkr: initialProduct?.compareAtPriceLkr ?? undefined,
+      price: initialProduct?.price ?? undefined,
+      compareAtPrice: initialProduct?.compareAtPrice ?? undefined,
       stockQuantity: initialProduct?.stockQuantity ?? 0,
       trackStock: initialProduct?.trackStock ?? true,
       sku: initialProduct?.sku ?? "",
@@ -78,6 +79,7 @@ export function ProductForm({
   const category = watch("category");
   const status = watch("status");
   const trackStock = watch("trackStock");
+  const { currencyCode } = usePlatformConfig();
 
   const [images, setImages] = useState<File[]>([]);
   const [imagesError, setImagesError] = useState<string | undefined>(undefined);
@@ -92,9 +94,9 @@ export function ProductForm({
     onSubmit(
       {
         ...values,
-        compareAtPriceLkr:
-          values.compareAtPriceLkr && !Number.isNaN(values.compareAtPriceLkr)
-            ? values.compareAtPriceLkr
+        compareAtPrice:
+          values.compareAtPrice && !Number.isNaN(values.compareAtPrice)
+            ? values.compareAtPrice
             : undefined,
         trackStock: stockManagementEnabled && values.trackStock,
         stockQuantity: stockManagementEnabled && values.trackStock ? values.stockQuantity : 0,
@@ -168,25 +170,25 @@ export function ProductForm({
           <h2 className="font-semibold">Pricing & inventory</h2>
           <div className={cn("grid gap-4", stockManagementEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
             <div className="space-y-1.5">
-              <Label htmlFor="priceLkr">Price (LKR)</Label>
+              <Label htmlFor="price">Price ({currencyCode})</Label>
               <Input
-                id="priceLkr"
+                id="price"
                 type="number"
                 step="1"
-                {...register("priceLkr", { valueAsNumber: true })}
+                {...register("price", { valueAsNumber: true })}
               />
-              {errors.priceLkr ? (
-                <p className="text-destructive text-xs">{errors.priceLkr.message}</p>
+              {errors.price ? (
+                <p className="text-destructive text-xs">{errors.price.message}</p>
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="compareAtPriceLkr">Compare-at price</Label>
+              <Label htmlFor="compareAtPrice">Compare-at price</Label>
               <Input
-                id="compareAtPriceLkr"
+                id="compareAtPrice"
                 type="number"
                 step="1"
                 placeholder="Optional"
-                {...register("compareAtPriceLkr", { valueAsNumber: true })}
+                {...register("compareAtPrice", { valueAsNumber: true })}
               />
             </div>
             {stockManagementEnabled ? (

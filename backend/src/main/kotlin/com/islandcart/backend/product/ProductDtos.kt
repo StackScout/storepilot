@@ -23,8 +23,8 @@ data class ProductResponse(
     val description: String,
     val images: List<ProductImageResponse>,
     val category: String,
-    val priceLkr: Int,
-    val compareAtPriceLkr: Int?,
+    val price: Int,
+    val compareAtPrice: Int?,
     val stockQuantity: Int,
     val trackStock: Boolean,
     val status: String,
@@ -48,9 +48,9 @@ data class ProductFormInput(
     @field:NotBlank(message = "Select a category")
     val category: String,
     @field:Min(value = 1, message = "Price must be positive")
-    val priceLkr: Int,
+    val price: Int,
     @field:PositiveOrZero(message = "Compare-at price must be positive")
-    val compareAtPriceLkr: Int?,
+    val compareAtPrice: Int?,
     @field:PositiveOrZero(message = "Stock quantity must be zero or more")
     val stockQuantity: Int,
     val trackStock: Boolean = true,

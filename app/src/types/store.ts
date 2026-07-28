@@ -8,10 +8,10 @@ export type StoreCategory =
   | "jewelry"
   | "grocery";
 
+/** `state` is deliberately one generic "state/province" field, not a separate district+province pair — see backend's StoreAddress.state doc comment. Options come from `GET /api/states`. */
 export interface StoreAddress {
   city: string;
-  district: string;
-  province: string;
+  state: string;
 }
 
 /**
@@ -66,14 +66,26 @@ export interface StoreSettings {
   onlinePaymentEnabled: boolean;
   /** Opt-in, defaults false — shows bankName/bankAccountName/bankAccountNumber to buyers at checkout. */
   bankTransferEnabled: boolean;
-  /** Verification fields — collected at onboarding, reviewed by admin. */
+  /**
+   * Verification fields — collected at onboarding, reviewed by admin. Which
+   * pair is active (driver's licence/ABN vs NIC/business registration) is
+   * decided by this deployment's platform config country, not by the
+   * store — see `usePlatformConfig().countryCode`. Both pairs are optional
+   * here since a given deployment only ever populates one.
+   */
   sellerType: SellerType;
-  nicNumber: string;
-  /** Required when sellerType === "business"; absent for individual sellers. */
+  driverLicenceNumber?: string;
+  /** Australian Business Number — required when sellerType === "business" on an AU deployment. */
+  abn?: string;
+  /** Sri Lanka NIC number — required on an LK deployment. */
+  nicNumber?: string;
+  /** Sri Lanka Business Registration Number — required when sellerType === "business" on an LK deployment. */
   businessRegistrationNumber?: string;
   /** Set by admin when verificationStatus is rejected, shown to the seller. */
   rejectionReason?: string;
   /** Uploaded proof documents — resolved to a fetchable URL by the backend at read time. */
+  driverLicenceDocumentUrl?: string;
+  abnDocumentUrl?: string;
   nicDocumentUrl?: string;
   businessRegDocumentUrl?: string;
   /** Store-wide switch — when false, no product in this store tracks stock, and the new-product page hides the stock UI entirely. */
@@ -87,6 +99,6 @@ export interface StoreApplicationInput {
   tagline: string;
   description: string;
   city: string;
-  district: string;
+  state: string;
   whatsappNumber: string;
 }

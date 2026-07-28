@@ -24,8 +24,8 @@ export function SearchResults({
   query,
   category,
   sort,
-  minPriceLkr,
-  maxPriceLkr,
+  minPrice,
+  maxPrice,
   tab,
   page,
   tabHrefProducts,
@@ -38,8 +38,8 @@ export function SearchResults({
   query: string;
   category?: StoreCategory;
   sort: "newest" | "price-asc" | "price-desc" | "rating";
-  minPriceLkr?: number;
-  maxPriceLkr?: number;
+  minPrice?: number;
+  maxPrice?: number;
   tab: "products" | "stores";
   page: number;
   tabHrefProducts: string;
@@ -50,14 +50,14 @@ export function SearchResults({
   initialStores: PageResponse<Store>;
 }) {
   const { data: products } = useQuery({
-    queryKey: ["products", "search", query, category, sort, minPriceLkr, maxPriceLkr, tab === "products" ? page : 0],
+    queryKey: ["products", "search", query, category, sort, minPrice, maxPrice, tab === "products" ? page : 0],
     queryFn: () =>
       productsService.listProducts({
         query,
         category,
         sort,
-        minPriceLkr,
-        maxPriceLkr,
+        minPrice,
+        maxPrice,
         page: tab === "products" ? page : 0,
       }),
     initialData: initialProducts,

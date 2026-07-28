@@ -25,12 +25,12 @@ class ProductController(
     fun search(
         @RequestParam category: String?,
         @RequestParam query: String?,
-        @RequestParam minPriceLkr: Int?,
-        @RequestParam maxPriceLkr: Int?,
+        @RequestParam minPrice: Int?,
+        @RequestParam maxPrice: Int?,
         @RequestParam sort: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "24") size: Int,
-    ): PageResponse<ProductResponse> = productService.search(category, query, minPriceLkr, maxPriceLkr, sort, page, size)
+    ): PageResponse<ProductResponse> = productService.search(category, query, minPrice, maxPrice, sort, page, size)
 
     @GetMapping("/api/products/{id}")
     fun getById(@PathVariable id: UUID): ProductResponse = productService.getById(id)

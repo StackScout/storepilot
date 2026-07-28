@@ -14,7 +14,7 @@ fun Buyer.toResponse(): BuyerResponse =
                 phone = it.phone,
                 addressLine1 = it.addressLine1,
                 city = it.city,
-                district = it.district,
+                state = it.state,
                 postalCode = it.postalCode,
             )
         },

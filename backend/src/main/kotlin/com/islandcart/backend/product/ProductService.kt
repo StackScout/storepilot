@@ -47,21 +47,22 @@ class ProductService(
     fun search(
         category: String?,
         query: String?,
-        minPriceLkr: Int?,
-        maxPriceLkr: Int?,
+        minPrice: Int?,
+        maxPrice: Int?,
         sort: String?,
         page: Int,
         size: Int,
     ): PageResponse<ProductResponse> {
         val categoryEnum = category?.let { wireValueOf<StoreCategory>(it) }
         val spec = Specification.allOf(
+            ProductSpecifications.storeActive(),
             ProductSpecifications.hasCategory(categoryEnum),
             ProductSpecifications.matchesQuery(query?.trim()),
-            ProductSpecifications.priceBetween(minPriceLkr, maxPriceLkr),
+            ProductSpecifications.priceBetween(minPrice, maxPrice),
         )
         val sortOrder = when (sort) {
-            "price-asc" -> Sort.by("priceLkr").ascending()
-            "price-desc" -> Sort.by("priceLkr").descending()
+            "price-asc" -> Sort.by("price").ascending()
+            "price-desc" -> Sort.by("price").descending()
             "rating" -> Sort.by("rating").descending()
             else -> Sort.by("createdAt").descending()
         }
@@ -108,8 +109,8 @@ class ProductService(
             slug = uniqueSlug(storeId, input.name),
             description = input.description,
             category = wireValueOf(input.category),
-            priceLkr = input.priceLkr,
-            compareAtPriceLkr = input.compareAtPriceLkr,
+            price = input.price,
+            compareAtPrice = input.compareAtPrice,
             stockQuantity = input.stockQuantity,
             trackStock = trackStock,
             status = resolveStatus(input, trackStock),
@@ -133,8 +134,8 @@ class ProductService(
         product.name = input.name
         product.description = input.description
         product.category = wireValueOf(input.category)
-        product.priceLkr = input.priceLkr
-        product.compareAtPriceLkr = input.compareAtPriceLkr
+        product.price = input.price
+        product.compareAtPrice = input.compareAtPrice
         product.stockQuantity = input.stockQuantity
         val trackStock = effectiveTrackStock(requireNotNull(product.store.id), input.trackStock)
         product.trackStock = trackStock

@@ -27,12 +27,12 @@ class Payout(
     var store: Store,
     @OneToMany(mappedBy = "payout", cascade = [CascadeType.ALL], orphanRemoval = true)
     var orders: MutableList<PayoutOrderRef> = mutableListOf(),
-    @Column(name = "subtotal_lkr", nullable = false)
-    var subtotalLkr: Int,
-    @Column(name = "platform_fee_lkr", nullable = false)
-    var platformFeeLkr: Int,
-    @Column(name = "net_lkr", nullable = false)
-    var netLkr: Int,
+    @Column(nullable = false)
+    var subtotal: Int,
+    @Column(name = "platform_fee", nullable = false)
+    var platformFee: Int,
+    @Column(nullable = false)
+    var net: Int,
     @Column(nullable = false)
     var status: PayoutStatus = PayoutStatus.SCHEDULED,
     @Column(name = "paid_at")
@@ -58,10 +58,10 @@ class PayoutOrderRef(
     var orderId: UUID,
     @Column(name = "order_number", nullable = false)
     var orderNumber: String,
-    @Column(name = "subtotal_lkr", nullable = false)
-    var subtotalLkr: Int,
-    @Column(name = "platform_fee_lkr", nullable = false)
-    var platformFeeLkr: Int,
-    @Column(name = "net_lkr", nullable = false)
-    var netLkr: Int,
+    @Column(nullable = false)
+    var subtotal: Int,
+    @Column(name = "platform_fee", nullable = false)
+    var platformFee: Int,
+    @Column(nullable = false)
+    var net: Int,
 ) : BaseEntity()

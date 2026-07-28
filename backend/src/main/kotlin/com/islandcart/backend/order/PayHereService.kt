@@ -2,6 +2,7 @@ package com.islandcart.backend.order
 
 import com.islandcart.backend.common.ConflictException
 import com.islandcart.backend.common.NotFoundException
+import com.islandcart.backend.common.PlatformConfigService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -22,6 +23,7 @@ import java.util.UUID
 class PayHereService(
     private val orderRepository: OrderRepository,
     private val properties: PayHereProperties,
+    private val platformConfigService: PlatformConfigService,
 ) {
     private val log = LoggerFactory.getLogger(PayHereService::class.java)
 
@@ -35,8 +37,9 @@ class PayHereService(
             throw ConflictException("Order $orderId is already ${order.paymentStatus.wireValue}")
         }
 
-        val amount = formatAmount(order.totalLkr)
-        val currency = "LKR"
+        val platformConfig = platformConfigService.current()
+        val amount = formatAmount(order.total)
+        val currency = platformConfig.currencyCode
         val hash = generateHash(orderId.toString(), amount, currency)
 
         // ShippingDetails only has one combined fullName field; PayHere wants
@@ -54,7 +57,7 @@ class PayHereService(
             actionUrl = if (properties.sandbox) "https://sandbox.payhere.lk/pay/checkout" else "https://www.payhere.lk/pay/checkout",
             merchantId = properties.merchantId,
             orderId = orderId.toString(),
-            items = "IslandCart order ${order.orderNumber}",
+            items = "${platformConfig.name} order ${order.orderNumber}",
             amount = amount,
             currency = currency,
             hash = hash,
@@ -67,7 +70,7 @@ class PayHereService(
             phone = order.shipping.phone ?: "",
             address = order.shipping.addressLine1 ?: "",
             city = order.shipping.city ?: "",
-            country = "Sri Lanka",
+            country = platformConfig.countryName,
         )
     }
 
@@ -146,5 +149,5 @@ class PayHereService(
         return digest.joinToString("") { "%02x".format(it) }.uppercase(Locale.ROOT)
     }
 
-    private fun formatAmount(totalLkr: Int): String = BigDecimal(totalLkr).setScale(2).toPlainString()
+    private fun formatAmount(total: Int): String = BigDecimal(total).setScale(2).toPlainString()
 }

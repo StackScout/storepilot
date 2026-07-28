@@ -13,21 +13,27 @@ source .env.deploy
 set +a
 
 REGION="${AWS_REGION:-us-east-1}"
+# Scoped per-environment — a second deployment (e.g. an Australia stack
+# alongside this Sri Lanka one, same ../.env.deploy.example vars, different
+# ENVIRONMENT_NAME) must NOT overwrite this one's secrets. iam.yaml's SSM
+# policy is already a wildcard on /islandcart/* so it still covers this.
+ENV_NAME="${ENVIRONMENT_NAME:-islandcart-test}"
+PREFIX="/islandcart/$ENV_NAME"
 
 put() {
   aws ssm put-parameter --name "$1" --value "$2" --type SecureString --overwrite --region "$REGION" >/dev/null
   echo "  set $1"
 }
 
-echo "==> Writing secrets to SSM Parameter Store under /islandcart/*"
-put /islandcart/db-username "$DB_USERNAME"
-put /islandcart/db-password "$DB_PASSWORD"
-put /islandcart/payhere-merchant-id "$PAYHERE_MERCHANT_ID"
-put /islandcart/payhere-merchant-secret "$PAYHERE_MERCHANT_SECRET"
-put /islandcart/ses-sender-email "$SES_SENDER_EMAIL"
-put /islandcart/cognito-oauth-client-id "$COGNITO_OAUTH_CLIENT_ID"
-put /islandcart/cognito-oauth-client-secret "$COGNITO_OAUTH_CLIENT_SECRET"
-put /islandcart/google-client-id "$GOOGLE_CLIENT_ID"
-put /islandcart/google-client-secret "$GOOGLE_CLIENT_SECRET"
+echo "==> Writing secrets to SSM Parameter Store under $PREFIX/*"
+put "$PREFIX/db-username" "$DB_USERNAME"
+put "$PREFIX/db-password" "$DB_PASSWORD"
+put "$PREFIX/payhere-merchant-id" "$PAYHERE_MERCHANT_ID"
+put "$PREFIX/payhere-merchant-secret" "$PAYHERE_MERCHANT_SECRET"
+put "$PREFIX/ses-sender-email" "$SES_SENDER_EMAIL"
+put "$PREFIX/cognito-oauth-client-id" "$COGNITO_OAUTH_CLIENT_ID"
+put "$PREFIX/cognito-oauth-client-secret" "$COGNITO_OAUTH_CLIENT_SECRET"
+put "$PREFIX/google-client-id" "$GOOGLE_CLIENT_ID"
+put "$PREFIX/google-client-secret" "$GOOGLE_CLIENT_SECRET"
 
 echo "Done."

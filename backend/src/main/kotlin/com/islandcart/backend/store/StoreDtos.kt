@@ -7,8 +7,7 @@ import java.util.UUID
 
 data class StoreAddressResponse(
     val city: String,
-    val district: String,
-    val province: String,
+    val state: String,
 )
 
 /** Shape matches src/types/store.ts's Store exactly — `joinedAt` maps from BaseEntity.createdAt. */
@@ -48,9 +47,13 @@ data class StoreSettingsResponse(
     val onlinePaymentEnabled: Boolean,
     val bankTransferEnabled: Boolean,
     val sellerType: String,
-    val nicNumber: String,
+    val driverLicenceNumber: String?,
+    val abn: String?,
+    val nicNumber: String?,
     val businessRegistrationNumber: String?,
     val rejectionReason: String?,
+    val driverLicenceDocumentUrl: String?,
+    val abnDocumentUrl: String?,
     val nicDocumentUrl: String?,
     val businessRegDocumentUrl: String?,
     val stockManagementEnabled: Boolean,
@@ -68,8 +71,8 @@ data class StoreApplicationInput(
     val description: String,
     @field:NotBlank(message = "Enter your city/town")
     val city: String,
-    @field:NotBlank(message = "Select a district")
-    val district: String,
+    @field:NotBlank(message = "Select a state/province")
+    val state: String,
     @field:NotBlank(message = "Enter a valid WhatsApp number")
     val whatsappNumber: String,
 )
@@ -91,6 +94,8 @@ data class StoreSettingsInput(
     val onlinePaymentEnabled: Boolean? = null,
     val bankTransferEnabled: Boolean? = null,
     val sellerType: String? = null,
+    val driverLicenceNumber: String? = null,
+    val abn: String? = null,
     val nicNumber: String? = null,
     val businessRegistrationNumber: String? = null,
     val rejectionReason: String? = null,

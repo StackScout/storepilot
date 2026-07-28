@@ -40,6 +40,20 @@ aws cloudformation deploy \
   --template-file cloudformation/compute.yaml \
   --stack-name "${ENV_NAME}-compute" \
   --parameter-overrides EnvironmentName="$ENV_NAME" SubnetId="$SUBNET_ID" KeyName="$KEY_NAME" \
+    PlatformName="${PLATFORM_NAME:-IslandCart}" \
+    PlatformTagline="${PLATFORM_TAGLINE:-Australia's marketplace for small business sellers}" \
+    PlatformCountryName="${PLATFORM_COUNTRY_NAME:-Australia}" \
+    PlatformCountryCode="${PLATFORM_COUNTRY_CODE:-AU}" \
+    PlatformCurrencyCode="${PLATFORM_CURRENCY_CODE:-AUD}" \
+    PlatformCurrencySymbol="${PLATFORM_CURRENCY_SYMBOL:-\$}" \
+    PlatformCurrencyLocale="${PLATFORM_CURRENCY_LOCALE:-en-AU}" \
+    PlatformFeePercent="${PLATFORM_FEE_PERCENT:-3.5}" \
+    PlatformFlatShippingFee="${PLATFORM_FLAT_SHIPPING_FEE:-10}" \
+    PlatformDefaultCodEnabled="${PLATFORM_DEFAULT_COD_ENABLED:-true}" \
+    PlatformDefaultOnlinePaymentEnabled="${PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED:-false}" \
+    PlatformDefaultBankTransferEnabled="${PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED:-true}" \
+    SupportEmail="${SUPPORT_EMAIL:-hello@islandcart.au}" \
+    CompanyLocation="${COMPANY_LOCATION:-Sydney, Australia}" \
   --region "$REGION"
 
 echo "==> Done. Outputs:"

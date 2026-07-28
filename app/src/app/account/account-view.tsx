@@ -61,7 +61,7 @@ export function AccountView() {
           {buyer?.defaultShipping ? (
             <p className="text-muted-foreground text-sm">
               {buyer.defaultShipping.addressLine1}, {buyer.defaultShipping.city},{" "}
-              {buyer.defaultShipping.district} {buyer.defaultShipping.postalCode}
+              {buyer.defaultShipping.state} {buyer.defaultShipping.postalCode}
             </p>
           ) : (
             <p className="text-muted-foreground text-sm">
@@ -110,7 +110,7 @@ export function AccountView() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <PriceDisplay priceLkr={order.totalLkr} size="sm" />
+                    <PriceDisplay price={order.total} size="sm" />
                     <OrderStatusBadge status={order.status} />
                   </div>
                 </Link>

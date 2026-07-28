@@ -1,11 +1,10 @@
 package com.islandcart.backend.order
 
 import com.islandcart.backend.common.ConflictException
-import com.islandcart.backend.common.FLAT_SHIPPING_FEE_LKR
 import com.islandcart.backend.common.ForbiddenException
 import com.islandcart.backend.common.NotFoundException
-import com.islandcart.backend.common.PLATFORM_FEE_PERCENT
 import com.islandcart.backend.common.PageResponse
+import com.islandcart.backend.common.PlatformConfigService
 import com.islandcart.backend.common.ShippingDetails
 import com.islandcart.backend.common.security.CurrentActor
 import com.islandcart.backend.common.storage.FileStorageService
@@ -54,6 +53,7 @@ class OrderService(
     private val fileStorageService: FileStorageService,
     private val orderNotifier: OrderNotifier,
     private val currentActor: CurrentActor,
+    private val platformConfigService: PlatformConfigService,
 ) {
     /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
     fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
@@ -107,13 +107,14 @@ class OrderService(
         }
 
         val store = resolvedItems.first().third
-        val subtotalLkr = resolvedItems.sumOf { (product, quantity, _) -> product.priceLkr * quantity }
+        val subtotal = resolvedItems.sumOf { (product, quantity, _) -> product.price * quantity }
+        val platformConfig = platformConfigService.current()
 
         val feePercent = store.id
             ?.let { storeSettingsRepository.findById(it).orElse(null) }
             ?.transactionFeePercent
-            ?: PLATFORM_FEE_PERCENT
-        val platformFeeLkr = (BigDecimal(subtotalLkr) * feePercent)
+            ?: platformConfig.platformFeePercent
+        val platformFee = (BigDecimal(subtotal) * feePercent)
             .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
             .toInt()
 
@@ -129,12 +130,12 @@ class OrderService(
         val buyer = currentActor.buyerOrNull()
 
         val order = Order(
-            orderNumber = generateOrderNumber(now),
+            orderNumber = generateOrderNumber(now, platformConfig.countryCode),
             store = store,
-            subtotalLkr = subtotalLkr,
-            shippingFeeLkr = FLAT_SHIPPING_FEE_LKR,
-            platformFeeLkr = platformFeeLkr,
-            totalLkr = subtotalLkr + FLAT_SHIPPING_FEE_LKR,
+            subtotal = subtotal,
+            shippingFee = platformConfig.flatShippingFee,
+            platformFee = platformFee,
+            total = subtotal + platformConfig.flatShippingFee,
             status = OrderStatus.PENDING,
             paymentMethod = paymentMethod,
             paymentStatus = paymentStatus,
@@ -143,7 +144,7 @@ class OrderService(
                 phone = input.shipping.phone,
                 addressLine1 = input.shipping.addressLine1,
                 city = input.shipping.city,
-                district = input.shipping.district,
+                state = input.shipping.state,
                 postalCode = input.shipping.postalCode,
             ),
             buyerEmail = input.email,
@@ -156,7 +157,7 @@ class OrderService(
                     productId = requireNotNull(product.id),
                     productName = product.name,
                     productImageUrl = product.images.firstOrNull()?.url ?: "",
-                    unitPriceLkr = product.priceLkr,
+                    unitPrice = product.price,
                     quantity = quantity,
                 ),
             )
@@ -341,10 +342,10 @@ class OrderService(
         return orderRepository.save(order).toResponse(receiptStorageService, fileStorageService)
     }
 
-    private fun generateOrderNumber(now: Instant): String {
+    private fun generateOrderNumber(now: Instant, countryCode: String): String {
         val datePart = ORDER_NUMBER_DATE_FORMAT.format(now.atZone(java.time.ZoneOffset.UTC))
         val randomPart = Random.nextInt(1000, 10000)
-        return "SL-$datePart-$randomPart"
+        return "$countryCode-$datePart-$randomPart"
     }
 
     private fun requireSellerOwnsOrder(order: Order) {

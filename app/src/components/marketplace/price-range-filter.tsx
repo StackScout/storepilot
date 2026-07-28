@@ -11,14 +11,14 @@ export function PriceRangeFilter({
   query,
   category,
   sort,
-  minPriceLkr,
-  maxPriceLkr,
+  minPrice,
+  maxPrice,
 }: {
   query: string;
   category?: StoreCategory;
   sort: string;
-  minPriceLkr?: number;
-  maxPriceLkr?: number;
+  minPrice?: number;
+  maxPrice?: number;
 }) {
   return (
     <form action="/search" method="get" className="flex items-center gap-1.5">
@@ -29,7 +29,7 @@ export function PriceRangeFilter({
         type="number"
         name="minPrice"
         placeholder="Min"
-        defaultValue={minPriceLkr}
+        defaultValue={minPrice}
         min={0}
         className="h-7 w-20 text-xs"
         aria-label="Minimum price (LKR)"
@@ -39,7 +39,7 @@ export function PriceRangeFilter({
         type="number"
         name="maxPrice"
         placeholder="Max"
-        defaultValue={maxPriceLkr}
+        defaultValue={maxPrice}
         min={0}
         className="h-7 w-20 text-xs"
         aria-label="Maximum price (LKR)"

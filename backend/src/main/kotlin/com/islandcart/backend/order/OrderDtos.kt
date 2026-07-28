@@ -11,7 +11,7 @@ data class OrderItemResponse(
     val productId: UUID,
     val productName: String,
     val productImageUrl: String,
-    val unitPriceLkr: Int,
+    val unitPrice: Int,
     val quantity: Int,
 )
 
@@ -27,7 +27,7 @@ data class ShippingDetailsResponse(
     val phone: String?,
     val addressLine1: String?,
     val city: String?,
-    val district: String?,
+    val state: String?,
     val postalCode: String?,
 )
 
@@ -39,10 +39,10 @@ data class OrderResponse(
     val storeName: String,
     val storeSlug: String,
     val items: List<OrderItemResponse>,
-    val subtotalLkr: Int,
-    val shippingFeeLkr: Int,
-    val platformFeeLkr: Int,
-    val totalLkr: Int,
+    val subtotal: Int,
+    val shippingFee: Int,
+    val platformFee: Int,
+    val total: Int,
     val status: String,
     val paymentMethod: String,
     val paymentStatus: String,
@@ -66,8 +66,8 @@ data class ShippingDetailsInput(
     val addressLine1: String,
     @field:NotBlank(message = "Enter a city/town")
     val city: String,
-    @field:NotBlank(message = "Select a district")
-    val district: String,
+    @field:NotBlank(message = "Select a state/province")
+    val state: String,
     @field:NotBlank(message = "Enter a postal code")
     val postalCode: String,
 )

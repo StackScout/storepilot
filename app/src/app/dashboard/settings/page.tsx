@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { storesService } from "@/services";
 
 const urlOrEmpty = z
@@ -45,6 +46,8 @@ type SettingsFormValues = z.infer<typeof settingsSchema>;
 export default function DashboardSettingsPage() {
   const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
+  const { countryCode } = usePlatformConfig();
+  const isSriLanka = countryCode === "LK";
 
   const { data: settings, isLoading: isSettingsLoading } = useQuery({
     queryKey: ["store-settings", storeId],
@@ -123,8 +126,38 @@ export default function DashboardSettingsPage() {
     onError: () => toast.error("Couldn't save settings. Please try again."),
   });
 
+  const [isUploadingLicence, setIsUploadingLicence] = useState(false);
+  const [isUploadingAbn, setIsUploadingAbn] = useState(false);
   const [isUploadingNic, setIsUploadingNic] = useState(false);
   const [isUploadingBusinessReg, setIsUploadingBusinessReg] = useState(false);
+
+  async function handleLicenceUpload(file: File | undefined) {
+    if (!file) return;
+    setIsUploadingLicence(true);
+    try {
+      await storesService.uploadDriverLicenceDocument(storeId, file);
+      queryClient.invalidateQueries({ queryKey: ["store-settings"] });
+      toast.success("Driver's licence document updated");
+    } catch {
+      toast.error("Couldn't upload the file. Please try again.");
+    } finally {
+      setIsUploadingLicence(false);
+    }
+  }
+
+  async function handleAbnUpload(file: File | undefined) {
+    if (!file) return;
+    setIsUploadingAbn(true);
+    try {
+      await storesService.uploadAbnDocument(storeId, file);
+      queryClient.invalidateQueries({ queryKey: ["store-settings"] });
+      toast.success("ABN document updated");
+    } catch {
+      toast.error("Couldn't upload the file. Please try again.");
+    } finally {
+      setIsUploadingAbn(false);
+    }
+  }
 
   async function handleNicUpload(file: File | undefined) {
     if (!file) return;
@@ -336,46 +369,93 @@ export default function DashboardSettingsPage() {
           <p className="text-muted-foreground text-xs">
             Uploads here save immediately, separate from the form above.
           </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="nicDocument">NIC copy</Label>
-            {settings?.nicDocumentUrl ? (
-              <a
-                href={settings.nicDocumentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
-              >
-                <FileText className="size-3.5" /> View current file
-              </a>
-            ) : null}
-            <Input
-              id="nicDocument"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              disabled={isUploadingNic}
-              onChange={(e) => handleNicUpload(e.target.files?.[0])}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="businessRegDocument">Business Registration certificate</Label>
-            {settings?.businessRegDocumentUrl ? (
-              <a
-                href={settings.businessRegDocumentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
-              >
-                <FileText className="size-3.5" /> View current file
-              </a>
-            ) : null}
-            <Input
-              id="businessRegDocument"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              disabled={isUploadingBusinessReg}
-              onChange={(e) => handleBusinessRegUpload(e.target.files?.[0])}
-            />
-          </div>
+          {isSriLanka ? (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="nicDocument">NIC copy</Label>
+                {settings?.nicDocumentUrl ? (
+                  <a
+                    href={settings.nicDocumentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
+                  >
+                    <FileText className="size-3.5" /> View current file
+                  </a>
+                ) : null}
+                <Input
+                  id="nicDocument"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  disabled={isUploadingNic}
+                  onChange={(e) => handleNicUpload(e.target.files?.[0])}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="businessRegDocument">Business registration document</Label>
+                {settings?.businessRegDocumentUrl ? (
+                  <a
+                    href={settings.businessRegDocumentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
+                  >
+                    <FileText className="size-3.5" /> View current file
+                  </a>
+                ) : null}
+                <Input
+                  id="businessRegDocument"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  disabled={isUploadingBusinessReg}
+                  onChange={(e) => handleBusinessRegUpload(e.target.files?.[0])}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="licenceDocument">Driver&apos;s licence copy</Label>
+                {settings?.driverLicenceDocumentUrl ? (
+                  <a
+                    href={settings.driverLicenceDocumentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
+                  >
+                    <FileText className="size-3.5" /> View current file
+                  </a>
+                ) : null}
+                <Input
+                  id="licenceDocument"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  disabled={isUploadingLicence}
+                  onChange={(e) => handleLicenceUpload(e.target.files?.[0])}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="abnDocument">ABN registration document</Label>
+                {settings?.abnDocumentUrl ? (
+                  <a
+                    href={settings.abnDocumentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary flex items-center gap-1.5 text-sm underline-offset-4 hover:underline"
+                  >
+                    <FileText className="size-3.5" /> View current file
+                  </a>
+                ) : null}
+                <Input
+                  id="abnDocument"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  disabled={isUploadingAbn}
+                  onChange={(e) => handleAbnUpload(e.target.files?.[0])}
+                />
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

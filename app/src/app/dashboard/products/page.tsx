@@ -21,8 +21,9 @@ import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { PriceDisplay } from "@/components/shared/price-display";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { productsService } from "@/services";
 import type { Product } from "@/types";
 
@@ -30,6 +31,8 @@ export default function DashboardProductsPage() {
   const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["products", "store", storeId],
@@ -107,7 +110,7 @@ export default function DashboardProductsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-3">
-                        <PriceDisplay priceLkr={product.priceLkr} size="sm" />
+                        <PriceDisplay price={product.price} size="sm" />
                       </td>
                       <td className="px-6 py-3">
                         {product.trackStock ? product.stockQuantity : "—"}
@@ -162,7 +165,7 @@ export default function DashboardProductsPage() {
           <DialogHeader>
             <DialogTitle>Delete product?</DialogTitle>
             <DialogDescription>
-              This will permanently remove &quot;{productToDelete?.name}&quot; ({formatLkr(productToDelete?.priceLkr ?? 0)}) from your store. This can&apos;t be undone.
+              This will permanently remove &quot;{productToDelete?.name}&quot; ({formatCurrency(productToDelete?.price ?? 0, currency)}) from your store. This can&apos;t be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

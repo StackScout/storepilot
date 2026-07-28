@@ -1,6 +1,8 @@
 package com.islandcart.backend.product
 
+import com.islandcart.backend.store.Store
 import com.islandcart.backend.store.StoreCategory
+import com.islandcart.backend.store.StoreVerificationStatus
 import org.springframework.data.jpa.domain.Specification
 
 /**
@@ -13,6 +15,22 @@ import org.springframework.data.jpa.domain.Specification
  * actually present.
  */
 object ProductSpecifications {
+    /**
+     * Public product search must only surface products whose owning store is
+     * ACTIVE — a pending/rejected store's products otherwise show up in
+     * results but 404 on click, since the storefront and product pages
+     * reject non-active stores (see StoreService.getBySlug). The path
+     * expression root.get("store").get(...) creates the implicit join to
+     * the stores table; mirrors StoreService.search's activeOnly filter.
+     */
+    fun storeActive(): Specification<Product> =
+        Specification { root, _, cb ->
+            cb.equal(
+                root.get<Store>("store").get<StoreVerificationStatus>("verificationStatus"),
+                StoreVerificationStatus.ACTIVE,
+            )
+        }
+
     fun hasCategory(category: StoreCategory?): Specification<Product> =
         Specification { root, _, cb ->
             if (category == null) null else cb.equal(root.get<StoreCategory>("category"), category)
@@ -31,12 +49,12 @@ object ProductSpecifications {
             }
         }
 
-    fun priceBetween(minPriceLkr: Int?, maxPriceLkr: Int?): Specification<Product> =
+    fun priceBetween(minPrice: Int?, maxPrice: Int?): Specification<Product> =
         Specification { root, _, cb ->
             when {
-                minPriceLkr != null && maxPriceLkr != null -> cb.between(root.get("priceLkr"), minPriceLkr, maxPriceLkr)
-                minPriceLkr != null -> cb.greaterThanOrEqualTo(root.get("priceLkr"), minPriceLkr)
-                maxPriceLkr != null -> cb.lessThanOrEqualTo(root.get("priceLkr"), maxPriceLkr)
+                minPrice != null && maxPrice != null -> cb.between(root.get("price"), minPrice, maxPrice)
+                minPrice != null -> cb.greaterThanOrEqualTo(root.get("price"), minPrice)
+                maxPrice != null -> cb.lessThanOrEqualTo(root.get("price"), maxPrice)
                 else -> null
             }
         }

@@ -9,11 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ordersService } from "@/services";
 import type { OrderStatus } from "@/types";
 
@@ -30,6 +31,8 @@ const PAGE_SIZE = 20;
 
 export default function DashboardOrdersPage() {
   const storeId = useSellerStoreId();
+  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [page, setPage] = useState(0);
 
@@ -106,7 +109,7 @@ export default function DashboardOrdersPage() {
                         {order.items.reduce((sum, i) => sum + i.quantity, 0)} items
                       </td>
                       <td className="text-muted-foreground px-6 py-3">{formatDate(order.createdAt)}</td>
-                      <td className="px-6 py-3">{formatLkr(order.totalLkr)}</td>
+                      <td className="px-6 py-3">{formatCurrency(order.total, currency)}</td>
                       <td className="text-muted-foreground px-6 py-3 capitalize">
                         {order.paymentMethod === "cod" ? "COD" : "PayHere"}
                       </td>

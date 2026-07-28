@@ -59,6 +59,10 @@ class SecurityConfig {
                     .requestMatchers("/api/auth/**").permitAll()
                     // Public marketplace browsing.
                     .requestMatchers(HttpMethod.GET, "/api/stores/**", "/api/products/**").permitAll()
+                    // DB-backed platform config + address state/province options
+                    // — the frontend fetches these instead of baking country
+                    // content into NEXT_PUBLIC_* build args (see PlatformConfigController).
+                    .requestMatchers(HttpMethod.GET, "/api/platform-config", "/api/states").permitAll()
                     // Locally-served uploaded files (product images, receipts,
                     // seller verification documents under the !aws profile) —
                     // plain static-asset fetches, not API calls; product
@@ -85,7 +89,13 @@ class SecurityConfig {
                     // StoreService.create / task "Seller onboarding").
                     .requestMatchers(HttpMethod.POST, "/api/stores").authenticated()
                     .requestMatchers(HttpMethod.PATCH, "/api/stores/*/settings", "/api/stores/*/profile").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/nic-document", "/api/stores/*/business-reg-document").hasRole("SELLER")
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/stores/*/driver-licence-document",
+                        "/api/stores/*/abn-document",
+                        "/api/stores/*/nic-document",
+                        "/api/stores/*/business-reg-document",
+                    ).hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/products/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasRole("SELLER")

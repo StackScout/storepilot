@@ -1,6 +1,7 @@
 package com.islandcart.backend
 
 import com.islandcart.backend.common.AwsProperties
+import com.islandcart.backend.common.PlatformProperties
 import com.islandcart.backend.common.security.CognitoProperties
 import com.islandcart.backend.common.storage.FileStorageProperties
 import com.islandcart.backend.notification.NotificationProperties
@@ -19,6 +20,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     AwsProperties::class,
     CognitoProperties::class,
     FileStorageProperties::class,
+    PlatformProperties::class,
 )
 @EnableScheduling
 class BackendApplication

@@ -15,7 +15,7 @@ import java.util.UUID
 /**
  * S3-backed storage for the aws profile — see FileStorageService for the
  * local/dev alternative. The bucket stays private (uploads here include
- * NIC/business-registration documents and bank-adjacent seller data), so
+ * driver's licence/ABN documents and bank-adjacent seller data), so
  * store() returns the object key and resolveUrl() mints a short-lived
  * presigned GET URL fresh on every read, same pattern as S3ReceiptStorageService.
  */

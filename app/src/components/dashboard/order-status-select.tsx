@@ -121,7 +121,7 @@ export function OrderStatusSelect({ order }: { order: Order }) {
                 id="courierServiceName"
                 value={courierServiceName}
                 onChange={(e) => setCourierServiceName(e.target.value)}
-                placeholder="e.g. Domex, Pronto, Sri Lanka Post"
+                placeholder="e.g. Australia Post, StarTrack, Sendle"
               />
             </div>
             <div className="space-y-1.5">

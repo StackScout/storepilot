@@ -22,9 +22,10 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { NotificationsBell } from "@/components/admin/notifications-bell";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { formatDateTime } from "@/lib/format";
 import { getCategoryLabel } from "@/mock/categories";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { storesService, payoutsService, authService } from "@/services";
 import type { Store, StoreSettings } from "@/types";
 
@@ -35,13 +36,16 @@ interface PendingApplication {
 
 interface EligibleStore {
   store: Store;
-  eligibleNetLkr: number;
+  eligibleNet: number;
   eligibleCount: number;
 }
 
 export default function AdminPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { currencyCode, currencySymbol, currencyLocale, countryCode } = usePlatformConfig();
+  const isSriLanka = countryCode === "LK";
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const [rejectTarget, setRejectTarget] = useState<Store | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [payoutToMarkPaid, setPayoutToMarkPaid] = useState<string | null>(null);
@@ -73,7 +77,7 @@ export default function AdminPage() {
           return {
             store,
             eligibleCount: orders.length,
-            eligibleNetLkr: orders.reduce((sum, o) => sum + (o.subtotalLkr - o.platformFeeLkr), 0),
+            eligibleNet: orders.reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0),
           };
         }),
       );
@@ -168,7 +172,7 @@ export default function AdminPage() {
                         <Badge variant="secondary">{getCategoryLabel(store.category)}</Badge>
                       </div>
                       <p className="text-muted-foreground flex items-center gap-1 text-xs">
-                        <MapPin className="size-3" /> {store.address.city}, {store.address.district}
+                        <MapPin className="size-3" /> {store.address.city}, {store.address.state}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -195,12 +199,18 @@ export default function AdminPage() {
                       <dd className="font-medium capitalize">{settings?.sellerType ?? "—"}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">NIC number</dt>
-                      <dd className="font-medium">{settings?.nicNumber ?? "—"}</dd>
+                      <dt className="text-muted-foreground">
+                        {isSriLanka ? "NIC no." : "Driver's licence no."}
+                      </dt>
+                      <dd className="font-medium">
+                        {(isSriLanka ? settings?.nicNumber : settings?.driverLicenceNumber) ?? "—"}
+                      </dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Business reg. no.</dt>
-                      <dd className="font-medium">{settings?.businessRegistrationNumber ?? "—"}</dd>
+                      <dt className="text-muted-foreground">{isSriLanka ? "Business reg. no." : "ABN"}</dt>
+                      <dd className="font-medium">
+                        {(isSriLanka ? settings?.businessRegistrationNumber : settings?.abn) ?? "—"}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Bank account</dt>
@@ -209,11 +219,13 @@ export default function AdminPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">NIC document</dt>
+                      <dt className="text-muted-foreground">
+                        {isSriLanka ? "NIC document" : "Driver's licence document"}
+                      </dt>
                       <dd className="font-medium">
-                        {settings?.nicDocumentUrl ? (
+                        {(isSriLanka ? settings?.nicDocumentUrl : settings?.driverLicenceDocumentUrl) ? (
                           <a
-                            href={settings.nicDocumentUrl}
+                            href={(isSriLanka ? settings?.nicDocumentUrl : settings?.driverLicenceDocumentUrl)!}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-primary underline-offset-4 hover:underline"
@@ -226,11 +238,13 @@ export default function AdminPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Business reg. document</dt>
+                      <dt className="text-muted-foreground">
+                        {isSriLanka ? "Business reg. document" : "ABN document"}
+                      </dt>
                       <dd className="font-medium">
-                        {settings?.businessRegDocumentUrl ? (
+                        {(isSriLanka ? settings?.businessRegDocumentUrl : settings?.abnDocumentUrl) ? (
                           <a
-                            href={settings.businessRegDocumentUrl}
+                            href={(isSriLanka ? settings?.businessRegDocumentUrl : settings?.abnDocumentUrl)!}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-primary underline-offset-4 hover:underline"
@@ -262,7 +276,7 @@ export default function AdminPage() {
             <EmptyState icon={Landmark} title="Nothing eligible for payout right now" />
           ) : (
             <div className="space-y-2">
-              {eligibleStores.map(({ store, eligibleCount, eligibleNetLkr }) => (
+              {eligibleStores.map(({ store, eligibleCount, eligibleNet }) => (
                 <div
                   key={store.id}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
@@ -270,7 +284,7 @@ export default function AdminPage() {
                   <div>
                     <p className="text-sm font-medium">{store.name}</p>
                     <p className="text-muted-foreground text-xs">
-                      {eligibleCount} order{eligibleCount === 1 ? "" : "s"} · {formatLkr(eligibleNetLkr)} net
+                      {eligibleCount} order{eligibleCount === 1 ? "" : "s"} · {formatCurrency(eligibleNet, currency)} net
                     </p>
                   </div>
                   <Button
@@ -310,7 +324,7 @@ export default function AdminPage() {
                         <td className="text-muted-foreground px-6 py-3">
                           {formatDateTime(payout.createdAt)}
                         </td>
-                        <td className="px-6 py-3">{formatLkr(payout.netLkr)}</td>
+                        <td className="px-6 py-3">{formatCurrency(payout.net, currency)}</td>
                         <td className="px-6 py-3">
                           <Badge
                             className={
@@ -353,7 +367,11 @@ export default function AdminPage() {
           </DialogHeader>
           <Textarea
             rows={3}
-            placeholder="e.g. NIC number couldn't be verified"
+            placeholder={
+              isSriLanka
+                ? "e.g. NIC number couldn't be verified"
+                : "e.g. Driver's licence number couldn't be verified"
+            }
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
           />

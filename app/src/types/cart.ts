@@ -3,7 +3,7 @@ export interface CartItem {
   productName: string;
   productSlug: string;
   productImageUrl: string;
-  unitPriceLkr: number;
+  unitPrice: number;
   quantity: number;
   stockQuantity: number;
   /** Mirrors Product.trackStock — when false, stockQuantity is not a real cap (quantity selectors treat it as unlimited). */

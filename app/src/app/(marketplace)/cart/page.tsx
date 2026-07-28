@@ -13,13 +13,15 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { useCart } from "@/hooks/use-cart";
 import { useCartReconciliation } from "@/hooks/use-cart-reconciliation";
 import { cn } from "@/lib/utils";
-import { formatLkr } from "@/lib/currency";
-import { FLAT_SHIPPING_FEE_LKR } from "@/lib/constants";
+import { formatCurrency } from "@/lib/currency";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 export default function CartPage() {
   const { cart, subtotal, isHydrated, updateQuantity, removeItem } = useCart();
   useCartReconciliation();
   const hasUnavailable = cart.items.some((i) => i.isUnavailable);
+  const { currencyCode, currencySymbol, currencyLocale, flatShippingFee } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   if (isHydrated && cart.items.length === 0) {
     return (
@@ -78,7 +80,7 @@ export default function CartPage() {
                       No longer available
                     </Badge>
                   ) : (
-                    <PriceDisplay priceLkr={item.unitPriceLkr} size="sm" className="mt-1" />
+                    <PriceDisplay price={item.unitPrice} size="sm" className="mt-1" />
                   )}
                 </div>
                 <div className="flex items-center justify-between pt-2">
@@ -111,16 +113,16 @@ export default function CartPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatLkr(subtotal)}</span>
+                <span>{formatCurrency(subtotal, currency)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping (estimate)</span>
-                <span>{formatLkr(FLAT_SHIPPING_FEE_LKR)}</span>
+                <span>{formatCurrency(flatShippingFee, currency)}</span>
               </div>
               <Separator />
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>
-                <span>{formatLkr(subtotal + FLAT_SHIPPING_FEE_LKR)}</span>
+                <span>{formatCurrency(subtotal + flatShippingFee, currency)}</span>
               </div>
             </div>
             <Button render={<Link href="/checkout" />} size="lg" className="w-full">

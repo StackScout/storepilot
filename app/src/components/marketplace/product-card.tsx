@@ -37,7 +37,7 @@ export function ProductCard({
             Only {product.stockQuantity} left
           </Badge>
         ) : null}
-        {!isOutOfStock && product.compareAtPriceLkr ? (
+        {!isOutOfStock && product.compareAtPrice ? (
           <Badge className="bg-primary text-primary-foreground absolute top-2 right-2 border-0">
             Sale
           </Badge>
@@ -47,8 +47,8 @@ export function ProductCard({
         <p className="text-muted-foreground truncate text-xs">{product.storeName}</p>
         <h3 className="line-clamp-2 text-sm leading-snug font-medium">{product.name}</h3>
         <PriceDisplay
-          priceLkr={product.priceLkr}
-          compareAtPriceLkr={product.compareAtPriceLkr}
+          price={product.price}
+          compareAtPrice={product.compareAtPrice}
           size="sm"
         />
       </div>

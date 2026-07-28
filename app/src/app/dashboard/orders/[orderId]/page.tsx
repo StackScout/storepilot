@@ -13,8 +13,9 @@ import { OrderStatusSelect } from "@/components/dashboard/order-status-select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { toApiUrl } from "@/lib/api-client";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, paymentMethodLabel } from "@/lib/format";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ordersService } from "@/services";
 
 export default function DashboardOrderDetailPage({
@@ -24,6 +25,8 @@ export default function DashboardOrderDetailPage({
 }) {
   const { orderId } = use(params);
   const queryClient = useQueryClient();
+  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order", orderId],
@@ -51,7 +54,7 @@ export default function DashboardOrderDetailPage({
     return <EmptyState icon={PackageX} title="Order not found" />;
   }
 
-  const netPayout = order.subtotalLkr - order.platformFeeLkr;
+  const netPayout = order.subtotal - order.platformFee;
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -88,10 +91,10 @@ export default function DashboardOrderDetailPage({
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-1 text-sm font-medium">{item.productName}</p>
                     <p className="text-muted-foreground text-xs">
-                      Qty {item.quantity} × {formatLkr(item.unitPriceLkr)}
+                      Qty {item.quantity} × {formatCurrency(item.unitPrice, currency)}
                     </p>
                   </div>
-                  <PriceDisplay priceLkr={item.unitPriceLkr * item.quantity} size="sm" />
+                  <PriceDisplay price={item.unitPrice * item.quantity} size="sm" />
                 </div>
               ))}
             </div>
@@ -101,20 +104,20 @@ export default function DashboardOrderDetailPage({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatLkr(order.subtotalLkr)}</span>
+                <span>{formatCurrency(order.subtotal, currency)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping (buyer paid)</span>
-                <span>{formatLkr(order.shippingFeeLkr)}</span>
+                <span>{formatCurrency(order.shippingFee, currency)}</span>
               </div>
               <div className="flex justify-between text-red-600 dark:text-red-400">
                 <span>Platform fee (3.5%)</span>
-                <span>-{formatLkr(order.platformFeeLkr)}</span>
+                <span>-{formatCurrency(order.platformFee, currency)}</span>
               </div>
               <Separator />
               <div className="flex justify-between text-base font-semibold">
                 <span>Your payout</span>
-                <span>{formatLkr(netPayout)}</span>
+                <span>{formatCurrency(netPayout, currency)}</span>
               </div>
             </div>
           </CardContent>
@@ -135,7 +138,7 @@ export default function DashboardOrderDetailPage({
               <p className="text-muted-foreground text-sm">
                 {order.shipping.addressLine1}
                 <br />
-                {order.shipping.city}, {order.shipping.district}
+                {order.shipping.city}, {order.shipping.state}
                 <br />
                 {order.shipping.postalCode}
               </p>

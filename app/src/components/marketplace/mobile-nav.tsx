@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/comp
 import { Logo } from "@/components/shared/logo";
 import { useBuyerAccountLink } from "@/hooks/use-buyer-account-link";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -19,6 +20,7 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const { buyerName } = useBuyerAccountLink();
   const signOut = useSignOut();
+  const { name } = usePlatformConfig();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -71,7 +73,7 @@ export function MobileNav() {
           <SheetClose
             render={<Link href="/onboarding" className={buttonVariants({ className: "w-full" })} />}
           >
-            Sell on IslandCart
+            Sell on {name}
           </SheetClose>
           <SheetClose
             render={

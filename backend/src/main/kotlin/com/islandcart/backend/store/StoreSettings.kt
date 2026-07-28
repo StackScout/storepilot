@@ -45,13 +45,32 @@ class StoreSettings(
     var bankTransferEnabled: Boolean = false,
     @Column(name = "seller_type", nullable = false)
     var sellerType: SellerType,
-    @Column(name = "nic_number", nullable = false)
-    var nicNumber: String,
+    /**
+     * Individual-seller identity verification fields — which pair is
+     * required/shown is decided per-deployment by `platform_settings.country_code`
+     * (see StoreService's country-conditional validation), never both at
+     * once for a given store. Australia: driver's licence number. Sri
+     * Lanka: National Identity Card number. Both are nullable since a given
+     * deployment only ever populates the pair matching its own country.
+     */
+    @Column(name = "driver_licence_number")
+    var driverLicenceNumber: String? = null,
+    /** Australian Business Number — required when sellerType === "business" on an AU deployment. */
+    @Column(name = "abn")
+    var abn: String? = null,
+    /** Sri Lanka NIC number — required when a deployment's country_code is "LK". */
+    @Column(name = "nic_number")
+    var nicNumber: String? = null,
+    /** Sri Lanka Business Registration Number — required when sellerType === "business" on an LK deployment. */
     @Column(name = "business_registration_number")
     var businessRegistrationNumber: String? = null,
     @Column(name = "rejection_reason", columnDefinition = "text")
     var rejectionReason: String? = null,
     /** Stored reference (local path or S3 key) from FileStorageService — resolve via resolveUrl() at read time, never persist a fixed URL. */
+    @Column(name = "driver_licence_document_url")
+    var driverLicenceDocumentUrl: String? = null,
+    @Column(name = "abn_document_url")
+    var abnDocumentUrl: String? = null,
     @Column(name = "nic_document_url")
     var nicDocumentUrl: String? = null,
     @Column(name = "business_reg_document_url")

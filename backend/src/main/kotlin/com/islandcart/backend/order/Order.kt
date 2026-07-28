@@ -34,14 +34,14 @@ class Order(
     var store: Store,
     @OneToMany(mappedBy = "order", cascade = [CascadeType.ALL], orphanRemoval = true)
     var items: MutableList<OrderItem> = mutableListOf(),
-    @Column(name = "subtotal_lkr", nullable = false)
-    var subtotalLkr: Int,
-    @Column(name = "shipping_fee_lkr", nullable = false)
-    var shippingFeeLkr: Int,
-    @Column(name = "platform_fee_lkr", nullable = false)
-    var platformFeeLkr: Int,
-    @Column(name = "total_lkr", nullable = false)
-    var totalLkr: Int,
+    @Column(nullable = false)
+    var subtotal: Int,
+    @Column(name = "shipping_fee", nullable = false)
+    var shippingFee: Int,
+    @Column(name = "platform_fee", nullable = false)
+    var platformFee: Int,
+    @Column(nullable = false)
+    var total: Int,
     @Column(nullable = false)
     var status: OrderStatus = OrderStatus.PENDING,
     @Column(name = "payment_method", nullable = false)
@@ -93,8 +93,8 @@ class OrderItem(
     var productName: String,
     @Column(name = "product_image_url", nullable = false)
     var productImageUrl: String,
-    @Column(name = "unit_price_lkr", nullable = false)
-    var unitPriceLkr: Int,
+    @Column(name = "unit_price", nullable = false)
+    var unitPrice: Int,
     @Column(nullable = false)
     var quantity: Int,
 ) : BaseEntity()

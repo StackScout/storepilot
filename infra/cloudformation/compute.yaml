@@ -29,6 +29,55 @@ Parameters:
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  # What makes this stack a distinct country's platform (e.g. a separate
+  # Australia deployment alongside a future Sri Lanka one, same template,
+  # same code) — read once at boot by DataSeeder to seed the DB-backed
+  # platform_settings row (see backend/.../common/PlatformProperties.kt and
+  # PlatformSettings.kt). Defaults below are Australia's — the near-term
+  # deployment target while the Sri Lanka launch is on hold; a Sri Lanka
+  # stack overrides these instead.
+  PlatformName:
+    Type: String
+    Default: IslandCart
+  PlatformTagline:
+    Type: String
+    Default: Australia's marketplace for small business sellers
+  PlatformCountryName:
+    Type: String
+    Default: Australia
+  PlatformCountryCode:
+    Type: String
+    Default: AU
+  PlatformCurrencyCode:
+    Type: String
+    Default: AUD
+  PlatformCurrencySymbol:
+    Type: String
+    Default: "$"
+  PlatformCurrencyLocale:
+    Type: String
+    Default: en-AU
+  PlatformFeePercent:
+    Type: String
+    Default: "3.5"
+  PlatformFlatShippingFee:
+    Type: String
+    Default: "10"
+  PlatformDefaultCodEnabled:
+    Type: String
+    Default: "true"
+  PlatformDefaultOnlinePaymentEnabled:
+    Type: String
+    Default: "false"
+  PlatformDefaultBankTransferEnabled:
+    Type: String
+    Default: "true"
+  SupportEmail:
+    Type: String
+    Default: hello@islandcart.au
+  CompanyLocation:
+    Type: String
+    Default: Sydney, Australia
 
 Resources:
   Instance:
@@ -79,23 +128,41 @@ Resources:
 
           # --- Secrets from SSM Parameter Store — put there ahead of time
           # by scripts/put-secrets.sh (CloudFormation itself can't create
-          # SecureString parameters natively, see infra/README.md). ---
+          # SecureString parameters natively, see infra/README.md). Scoped
+          # per-environment (/islandcart/${EnvironmentName}/*) so a second
+          # deployment (e.g. Australia) under a different EnvironmentName
+          # doesn't read or collide with this one's secrets. ---
           get_param() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text --region ${AWS::Region}; }
+          SSM_PREFIX="/islandcart/${EnvironmentName}"
 
           cat > /opt/islandcart/infra/docker/.env <<EOF
-          DB_USERNAME=$(get_param /islandcart/db-username)
-          DB_PASSWORD=$(get_param /islandcart/db-password)
-          PAYHERE_MERCHANT_ID=$(get_param /islandcart/payhere-merchant-id)
-          PAYHERE_MERCHANT_SECRET=$(get_param /islandcart/payhere-merchant-secret)
+          DB_USERNAME=$(get_param $SSM_PREFIX/db-username)
+          DB_PASSWORD=$(get_param $SSM_PREFIX/db-password)
+          PAYHERE_MERCHANT_ID=$(get_param $SSM_PREFIX/payhere-merchant-id)
+          PAYHERE_MERCHANT_SECRET=$(get_param $SSM_PREFIX/payhere-merchant-secret)
           PAYHERE_SANDBOX=true
           PAYHERE_NOTIFY_URL=$SITE_ADDRESS/api/payments/payhere/notify
           PAYHERE_RETURN_URL_BASE=$SITE_ADDRESS/orders
-          SES_SENDER_EMAIL=$(get_param /islandcart/ses-sender-email)
+          SES_SENDER_EMAIL=$(get_param $SSM_PREFIX/ses-sender-email)
           AWS_REGION=${AWS::Region}
           RECEIPTS_S3_BUCKET_NAME=${EnvironmentName}-receipts
           SITE_ADDRESS=$SITE_ADDRESS
           FRONTEND_ORIGIN=$SITE_ADDRESS
           BACKEND_ORIGIN=$SITE_ADDRESS
+          PLATFORM_NAME=${PlatformName}
+          PLATFORM_TAGLINE=${PlatformTagline}
+          PLATFORM_COUNTRY_NAME=${PlatformCountryName}
+          PLATFORM_COUNTRY_CODE=${PlatformCountryCode}
+          PLATFORM_CURRENCY_CODE=${PlatformCurrencyCode}
+          PLATFORM_CURRENCY_SYMBOL=${PlatformCurrencySymbol}
+          PLATFORM_CURRENCY_LOCALE=${PlatformCurrencyLocale}
+          PLATFORM_FEE_PERCENT=${PlatformFeePercent}
+          PLATFORM_FLAT_SHIPPING_FEE=${PlatformFlatShippingFee}
+          PLATFORM_DEFAULT_COD_ENABLED=${PlatformDefaultCodEnabled}
+          PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED=${PlatformDefaultOnlinePaymentEnabled}
+          PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED=${PlatformDefaultBankTransferEnabled}
+          SUPPORT_EMAIL=${SupportEmail}
+          COMPANY_LOCATION=${CompanyLocation}
           EOF
 
           chown -R ec2-user:ec2-user /opt/islandcart

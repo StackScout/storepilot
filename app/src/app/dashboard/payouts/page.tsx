@@ -7,13 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { payoutsService, storesService } from "@/services";
 
 export default function DashboardPayoutsPage() {
   const storeId = useSellerStoreId();
+  const { name, currencyCode, currencySymbol, currencyLocale, platformFeePercent } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   const { data: payouts, isLoading } = useQuery({
     queryKey: ["payouts", storeId],
@@ -28,31 +31,31 @@ export default function DashboardPayoutsPage() {
     queryFn: () => storesService.getStoreSettings(storeId),
   });
 
-  const availableLkr = (eligibleOrders ?? []).reduce(
-    (sum, o) => sum + (o.subtotalLkr - o.platformFeeLkr),
+  const availableAmount = (eligibleOrders ?? []).reduce(
+    (sum, o) => sum + (o.subtotal - o.platformFee),
     0,
   );
-  const scheduledLkr = (payouts ?? [])
+  const scheduledAmount = (payouts ?? [])
     .filter((p) => p.status === "scheduled")
-    .reduce((sum, p) => sum + p.netLkr, 0);
-  const paidLkr = (payouts ?? [])
+    .reduce((sum, p) => sum + p.net, 0);
+  const paidAmount = (payouts ?? [])
     .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.netLkr, 0);
+    .reduce((sum, p) => sum + p.net, 0);
 
   return (
     <div className="max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Payouts</h1>
         <p className="text-muted-foreground text-sm">
-          IslandCart deducts a {settings?.transactionFeePercent ?? 3.5}% transaction fee and holds
+          {name} deducts a {settings?.transactionFeePercent ?? platformFeePercent}% transaction fee and holds
           your share until an order is delivered, then releases it in a scheduled payout.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Available (awaiting payout run)" value={formatLkr(availableLkr)} icon={Clock} />
-        <StatCard label="Scheduled (bank transfer pending)" value={formatLkr(scheduledLkr)} icon={Wallet} />
-        <StatCard label="Paid out (all time)" value={formatLkr(paidLkr)} icon={Landmark} />
+        <StatCard label="Available (awaiting payout run)" value={formatCurrency(availableAmount, currency)} icon={Clock} />
+        <StatCard label="Scheduled (bank transfer pending)" value={formatCurrency(scheduledAmount, currency)} icon={Wallet} />
+        <StatCard label="Paid out (all time)" value={formatCurrency(paidAmount, currency)} icon={Landmark} />
       </div>
 
       {settings ? (
@@ -64,7 +67,7 @@ export default function DashboardPayoutsPage() {
                 {settings.bankName} · {settings.bankAccountName} · {settings.bankAccountNumber}
               </p>
             </div>
-            <Badge variant="secondary">Payouts released by IslandCart</Badge>
+            <Badge variant="secondary">Payouts released by {name}</Badge>
           </CardContent>
         </Card>
       ) : null}
@@ -73,7 +76,7 @@ export default function DashboardPayoutsPage() {
         <CardContent>
           <h2 className="mb-1 font-semibold">Payout history</h2>
           <p className="text-muted-foreground mb-4 text-xs">
-            Payout runs are created and released by IslandCart, not requested by you — this is a
+            Payout runs are created and released by {name}, not requested by you — this is a
             read-only ledger of what&apos;s been scheduled and paid.
           </p>
           {isLoading ? (
@@ -102,7 +105,7 @@ export default function DashboardPayoutsPage() {
                       <td className="px-6 py-3 font-medium">{payout.id}</td>
                       <td className="text-muted-foreground px-6 py-3">{formatDate(payout.createdAt)}</td>
                       <td className="text-muted-foreground px-6 py-3">{payout.orders.length}</td>
-                      <td className="px-6 py-3 font-medium">{formatLkr(payout.netLkr)}</td>
+                      <td className="px-6 py-3 font-medium">{formatCurrency(payout.net, currency)}</td>
                       <td className="px-6 py-3">
                         <Badge
                           className={

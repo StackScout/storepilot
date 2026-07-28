@@ -84,8 +84,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           <PriceDisplay
-            priceLkr={product.priceLkr}
-            compareAtPriceLkr={product.compareAtPriceLkr}
+            price={product.price}
+            compareAtPrice={product.compareAtPrice}
             size="lg"
           />
 

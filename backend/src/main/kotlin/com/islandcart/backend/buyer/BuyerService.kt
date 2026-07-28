@@ -40,7 +40,7 @@ class BuyerService(
             phone = input.phone,
             addressLine1 = input.addressLine1,
             city = input.city,
-            district = input.district,
+            state = input.state,
             postalCode = input.postalCode,
         )
         return buyerRepository.save(buyer).toResponse()

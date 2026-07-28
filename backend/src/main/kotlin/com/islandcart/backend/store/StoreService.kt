@@ -5,6 +5,7 @@ import com.islandcart.backend.common.ConflictException
 import com.islandcart.backend.common.ForbiddenException
 import com.islandcart.backend.common.NotFoundException
 import com.islandcart.backend.common.PageResponse
+import com.islandcart.backend.common.PlatformConfigService
 import com.islandcart.backend.common.security.CurrentActor
 import com.islandcart.backend.common.security.CognitoProperties
 import com.islandcart.backend.common.storage.FileStorageService
@@ -29,26 +30,6 @@ import java.util.UUID
 /** Hard cap regardless of what a caller requests via `size` — see docs/gaps-and-assumptions.md's search-scalability note. */
 private const val MAX_PAGE_SIZE = 100
 
-private val DISTRICT_TO_PROVINCE = mapOf(
-    "Colombo" to "Western",
-    "Gampaha" to "Western",
-    "Kalutara" to "Western",
-    "Kandy" to "Central",
-    "Matale" to "Central",
-    "Nuwara Eliya" to "Central",
-    "Galle" to "Southern",
-    "Matara" to "Southern",
-    "Hambantota" to "Southern",
-    "Jaffna" to "Northern",
-    "Kurunegala" to "North Western",
-    "Puttalam" to "North Western",
-    "Anuradhapura" to "North Central",
-    "Polonnaruwa" to "North Central",
-    "Badulla" to "Uva",
-    "Ratnapura" to "Sabaragamuwa",
-    "Kegalle" to "Sabaragamuwa",
-)
-
 @Service
 @Transactional(readOnly = true)
 class StoreService(
@@ -60,6 +41,7 @@ class StoreService(
     private val cognitoProperties: CognitoProperties,
     private val fileStorageService: FileStorageService,
     private val adminNotificationService: AdminNotificationService,
+    private val platformConfigService: PlatformConfigService,
 ) {
     private val log = LoggerFactory.getLogger(StoreService::class.java)
 
@@ -152,8 +134,7 @@ class StoreService(
             category = wireValueOf(input.category),
             address = StoreAddress(
                 city = input.city,
-                district = input.district,
-                province = DISTRICT_TO_PROVINCE[input.district] ?: input.district,
+                state = input.state,
             ),
             whatsappNumber = input.whatsappNumber,
             verificationStatus = StoreVerificationStatus.PENDING,
@@ -228,11 +209,14 @@ class StoreService(
             input.onlinePaymentEnabled?.let { existing.onlinePaymentEnabled = it }
             input.bankTransferEnabled?.let { existing.bankTransferEnabled = it }
             input.sellerType?.let { existing.sellerType = wireValueOf(it) }
+            input.driverLicenceNumber?.let { existing.driverLicenceNumber = it }
+            if (input.abn != null) existing.abn = input.abn
             input.nicNumber?.let { existing.nicNumber = it }
             if (input.businessRegistrationNumber != null) existing.businessRegistrationNumber = input.businessRegistrationNumber
             if (input.rejectionReason != null) existing.rejectionReason = input.rejectionReason
             input.stockManagementEnabled?.let { existing.stockManagementEnabled = it }
             requireAtLeastOnePaymentMethod(existing.codEnabled, existing.onlinePaymentEnabled, existing.bankTransferEnabled)
+            requireCountryVerificationFields(existing)
             val saved = storeSettingsRepository.save(existing)
             if (bankDetailsChanged) {
                 adminNotificationService.notifyBankDetailsChanged(
@@ -246,9 +230,10 @@ class StoreService(
         }
 
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        val codEnabled = input.codEnabled ?: true
-        val onlinePaymentEnabled = input.onlinePaymentEnabled ?: true
-        val bankTransferEnabled = input.bankTransferEnabled ?: false
+        val platformConfig = platformConfigService.current()
+        val codEnabled = input.codEnabled ?: platformConfig.defaultCodEnabled
+        val onlinePaymentEnabled = input.onlinePaymentEnabled ?: platformConfig.defaultOnlinePaymentEnabled
+        val bankTransferEnabled = input.bankTransferEnabled ?: platformConfig.defaultBankTransferEnabled
         requireAtLeastOnePaymentMethod(codEnabled, onlinePaymentEnabled, bankTransferEnabled)
         val created = StoreSettings(
             store = store,
@@ -257,20 +242,81 @@ class StoreService(
             bankAccountName = input.bankAccountName ?: "",
             bankAccountNumber = input.bankAccountNumber ?: "",
             bankName = input.bankName ?: "",
-            transactionFeePercent = input.transactionFeePercent ?: BigDecimal("3.5"),
+            transactionFeePercent = input.transactionFeePercent ?: platformConfig.platformFeePercent,
             codEnabled = codEnabled,
             onlinePaymentEnabled = onlinePaymentEnabled,
             bankTransferEnabled = bankTransferEnabled,
             sellerType = input.sellerType?.let { wireValueOf<SellerType>(it) } ?: SellerType.INDIVIDUAL,
-            nicNumber = input.nicNumber ?: "",
+            driverLicenceNumber = input.driverLicenceNumber,
+            abn = input.abn,
+            nicNumber = input.nicNumber,
             businessRegistrationNumber = input.businessRegistrationNumber,
             rejectionReason = input.rejectionReason,
             stockManagementEnabled = input.stockManagementEnabled ?: true,
         )
+        requireCountryVerificationFields(created)
         return storeSettingsRepository.save(created).toResponse(fileStorageService)
     }
 
-    /** POST /api/stores/{storeId}/nic-document — seller uploads/replaces their NIC proof. */
+    /**
+     * A store's seller-identity verification fields are country-specific
+     * (see StoreSettings' doc comment) — this deployment's
+     * platform_settings.country_code decides which pair is required, never
+     * both. The business-only field (ABN / business registration number) is
+     * only required when sellerType is BUSINESS.
+     */
+    private fun requireCountryVerificationFields(settings: StoreSettings) {
+        val countryCode = platformConfigService.current().countryCode
+        if (countryCode == "LK") {
+            require(!settings.nicNumber.isNullOrBlank()) { "NIC number is required" }
+            if (settings.sellerType == SellerType.BUSINESS) {
+                require(!settings.businessRegistrationNumber.isNullOrBlank()) {
+                    "Business registration number is required for a registered business"
+                }
+            }
+        } else {
+            require(!settings.driverLicenceNumber.isNullOrBlank()) { "Driver's licence number is required" }
+            if (settings.sellerType == SellerType.BUSINESS) {
+                require(!settings.abn.isNullOrBlank()) { "ABN is required for a registered business" }
+            }
+        }
+    }
+
+    /** POST /api/stores/{storeId}/driver-licence-document — seller uploads/replaces their driver's licence proof. */
+    @Transactional
+    fun uploadDriverLicenceDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
+        requireOwnedStore(storeId)
+        val reference = fileStorageService.store(
+            "seller-documents",
+            file,
+            FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+            FileUploadPolicies.DOCUMENT_MAX_BYTES,
+        )
+        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
+            NotFoundException("No settings for store $storeId yet")
+        }
+        settings.driverLicenceDocumentUrl = reference
+        return storeSettingsRepository.save(settings).toResponse(fileStorageService)
+    }
+
+    /** POST /api/stores/{storeId}/abn-document — seller uploads/replaces their ABN registration proof. */
+    @Transactional
+    fun uploadAbnDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
+        requireOwnedStore(storeId)
+        val reference = fileStorageService.store(
+            "seller-documents",
+            file,
+            FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+            FileUploadPolicies.DOCUMENT_MAX_BYTES,
+        )
+        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
+            NotFoundException("No settings for store $storeId yet")
+        }
+        settings.abnDocumentUrl = reference
+        return storeSettingsRepository.save(settings).toResponse(fileStorageService)
+    }
+
+    /** POST /api/stores/{storeId}/nic-document — seller uploads/replaces their NIC proof (Sri Lanka deployments only). */
     @Transactional
     fun uploadNicDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
         requireOwnedStore(storeId)
@@ -287,7 +333,7 @@ class StoreService(
         return storeSettingsRepository.save(settings).toResponse(fileStorageService)
     }
 
-    /** POST /api/stores/{storeId}/business-reg-document — seller uploads/replaces their business registration proof. */
+    /** POST /api/stores/{storeId}/business-reg-document — seller uploads/replaces their business registration proof (Sri Lanka deployments only). */
     @Transactional
     fun uploadBusinessRegDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
         requireOwnedStore(storeId)

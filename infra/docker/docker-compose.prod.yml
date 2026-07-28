@@ -41,6 +41,26 @@ services:
       AWS_REGION: ${AWS_REGION}
       RECEIPTS_S3_BUCKET_NAME: ${RECEIPTS_S3_BUCKET_NAME}
       APP_CORS_ALLOWED_ORIGINS: ${FRONTEND_ORIGIN}
+      # Bootstrap-only — read once by DataSeeder to insert the single
+      # platform_settings row if it's missing (see PlatformProperties.kt's
+      # doc comment); the running app reads that DB row afterward, not
+      # these env vars. Defaults below are Australia's, the near-term
+      # deployment target while the Sri Lanka launch is on hold — a Sri
+      # Lanka deployment overrides these instead.
+      PLATFORM_NAME: ${PLATFORM_NAME:-IslandCart}
+      PLATFORM_TAGLINE: ${PLATFORM_TAGLINE:-Australia's marketplace for small business sellers}
+      PLATFORM_COUNTRY_NAME: ${PLATFORM_COUNTRY_NAME:-Australia}
+      PLATFORM_COUNTRY_CODE: ${PLATFORM_COUNTRY_CODE:-AU}
+      PLATFORM_CURRENCY_CODE: ${PLATFORM_CURRENCY_CODE:-AUD}
+      PLATFORM_CURRENCY_SYMBOL: ${PLATFORM_CURRENCY_SYMBOL:-$$}
+      PLATFORM_CURRENCY_LOCALE: ${PLATFORM_CURRENCY_LOCALE:-en-AU}
+      PLATFORM_FEE_PERCENT: ${PLATFORM_FEE_PERCENT:-3.5}
+      PLATFORM_FLAT_SHIPPING_FEE: ${PLATFORM_FLAT_SHIPPING_FEE:-10}
+      PLATFORM_DEFAULT_COD_ENABLED: ${PLATFORM_DEFAULT_COD_ENABLED:-true}
+      PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED: ${PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED:-false}
+      PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED: ${PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED:-true}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-hello@islandcart.au}
+      COMPANY_LOCATION: ${COMPANY_LOCATION:-Sydney, Australia}
     # No AWS access key/secret here — the container inherits the EC2
     # instance role's credentials via the SDK's default provider chain.
 
@@ -48,6 +68,13 @@ services:
     build:
       context: ../../app
       args:
+        # The only build-time frontend config left — country content
+        # (platform name, currency, states, fees, ...) now comes from the
+        # backend's platform_settings/states tables at runtime, via GET
+        # /api/platform-config and GET /api/states (see
+        # app/src/lib/platform-config.ts), not NEXT_PUBLIC_* build args.
+        # This is what lets the same built image serve any country: only
+        # the backend's DB differs, not the frontend build.
         NEXT_PUBLIC_API_URL: ${BACKEND_ORIGIN}
     restart: unless-stopped
     depends_on:

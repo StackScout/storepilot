@@ -10,8 +10,8 @@ export interface ProductQueryParams {
   category?: StoreCategory;
   query?: string;
   sort?: "newest" | "price-asc" | "price-desc" | "rating";
-  minPriceLkr?: number;
-  maxPriceLkr?: number;
+  minPrice?: number;
+  maxPrice?: number;
   page?: number;
   size?: number;
 }
@@ -28,8 +28,8 @@ export async function listProducts(params: ProductQueryParams = {}): Promise<Pag
     category: params.category,
     query: params.query,
     sort: params.sort,
-    minPriceLkr: params.minPriceLkr,
-    maxPriceLkr: params.maxPriceLkr,
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
     page: params.page ?? 0,
     size: params.size ?? DEFAULT_PAGE_SIZE,
   });

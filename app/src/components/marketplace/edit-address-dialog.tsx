@@ -20,7 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SRI_LANKA_DISTRICTS } from "@/lib/constants";
+import { useStates } from "@/hooks/use-platform-config";
 import { buyersService } from "@/services";
 import type { ShippingDetails } from "@/types";
 
@@ -28,11 +28,11 @@ const addressSchema = z.object({
   fullName: z.string().min(2, "Enter the recipient's full name"),
   phone: z
     .string()
-    .min(9, "Enter a valid Sri Lankan phone number")
+    .min(9, "Enter a valid phone number")
     .regex(/^[0-9+\s]+$/, "Digits only"),
   addressLine1: z.string().min(5, "Enter the delivery address"),
   city: z.string().min(2, "Enter a city/town"),
-  district: z.string().min(1, "Select a district"),
+  state: z.string().min(1, "Select a state/province"),
   postalCode: z.string().min(4, "Enter a postal code"),
 });
 
@@ -43,7 +43,7 @@ const EMPTY_VALUES: AddressFormValues = {
   phone: "",
   addressLine1: "",
   city: "",
-  district: "",
+  state: "",
   postalCode: "",
 };
 
@@ -64,7 +64,8 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
     defaultValues: defaultShipping ?? EMPTY_VALUES,
   });
 
-  const district = watch("district");
+  const state = watch("state");
+  const { data: states } = useStates();
 
   const mutation = useMutation({
     mutationFn: (values: AddressFormValues) => buyersService.updateDefaultShipping(values),
@@ -107,7 +108,7 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="edit-phone">Phone number</Label>
-            <Input id="edit-phone" placeholder="07X XXX XXXX" {...register("phone")} />
+            <Input id="edit-phone" placeholder="04XX XXX XXX" {...register("phone")} />
             {errors.phone ? <p className="text-destructive text-xs">{errors.phone.message}</p> : null}
           </div>
           <div className="space-y-1.5">
@@ -120,35 +121,35 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="edit-city">City</Label>
-              <Input id="edit-city" placeholder="e.g. Dehiwala" {...register("city")} />
+              <Input id="edit-city" placeholder="e.g. Parramatta" {...register("city")} />
               {errors.city ? <p className="text-destructive text-xs">{errors.city.message}</p> : null}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-postalCode">Postal code</Label>
-              <Input id="edit-postalCode" placeholder="e.g. 10350" {...register("postalCode")} />
+              <Input id="edit-postalCode" placeholder="e.g. 2150" {...register("postalCode")} />
               {errors.postalCode ? (
                 <p className="text-destructive text-xs">{errors.postalCode.message}</p>
               ) : null}
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="edit-district">District</Label>
+            <Label htmlFor="edit-state">State/Province</Label>
             <Select
-              value={district}
-              onValueChange={(v) => setValue("district", v as string, { shouldValidate: true })}
+              value={state}
+              onValueChange={(v) => setValue("state", v as string, { shouldValidate: true })}
             >
-              <SelectTrigger id="edit-district" className="w-full">
-                <SelectValue placeholder="Select a district" />
+              <SelectTrigger id="edit-state" className="w-full">
+                <SelectValue placeholder="Select a state/province" />
               </SelectTrigger>
               <SelectContent>
-                {SRI_LANKA_DISTRICTS.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
+                {(states ?? []).map((s) => (
+                  <SelectItem key={s.name} value={s.name}>
+                    {s.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.district ? <p className="text-destructive text-xs">{errors.district.message}</p> : null}
+            {errors.state ? <p className="text-destructive text-xs">{errors.state.message}</p> : null}
           </div>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>

@@ -66,9 +66,9 @@ class PayoutService(
 
         val payout = Payout(
             store = store,
-            subtotalLkr = eligible.sumOf { it.subtotalLkr },
-            platformFeeLkr = eligible.sumOf { it.platformFeeLkr },
-            netLkr = eligible.sumOf { it.subtotalLkr - it.platformFeeLkr },
+            subtotal = eligible.sumOf { it.subtotal },
+            platformFee = eligible.sumOf { it.platformFee },
+            net = eligible.sumOf { it.subtotal - it.platformFee },
             status = PayoutStatus.SCHEDULED,
         )
         eligible.forEach { order ->
@@ -77,9 +77,9 @@ class PayoutService(
                     payout = payout,
                     orderId = requireNotNull(order.id),
                     orderNumber = order.orderNumber,
-                    subtotalLkr = order.subtotalLkr,
-                    platformFeeLkr = order.platformFeeLkr,
-                    netLkr = order.subtotalLkr - order.platformFeeLkr,
+                    subtotal = order.subtotal,
+                    platformFee = order.platformFee,
+                    net = order.subtotal - order.platformFee,
                 ),
             )
         }

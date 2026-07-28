@@ -22,12 +22,15 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { useCart } from "@/hooks/use-cart";
 import { useCartReconciliation } from "@/hooks/use-cart-reconciliation";
 import { cn } from "@/lib/utils";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 export function CartDrawer() {
   const [open, setOpen] = useState(false);
   const { cart, itemCount, subtotal, updateQuantity, removeItem } = useCart();
   useCartReconciliation();
+  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -80,7 +83,7 @@ export function CartDrawer() {
                     {item.isUnavailable ? (
                       <Badge variant="destructive">No longer available</Badge>
                     ) : (
-                      <PriceDisplay priceLkr={item.unitPriceLkr} size="sm" />
+                      <PriceDisplay price={item.unitPrice} size="sm" />
                     )}
                     <div className="flex items-center justify-between">
                       {item.isUnavailable ? (
@@ -111,7 +114,7 @@ export function CartDrawer() {
             <SheetFooter className="gap-3 border-t pt-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-semibold">{formatLkr(subtotal)}</span>
+                <span className="font-semibold">{formatCurrency(subtotal, currency)}</span>
               </div>
               <Separator />
               <SheetClose

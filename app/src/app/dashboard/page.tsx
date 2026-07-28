@@ -9,13 +9,16 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatLkr } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ordersService, productsService } from "@/services";
 
 export default function DashboardOverviewPage() {
   const storeId = useSellerStoreId();
+  const { currencyCode, currencySymbol, currencyLocale, platformFeePercent } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   // Revenue/pending-count below are computed from this full set, not just
   // one page — a large enough page size to cover realistic stores. A store
   // that outgrows this needs a real backend aggregate query instead of
@@ -34,10 +37,10 @@ export default function DashboardOverviewPage() {
 
   const revenue = orders
     .filter((o) => o.status !== "cancelled")
-    .reduce((sum, o) => sum + o.subtotalLkr, 0);
+    .reduce((sum, o) => sum + o.subtotal, 0);
   const platformFees = orders
     .filter((o) => o.status !== "cancelled")
-    .reduce((sum, o) => sum + o.platformFeeLkr, 0);
+    .reduce((sum, o) => sum + o.platformFee, 0);
   const pendingCount = orders.filter((o) => o.status === "pending").length;
   const lowStockProducts = products.filter(
     (p) => p.trackStock && p.status !== "out-of-stock" && p.stockQuantity <= 5,
@@ -51,12 +54,12 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total revenue" value={formatLkr(revenue)} icon={Wallet} />
+        <StatCard label="Total revenue" value={formatCurrency(revenue, currency)} icon={Wallet} />
         <StatCard label="Pending orders" value={String(pendingCount)} icon={ClipboardList} />
         <StatCard label="Active products" value={String(products.length)} icon={Package} />
         <StatCard
-          label="Platform fees (3.5%)"
-          value={formatLkr(platformFees)}
+          label={`Platform fees (${platformFeePercent}%)`}
+          value={formatCurrency(platformFees, currency)}
           icon={Wallet}
         />
       </div>
@@ -117,7 +120,7 @@ export default function DashboardOverviewPage() {
                       </td>
                       <td className="px-6 py-3">{order.shipping.fullName}</td>
                       <td className="text-muted-foreground px-6 py-3">{formatDate(order.createdAt)}</td>
-                      <td className="px-6 py-3">{formatLkr(order.totalLkr)}</td>
+                      <td className="px-6 py-3">{formatCurrency(order.total, currency)}</td>
                       <td className="px-6 py-3">
                         <OrderStatusBadge status={order.status} />
                       </td>

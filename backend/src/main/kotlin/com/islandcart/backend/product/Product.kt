@@ -40,10 +40,10 @@ class Product(
     var description: String,
     @Column(nullable = false)
     var category: StoreCategory,
-    @Column(name = "price_lkr", nullable = false)
-    var priceLkr: Int,
-    @Column(name = "compare_at_price_lkr")
-    var compareAtPriceLkr: Int? = null,
+    @Column(nullable = false)
+    var price: Int,
+    @Column(name = "compare_at_price")
+    var compareAtPrice: Int? = null,
     @Column(name = "stock_quantity", nullable = false)
     var stockQuantity: Int,
     /** When false, stockQuantity is ignored — status is never auto-forced to out-of-stock and decrementStock skips this product. Forced false whenever the owning store has stockManagementEnabled = false, regardless of what's stored here — see ProductService. */

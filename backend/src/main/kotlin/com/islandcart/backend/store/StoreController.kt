@@ -59,6 +59,18 @@ class StoreController(
         @RequestBody input: StoreProfileInput,
     ): StoreResponse = storeService.updateProfileAsSeller(storeId, input)
 
+    @PostMapping("/api/stores/{storeId}/driver-licence-document", consumes = ["multipart/form-data"])
+    fun uploadDriverLicenceDocument(
+        @PathVariable storeId: UUID,
+        @RequestPart file: MultipartFile,
+    ): StoreSettingsResponse = storeService.uploadDriverLicenceDocument(storeId, file)
+
+    @PostMapping("/api/stores/{storeId}/abn-document", consumes = ["multipart/form-data"])
+    fun uploadAbnDocument(
+        @PathVariable storeId: UUID,
+        @RequestPart file: MultipartFile,
+    ): StoreSettingsResponse = storeService.uploadAbnDocument(storeId, file)
+
     @PostMapping("/api/stores/{storeId}/nic-document", consumes = ["multipart/form-data"])
     fun uploadNicDocument(
         @PathVariable storeId: UUID,

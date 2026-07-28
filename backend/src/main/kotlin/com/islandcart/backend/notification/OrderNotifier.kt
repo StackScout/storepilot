@@ -1,5 +1,6 @@
 package com.islandcart.backend.notification
 
+import com.islandcart.backend.common.PlatformConfigService
 import com.islandcart.backend.order.Order
 import com.islandcart.backend.store.StoreSettingsRepository
 import org.slf4j.LoggerFactory
@@ -18,18 +19,20 @@ class OrderNotifier(
     private val emailService: EmailService,
     private val storeSettingsRepository: StoreSettingsRepository,
     private val notificationProperties: NotificationProperties,
+    private val platformConfigService: PlatformConfigService,
 ) {
     private val log = LoggerFactory.getLogger(OrderNotifier::class.java)
 
     fun orderConfirmed(order: Order) {
+        val platformConfig = platformConfigService.current()
         sendSafely(
             to = order.buyerEmail,
-            subject = "Your IslandCart order ${order.orderNumber} is confirmed",
+            subject = "Your ${platformConfig.name} order ${order.orderNumber} is confirmed",
             body = buildString {
                 appendLine("Thanks for your order from ${order.store.name}!")
                 appendLine()
                 appendLine("Order: ${order.orderNumber}")
-                appendLine("Total: LKR ${order.totalLkr}")
+                appendLine("Total: ${platformConfig.currencyCode} ${order.total}")
                 appendLine()
                 appendLine("Track your order: ${orderUrl(order)}")
             },
@@ -48,7 +51,7 @@ class OrderNotifier(
             subject = "Receipt uploaded for order ${order.orderNumber}",
             body = buildString {
                 appendLine("A buyer has uploaded a payment receipt for order ${order.orderNumber}.")
-                appendLine("Amount: LKR ${order.totalLkr}")
+                appendLine("Amount: ${platformConfigService.current().currencyCode} ${order.total}")
                 appendLine()
                 appendLine("Review and verify it from your seller dashboard.")
             },
@@ -88,7 +91,7 @@ class OrderNotifier(
         }
         sendSafely(
             to = order.buyerEmail,
-            subject = "Your IslandCart order ${order.orderNumber} has shipped",
+            subject = "Your ${platformConfigService.current().name} order ${order.orderNumber} has shipped",
             body = buildString {
                 appendLine("Good news — ${order.store.name} has handed your order ${order.orderNumber} to the courier.")
                 appendLine()
@@ -122,6 +125,19 @@ class OrderNotifier(
      * uncaught exception here would roll that back too. Best-effort: log
      * and move on, same principle as the buyer-default-shipping save in
      * OrderService#createOrder.
+     *
+     * TODO (deferred, not launch-blocking): move this off the request path
+     * onto SQS — publish here instead of calling EmailService directly, add
+     * a poller (SqsNotificationPublisher/consumer, aws profile only) that
+     * calls EmailService and gets retry + a DLQ for free instead of today's
+     * log-and-drop. SQS itself is free at this scale (1M requests/month,
+     * permanently, long-polling keeps an idle consumer well under that) —
+     * deferred because the current failure mode is low-stakes (the order
+     * is already committed regardless of whether the email sends), and this
+     * can't be verified locally (no LocalStack), so it's cheaper to build
+     * once real traffic/launch makes it worth the AWS-deploy iteration
+     * loop. Revisit when: onboarding real sellers/going live, or SES
+     * latency/failures actually show up in logs.
      */
     private fun sendSafely(to: String, subject: String, body: String, attachment: EmailAttachment? = null) {
         try {

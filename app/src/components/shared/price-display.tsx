@@ -1,9 +1,12 @@
-import { formatLkr } from "@/lib/currency";
+"use client";
+
+import { formatCurrency } from "@/lib/currency";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { cn } from "@/lib/utils";
 
 interface PriceDisplayProps {
-  priceLkr: number;
-  compareAtPriceLkr?: number;
+  price: number;
+  compareAtPrice?: number;
   size?: "sm" | "md" | "lg";
   className?: string;
 }
@@ -15,21 +18,23 @@ const SIZE_CLASSES: Record<NonNullable<PriceDisplayProps["size"]>, string> = {
 };
 
 export function PriceDisplay({
-  priceLkr,
-  compareAtPriceLkr,
+  price,
+  compareAtPrice,
   size = "md",
   className,
 }: PriceDisplayProps) {
-  const hasDiscount = compareAtPriceLkr && compareAtPriceLkr > priceLkr;
+  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
+  const hasDiscount = compareAtPrice && compareAtPrice > price;
 
   return (
     <span className={cn("inline-flex items-baseline gap-2", className)}>
       <span className={cn("font-semibold text-foreground", SIZE_CLASSES[size])}>
-        {formatLkr(priceLkr)}
+        {formatCurrency(price, currency)}
       </span>
       {hasDiscount ? (
         <span className="text-muted-foreground text-sm line-through">
-          {formatLkr(compareAtPriceLkr)}
+          {formatCurrency(compareAtPrice, currency)}
         </span>
       ) : null}
     </span>

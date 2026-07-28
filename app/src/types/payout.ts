@@ -11,9 +11,9 @@ export type PayoutStatus = "scheduled" | "paid";
 export interface PayoutOrderRef {
   orderId: string;
   orderNumber: string;
-  subtotalLkr: number;
-  platformFeeLkr: number;
-  netLkr: number;
+  subtotal: number;
+  platformFee: number;
+  net: number;
 }
 
 export interface Payout {
@@ -21,9 +21,9 @@ export interface Payout {
   storeId: string;
   storeName: string;
   orders: PayoutOrderRef[];
-  subtotalLkr: number;
-  platformFeeLkr: number;
-  netLkr: number;
+  subtotal: number;
+  platformFee: number;
+  net: number;
   status: PayoutStatus;
   createdAt: string;
   paidAt?: string;

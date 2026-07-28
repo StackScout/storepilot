@@ -27,8 +27,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const category = params.category as StoreCategory | undefined;
   const tab = params.tab === "stores" ? "stores" : "products";
   const sort = (params.sort as "newest" | "price-asc" | "price-desc" | "rating") ?? "newest";
-  const minPriceLkr = params.minPrice ? Number(params.minPrice) : undefined;
-  const maxPriceLkr = params.maxPrice ? Number(params.maxPrice) : undefined;
+  const minPrice = params.minPrice ? Number(params.minPrice) : undefined;
+  const maxPrice = params.maxPrice ? Number(params.maxPrice) : undefined;
   // URL is 1-indexed for readability ("page=2"); the API is 0-indexed.
   const page = Math.max(0, (Number(params.page) || 1) - 1);
 
@@ -37,8 +37,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       query,
       category,
       sort,
-      minPriceLkr,
-      maxPriceLkr,
+      minPrice,
+      maxPrice,
       page: tab === "products" ? page : 0,
       size: PAGE_SIZE,
     }),
@@ -63,8 +63,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     const search = baseParams();
     if (tab !== "products") search.set("tab", tab);
     if (nextSort !== "newest") search.set("sort", nextSort);
-    if (minPriceLkr) search.set("minPrice", String(minPriceLkr));
-    if (maxPriceLkr) search.set("maxPrice", String(maxPriceLkr));
+    if (minPrice) search.set("minPrice", String(minPrice));
+    if (maxPrice) search.set("maxPrice", String(maxPrice));
     const qs = search.toString();
     return qs ? `/search?${qs}` : "/search";
   }
@@ -73,8 +73,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     const search = baseParams();
     if (tab !== "products") search.set("tab", tab);
     if (sort !== "newest") search.set("sort", sort);
-    if (minPriceLkr) search.set("minPrice", String(minPriceLkr));
-    if (maxPriceLkr) search.set("maxPrice", String(maxPriceLkr));
+    if (minPrice) search.set("minPrice", String(minPrice));
+    if (maxPrice) search.set("maxPrice", String(maxPrice));
     if (nextPage1Indexed > 1) search.set("page", String(nextPage1Indexed));
     const qs = search.toString();
     return qs ? `/search?${qs}` : "/search";
@@ -118,8 +118,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               query={query}
               category={category}
               sort={sort}
-              minPriceLkr={minPriceLkr}
-              maxPriceLkr={maxPriceLkr}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
             />
           </div>
         ) : null}
@@ -129,8 +129,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         query={query}
         category={category}
         sort={sort}
-        minPriceLkr={minPriceLkr}
-        maxPriceLkr={maxPriceLkr}
+        minPrice={minPrice}
+        maxPrice={maxPrice}
         tab={tab}
         page={page}
         tabHrefProducts={tabHref("products")}

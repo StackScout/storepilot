@@ -23,8 +23,9 @@ class ShippingDetails(
     var addressLine1: String? = null,
     @Column(name = "shipping_city")
     var city: String? = null,
-    @Column(name = "shipping_district")
-    var district: String? = null,
+    /** Generic "state/province" field (district, state, ...) — see StoreAddress.state's doc comment. */
+    @Column(name = "shipping_state")
+    var state: String? = null,
     @Column(name = "shipping_postal_code")
     var postalCode: String? = null,
 )

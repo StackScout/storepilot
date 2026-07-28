@@ -50,8 +50,7 @@ private data class SeedStore(
     val description: String,
     val category: StoreCategory,
     val city: String,
-    val district: String,
-    val province: String,
+    val state: String,
     val whatsapp: String,
     val rating: Double,
     val reviewCount: Int,
@@ -75,8 +74,8 @@ private data class SeedProduct(
     val description: String,
     val imageSeed: String,
     val category: StoreCategory,
-    val priceLkr: Int,
-    val compareAtPriceLkr: Int?,
+    val price: Int,
+    val compareAtPrice: Int?,
     val stockQuantity: Int,
     val status: ProductStatus,
     val sku: String,
@@ -87,12 +86,22 @@ private data class SeedProduct(
 )
 
 /**
- * Translates the frontend's mock data (app/src/mock) into real rows on first boot (only runs
+ * Translates demo marketplace content into real rows on first boot (only runs
  * against an empty `stores` table, so it's safe to leave enabled — restarts
- * against an already-seeded database are a no-op). This is what "move the
- * mock data to the database" means concretely: the exact same demo
- * catalogue/orders the frontend used to fabricate from localStorage now
- * exists for real.
+ * against an already-seeded database are a no-op).
+ *
+ * Demo content is Australian — AU is the near-term deployment target while
+ * the Sri Lanka launch sits on hold pending business registration (see
+ * PlatformProperties.kt) — not a faithful port of the original Sri Lankan
+ * mock catalogue. Payment methods are deliberately COD/bank-transfer only:
+ * PayHere (PaymentMethod.PAYHERE) is a Sri Lanka-specific gateway with no AU
+ * equivalent wired up yet (an AU deployment needs Stripe Connect — not
+ * built in this pass), so no seed order uses it.
+ *
+ * StoreSettings.driverLicenceNumber/abn are the seller-verification fields
+ * (renamed from an earlier Sri Lanka NIC/Business Registration Number model
+ * now that this platform is AU-only) — populated here with plausible
+ * placeholder values.
  */
 @Component
 class DataSeeder(
@@ -104,16 +113,20 @@ class DataSeeder(
     private val payoutRepository: PayoutRepository,
     private val sellerRepository: SellerRepository,
     private val jdbcTemplate: JdbcTemplate,
+    private val platformProperties: PlatformProperties,
+    private val platformSettingsRepository: PlatformSettingsRepository,
 ) : CommandLineRunner {
     private val log = LoggerFactory.getLogger(DataSeeder::class.java)
 
     @Transactional
     override fun run(vararg args: String) {
+        seedPlatformSettingsIfMissing()
+
         if (storeRepository.count() > 0) {
             log.info("Seed skipped — stores table already has data.")
             return
         }
-        log.info("Seeding database from frontend mock data...")
+        log.info("Seeding database from demo marketplace data...")
 
         val sellers = seedSellers()
         val storeIds = seedStores(sellers)
@@ -132,26 +145,54 @@ class DataSeeder(
     }
 
     /**
-     * One Seller row per seed store. store-01 (Ceylon Spice Co., the store
-     * every dashboard/order flow demo interacts with) is linked to the real
-     * `test-seller@islandcart.test` Cognito user created for local dev
+     * The single platform_settings row — inserted once from PlatformProperties'
+     * bootstrap env-var values (see its doc comment); a no-op on every later
+     * boot. This is what makes the DB (not application.yml) the running
+     * app's actual config source, and what an operator would edit directly
+     * to reconfigure a deployment without rebuilding/redeploying.
+     */
+    private fun seedPlatformSettingsIfMissing() {
+        if (platformSettingsRepository.count() > 0) return
+        platformSettingsRepository.save(
+            PlatformSettings(
+                name = platformProperties.name,
+                tagline = platformProperties.tagline,
+                countryName = platformProperties.countryName,
+                countryCode = platformProperties.countryCode,
+                currencyCode = platformProperties.currencyCode,
+                currencySymbol = platformProperties.currencySymbol,
+                currencyLocale = platformProperties.currencyLocale,
+                platformFeePercent = platformProperties.platformFeePercent,
+                flatShippingFee = platformProperties.flatShippingFee,
+                defaultCodEnabled = platformProperties.defaultCodEnabled,
+                defaultOnlinePaymentEnabled = platformProperties.defaultOnlinePaymentEnabled,
+                defaultBankTransferEnabled = platformProperties.defaultBankTransferEnabled,
+                supportEmail = platformProperties.supportEmail,
+                companyLocation = platformProperties.companyLocation,
+            ),
+        )
+        log.info("Seeded platform_settings from bootstrap PlatformProperties (name={}).", platformProperties.name)
+    }
+
+    /**
+     * One Seller row per seed store. store-01 (Blue Mountains Roasters, the
+     * store every dashboard/order flow demo interacts with) is linked to the
+     * real `test-seller@islandcart.test` Cognito user created for local dev
      * (see infra's manually-created Cognito pool) — logging in as that user
-     * manages store-01, the same role the old hardcoded
-     * CURRENT_SELLER_STORE_ID demo login played. The other 7 are placeholder
-     * rows with synthetic cognitoSub values — nobody needs to log in as
-     * them, they exist only to satisfy Store.sellerId and populate the
-     * marketplace catalogue.
+     * manages store-01. The other 7 are placeholder rows with synthetic
+     * cognitoSub values — nobody needs to log in as them, they exist only to
+     * satisfy Store.sellerId and populate the marketplace catalogue.
      */
     private fun seedSellers(): Map<String, Seller> {
         val seeds = listOf(
-            SeedSeller("store-01", "41b39d1a-0051-70ad-50b2-9dac620a0ff0", "test-seller@islandcart.test", "Ceylon Spice Co. Seller"),
-            SeedSeller("store-02", "seed-store-02", "seller-store-02@islandcart.test", "Kolam Batik House Seller"),
-            SeedSeller("store-03", "seed-store-03", "seller-store-03@islandcart.test", "Colombo Streetwear Seller"),
-            SeedSeller("store-04", "seed-store-04", "seller-store-04@islandcart.test", "Nuwara Glow Beauty Seller"),
-            SeedSeller("store-05", "seed-store-05", "seller-store-05@islandcart.test", "Lanka Gems & Jewels Seller"),
-            SeedSeller("store-06", "seed-store-06", "seller-store-06@islandcart.test", "TechHub Lanka Seller"),
-            SeedSeller("store-07", "seed-store-07", "seller-store-07@islandcart.test", "Village Basket Seller"),
-            SeedSeller("store-08", "seed-store-08", "seller-store-08@islandcart.test", "Home & Hearth Lanka Seller"),
+            SeedSeller("store-01", "41b39d1a-0051-70ad-50b2-9dac620a0ff0", "test-seller@islandcart.test", "Blue Mountains Roasters Seller"),
+            SeedSeller("store-02", "seed-store-02", "seller-store-02@islandcart.test", "Yarra Valley Weavers Seller"),
+            SeedSeller("store-03", "seed-store-03", "seller-store-03@islandcart.test", "Bondi Streetwear Seller"),
+            SeedSeller("store-04", "seed-store-04", "seller-store-04@islandcart.test", "Byron Bay Botanicals Seller"),
+            SeedSeller("store-05", "seed-store-05", "seller-store-05@islandcart.test", "Outback Opal Co. Seller"),
+            SeedSeller("store-06", "seed-store-06", "seller-store-06@islandcart.test", "TechHub Australia Seller"),
+            SeedSeller("store-07", "seed-store-07", "seller-store-07@islandcart.test", "Aussie Farm Basket Seller"),
+            SeedSeller("store-08", "seed-store-08", "seller-store-08@islandcart.test", "Coastal Home Co. Seller"),
         )
         return seeds.associate { s ->
             s.storeKey to sellerRepository.save(Seller(cognitoSub = s.cognitoSub, email = s.email, name = s.name))
@@ -160,14 +201,14 @@ class DataSeeder(
 
     private fun seedStores(sellers: Map<String, Seller>): Map<String, UUID> {
         val seeds = listOf(
-            SeedStore("store-01", "ceylon-spice-co", "Ceylon Spice Co.", "Farm-fresh spices & tea from the hills of Kandy", "We source cinnamon, tea and spices directly from small growers around Kandy and Matale, roasting and packing everything in small batches for freshness.", StoreCategory.FOOD_BEVERAGE, "Kandy", "Kandy", "Central", "+94771234501", 4.8, 214, 4, true, "2024-02-11", 1320),
-            SeedStore("store-02", "kolam-batik-house", "Kolam Batik House", "Handmade batik, straight from the Galle Fort workshops", "Three generations of batik artisans creating hand-painted sarongs, dresses and home textiles using traditional wax-resist dyeing.", StoreCategory.HANDICRAFTS, "Galle", "Galle", "Southern", "+94771234502", 4.9, 156, 3, true, "2023-11-02", 980),
-            SeedStore("store-03", "colombo-streetwear", "Colombo Streetwear", "Everyday streetwear designed and printed in Colombo", "Small local streetwear label making graphic tees, caps and sneakers inspired by Colombo's neighbourhoods and skate scene.", StoreCategory.FASHION, "Colombo", "Colombo", "Western", "+94771234503", 4.6, 342, 3, true, "2024-05-20", 2110),
-            SeedStore("store-04", "nuwara-glow-beauty", "Nuwara Glow Beauty", "Tea-infused skincare from the highlands", "Small-batch skincare made with Ceylon green tea, herbs and highland botanicals — cruelty-free and locally formulated.", StoreCategory.BEAUTY, "Nuwara Eliya", "Nuwara Eliya", "Central", "+94771234504", 4.7, 98, 3, false, "2025-01-15", 410),
-            SeedStore("store-05", "lanka-gems-jewels", "Lanka Gems & Jewels", "Certified Ceylon gemstones, ethically sourced from Ratnapura", "Family-run jewellers offering certified sapphires, moonstones and custom settings, sourced directly from Ratnapura gem pits.", StoreCategory.JEWELRY, "Ratnapura", "Ratnapura", "Sabaragamuwa", "+94771234505", 4.9, 67, 3, true, "2023-08-09", 540),
-            SeedStore("store-06", "techhub-lanka", "TechHub Lanka", "Affordable phone & gadget accessories, delivered island-wide", "Your neighbourhood tech shop online — chargers, earbuds, cables and accessories at fair prices with fast Colombo dispatch.", StoreCategory.ELECTRONICS, "Colombo", "Colombo", "Western", "+94771234506", 4.4, 501, 4, true, "2024-09-03", 1875),
-            SeedStore("store-07", "village-basket", "Village Basket", "Organic produce direct from Kurunegala farms", "Connecting Kurunegala farmers to city kitchens — organic jaggery, honey, rice and dried goods with no middlemen.", StoreCategory.GROCERY, "Kurunegala", "Kurunegala", "North Western", "+94771234507", 4.7, 133, 4, false, "2025-03-28", 305),
-            SeedStore("store-08", "home-hearth-lanka", "Home & Hearth Lanka", "Handmade clay, coconut shell & reed decor for the home", "Reviving traditional Sri Lankan craft techniques into everyday homeware — clay pots, coconut shell bowls and reed weaves.", StoreCategory.HOME_LIVING, "Negombo", "Gampaha", "Western", "+94771234508", 4.5, 74, 3, false, "2025-02-02", 260),
+            SeedStore("store-01", "blue-mountains-roasters", "Blue Mountains Roasters", "Small-batch coffee & tea from the Blue Mountains", "We roast single-origin coffee and blend loose-leaf tea in small batches out of Katoomba, sourcing green beans direct from growers we know by name.", StoreCategory.FOOD_BEVERAGE, "Katoomba", "New South Wales", "+61412345601", 4.8, 214, 4, true, "2024-02-11", 1320),
+            SeedStore("store-02", "yarra-valley-weavers", "Yarra Valley Weavers", "Handwoven wool textiles from the Yarra Valley", "A small weaving studio turning locally sourced Merino wool into throws, scarves and cushion covers on traditional floor looms.", StoreCategory.HANDICRAFTS, "Yarra Valley", "Victoria", "+61412345602", 4.9, 156, 3, true, "2023-11-02", 980),
+            SeedStore("store-03", "bondi-streetwear", "Bondi Streetwear", "Everyday streetwear designed and printed in Bondi", "Small local streetwear label making graphic tees, caps and sneakers inspired by Bondi's beach and skate culture.", StoreCategory.FASHION, "Bondi Beach", "New South Wales", "+61412345603", 4.6, 342, 3, true, "2024-05-20", 2110),
+            SeedStore("store-04", "byron-bay-botanicals", "Byron Bay Botanicals", "Native-botanical skincare from Byron Bay", "Small-batch skincare made with native Australian botanicals and macadamia oil — cruelty-free and locally formulated.", StoreCategory.BEAUTY, "Byron Bay", "New South Wales", "+61412345604", 4.7, 98, 3, false, "2025-01-15", 410),
+            SeedStore("store-05", "outback-opal-co", "Outback Opal Co.", "Certified Australian opals, ethically sourced from Coober Pedy", "Family-run jewellers offering certified boulder and doublet opals set in silver and gold, sourced directly from Coober Pedy fields.", StoreCategory.JEWELRY, "Coober Pedy", "South Australia", "+61412345605", 4.9, 67, 3, true, "2023-08-09", 540),
+            SeedStore("store-06", "techhub-australia", "TechHub Australia", "Affordable phone & gadget accessories, delivered nationwide", "Your neighbourhood tech shop online — chargers, earbuds, cables and accessories at fair prices with fast Melbourne dispatch.", StoreCategory.ELECTRONICS, "Melbourne", "Victoria", "+61412345606", 4.4, 501, 4, true, "2024-09-03", 1875),
+            SeedStore("store-07", "aussie-farm-basket", "Aussie Farm Basket", "Organic produce direct from Toowoomba farms", "Connecting Darling Downs farmers to city kitchens — organic honey, macadamias, flour and free-range eggs with no middlemen.", StoreCategory.GROCERY, "Toowoomba", "Queensland", "+61412345607", 4.7, 133, 4, false, "2025-03-28", 305),
+            SeedStore("store-08", "coastal-home-co", "Coastal Home Co.", "Handmade seagrass, glass & driftwood decor for the home", "Coastal-inspired everyday homeware — woven seagrass baskets, recycled glass vases and driftwood pieces, made in Fremantle.", StoreCategory.HOME_LIVING, "Fremantle", "Western Australia", "+61412345608", 4.5, 74, 3, false, "2025-02-02", 260),
         )
 
         val ids = mutableMapOf<String, UUID>()
@@ -181,7 +222,7 @@ class DataSeeder(
                 logoUrl = "https://picsum.photos/seed/${s.slug}-logo/200/200",
                 bannerUrl = "https://picsum.photos/seed/${s.slug}-banner/1200/400",
                 category = s.category,
-                address = StoreAddress(s.city, s.district, s.province),
+                address = StoreAddress(s.city, s.state),
                 whatsappNumber = s.whatsapp,
                 rating = s.rating,
                 reviewCount = s.reviewCount,
@@ -203,57 +244,58 @@ class DataSeeder(
         storeSettingsRepository.save(
             StoreSettings(
                 store = store,
-                contactEmail = "hello@ceylonspiceco.lk",
-                contactPhone = "+94771234501",
-                bankAccountName = "Ceylon Spice Co. (Pvt) Ltd",
-                bankAccountNumber = "0081 4562 1190",
-                bankName = "Commercial Bank of Ceylon",
+                contactEmail = "hello@bluemountainsroasters.com.au",
+                contactPhone = "+61412345601",
+                bankAccountName = "Blue Mountains Roasters Pty Ltd",
+                bankAccountNumber = "BSB 062-000 Acc 1234 5678",
+                bankName = "Commonwealth Bank of Australia",
                 transactionFeePercent = BigDecimal("3.5"),
                 codEnabled = true,
-                onlinePaymentEnabled = true,
+                onlinePaymentEnabled = false,
+                bankTransferEnabled = true,
                 sellerType = SellerType.BUSINESS,
-                nicNumber = "851234567V",
-                businessRegistrationNumber = "PV 00219845",
+                driverLicenceNumber = "12345678",
+                abn = "51 824 753 556",
             ),
         )
     }
 
     private fun seedProducts(storeIds: Map<String, UUID>): Map<String, UUID> {
         val seeds = listOf(
-            SeedProduct("store-01", "Ceylon Cinnamon Sticks (100g)", "ceylon-cinnamon-sticks-100g", "True Ceylon cinnamon (Cinnamomum verum) hand-rolled by Matale growers. Sweet, delicate flavour — ideal for tea, baking and curries.", "cinnamon", StoreCategory.FOOD_BEVERAGE, 850, 950, 42, ProductStatus.ACTIVE, "CSC-CIN-100", 4.9, 88, "2025-03-01", "2026-06-12"),
-            SeedProduct("store-01", "Pure Ceylon Black Tea (200g)", "pure-ceylon-black-tea-200g", "High-grown black tea from Kandy estates, hand-picked and slow-dried for a bold, malty cup.", "blacktea", StoreCategory.FOOD_BEVERAGE, 650, null, 76, ProductStatus.ACTIVE, "CSC-TEA-200", 4.8, 121, "2025-02-14", "2026-05-30"),
-            SeedProduct("store-01", "Cold-Pressed King Coconut Oil (500ml)", "cold-pressed-king-coconut-oil-500ml", "Unrefined, cold-pressed coconut oil from king coconuts — great for cooking, hair and skin.", "coconutoil", StoreCategory.FOOD_BEVERAGE, 1200, null, 0, ProductStatus.OUT_OF_STOCK, "CSC-OIL-500", 4.6, 54, "2025-04-20", "2026-07-01"),
-            SeedProduct("store-01", "Roasted Curry Powder (250g)", "roasted-curry-powder-250g", "Traditional roasted curry powder blend — coriander, cumin, fennel and Ceylon spices roasted in small batches.", "currypowder", StoreCategory.FOOD_BEVERAGE, 450, null, 5, ProductStatus.ACTIVE, "CSC-CUR-250", 4.7, 39, "2025-05-11", "2026-06-25"),
+            SeedProduct("store-01", "Colombian Single-Origin Coffee Beans (250g)", "colombian-single-origin-coffee-beans-250g", "Washed Colombian beans, roasted in small batches to a bright, fruit-forward medium roast. Whole bean.", "coffeebeans", StoreCategory.FOOD_BEVERAGE, 18, 22, 42, ProductStatus.ACTIVE, "BMR-COF-250", 4.9, 88, "2025-03-01", "2026-06-12"),
+            SeedProduct("store-01", "English Breakfast Tea Leaves (200g)", "english-breakfast-tea-leaves-200g", "A bold, malty loose-leaf blend — hand-packed in Katoomba, great with milk.", "blacktea", StoreCategory.FOOD_BEVERAGE, 14, null, 76, ProductStatus.ACTIVE, "BMR-TEA-200", 4.8, 121, "2025-02-14", "2026-05-30"),
+            SeedProduct("store-01", "Cold-Pressed Macadamia Oil (500ml)", "cold-pressed-macadamia-oil-500ml", "Unrefined, cold-pressed macadamia oil — great for cooking, hair and skin.", "macoil", StoreCategory.FOOD_BEVERAGE, 24, null, 0, ProductStatus.OUT_OF_STOCK, "BMR-OIL-500", 4.6, 54, "2025-04-20", "2026-07-01"),
+            SeedProduct("store-01", "House Blend Ground Coffee (250g)", "house-blend-ground-coffee-250g", "Our everyday house blend, pre-ground for the filter or plunger.", "groundcoffee", StoreCategory.FOOD_BEVERAGE, 16, null, 5, ProductStatus.ACTIVE, "BMR-GRD-250", 4.7, 39, "2025-05-11", "2026-06-25"),
 
-            SeedProduct("store-02", "Hand-Painted Batik Sarong", "hand-painted-batik-sarong", "Traditional wax-resist batik sarong, hand-painted in Galle Fort using natural dyes. One-of-a-kind patterns.", "batiksarong", StoreCategory.HANDICRAFTS, 2800, 3200, 18, ProductStatus.ACTIVE, "KBH-SAR-01", 4.9, 47, "2025-01-22", "2026-06-18"),
-            SeedProduct("store-02", "Batik Cotton Midi Dress", "batik-cotton-midi-dress", "Breathable cotton midi dress with hand-stamped batik print, tailored in-house.", "batikdress", StoreCategory.FASHION, 4500, null, 9, ProductStatus.ACTIVE, "KBH-DRS-02", 4.8, 31, "2025-06-02", "2026-07-05"),
-            SeedProduct("store-02", "Batik Cushion Cover Set (2pc)", "batik-cushion-cover-set-2pc", "Set of two 45x45cm cushion covers in complementary batik prints.", "batikcushion", StoreCategory.HOME_LIVING, 1800, null, 23, ProductStatus.ACTIVE, "KBH-CUS-03", 4.7, 22, "2025-07-19", "2026-04-14"),
+            SeedProduct("store-02", "Handwoven Wool Throw Blanket", "handwoven-wool-throw-blanket", "Merino wool throw, handwoven on a traditional floor loom in the Yarra Valley. One-of-a-kind patterns.", "throwblanket", StoreCategory.HANDICRAFTS, 89, 110, 18, ProductStatus.ACTIVE, "YVW-THR-01", 4.9, 47, "2025-01-22", "2026-06-18"),
+            SeedProduct("store-02", "Merino Wool Scarf", "merino-wool-scarf", "Lightweight Merino wool scarf, hand-dyed and woven in-house.", "woolscarf", StoreCategory.FASHION, 45, null, 9, ProductStatus.ACTIVE, "YVW-SCF-02", 4.8, 31, "2025-06-02", "2026-07-05"),
+            SeedProduct("store-02", "Woven Cushion Cover Set (2pc)", "woven-cushion-cover-set-2pc", "Set of two 45x45cm cushion covers in complementary handwoven patterns.", "cushioncover", StoreCategory.HOME_LIVING, 55, null, 23, ProductStatus.ACTIVE, "YVW-CUS-03", 4.7, 22, "2025-07-19", "2026-04-14"),
 
-            SeedProduct("store-03", "\"Colombo 07\" Graphic Tee", "colombo-07-graphic-tee", "100% combed cotton tee with a screen-printed Colombo 07 skyline graphic. Unisex fit.", "graphictee", StoreCategory.FASHION, 1990, null, 64, ProductStatus.ACTIVE, "CST-TEE-07", 4.6, 203, "2025-02-28", "2026-07-10"),
-            SeedProduct("store-03", "Ceylon Dad Cap", "ceylon-dad-cap", "Adjustable cotton twill cap with embroidered lion emblem.", "dadcap", StoreCategory.FASHION, 1450, null, 3, ProductStatus.ACTIVE, "CST-CAP-05", 4.5, 66, "2025-03-15", "2026-06-01"),
-            SeedProduct("store-03", "Canvas Low-Top Sneakers", "canvas-low-top-sneakers", "Locally made canvas sneakers with rubber soles, unisex sizing.", "sneakers", StoreCategory.FASHION, 6500, 7200, 15, ProductStatus.ACTIVE, "CST-SNK-09", 4.4, 73, "2025-05-04", "2026-05-22"),
+            SeedProduct("store-03", "\"Bondi Beach\" Graphic Tee", "bondi-beach-graphic-tee", "100% combed cotton tee with a screen-printed Bondi Beach graphic. Unisex fit.", "graphictee", StoreCategory.FASHION, 35, null, 64, ProductStatus.ACTIVE, "BST-TEE-01", 4.6, 203, "2025-02-28", "2026-07-10"),
+            SeedProduct("store-03", "Australiana Dad Cap", "australiana-dad-cap", "Adjustable cotton twill cap with embroidered kangaroo emblem.", "dadcap", StoreCategory.FASHION, 28, null, 3, ProductStatus.ACTIVE, "BST-CAP-02", 4.5, 66, "2025-03-15", "2026-06-01"),
+            SeedProduct("store-03", "Canvas Low-Top Sneakers", "canvas-low-top-sneakers", "Locally made canvas sneakers with rubber soles, unisex sizing.", "sneakers", StoreCategory.FASHION, 79, 95, 15, ProductStatus.ACTIVE, "BST-SNK-03", 4.4, 73, "2025-05-04", "2026-05-22"),
 
-            SeedProduct("store-04", "Green Tea Face Serum (30ml)", "green-tea-face-serum-30ml", "Lightweight serum with Ceylon green tea extract and niacinamide for brightening.", "faceserum", StoreCategory.BEAUTY, 2200, null, 31, ProductStatus.ACTIVE, "NGB-SER-01", 4.7, 41, "2025-04-09", "2026-06-30"),
-            SeedProduct("store-04", "Herbal Foaming Face Wash (150ml)", "herbal-foaming-face-wash-150ml", "Gentle daily cleanser with neem, turmeric and highland herbs.", "facewash", StoreCategory.BEAUTY, 950, null, 58, ProductStatus.ACTIVE, "NGB-WSH-02", 4.6, 29, "2025-04-09", "2026-06-30"),
-            SeedProduct("store-04", "Ceylon Tea Body Scrub (250g)", "ceylon-tea-body-scrub-250g", "Exfoliating body scrub with spent tea leaves and coconut oil.", "bodyscrub", StoreCategory.BEAUTY, 1650, null, 12, ProductStatus.ACTIVE, "NGB-SCR-03", 4.8, 18, "2025-08-01", "2026-07-02"),
+            SeedProduct("store-04", "Native Botanicals Face Serum (30ml)", "native-botanicals-face-serum-30ml", "Lightweight serum with native Kakadu plum extract and niacinamide for brightening.", "faceserum", StoreCategory.BEAUTY, 42, null, 31, ProductStatus.ACTIVE, "BBB-SER-01", 4.7, 41, "2025-04-09", "2026-06-30"),
+            SeedProduct("store-04", "Tea Tree Foaming Cleanser (150ml)", "tea-tree-foaming-cleanser-150ml", "Gentle daily cleanser with Australian tea tree oil.", "facewash", StoreCategory.BEAUTY, 22, null, 58, ProductStatus.ACTIVE, "BBB-CLN-02", 4.6, 29, "2025-04-09", "2026-06-30"),
+            SeedProduct("store-04", "Macadamia Body Scrub (250g)", "macadamia-body-scrub-250g", "Exfoliating body scrub with crushed macadamia shell and coconut oil.", "bodyscrub", StoreCategory.BEAUTY, 26, null, 12, ProductStatus.ACTIVE, "BBB-SCR-03", 4.8, 18, "2025-08-01", "2026-07-02"),
 
-            SeedProduct("store-05", "Blue Sapphire Pendant (18k Gold)", "blue-sapphire-pendant-18k-gold", "Certified natural blue sapphire (1.2ct) set in 18k gold pendant. Comes with GIA-equivalent local gem certificate.", "sapphirependant", StoreCategory.JEWELRY, 45000, null, 4, ProductStatus.ACTIVE, "LGJ-PEN-01", 5.0, 12, "2025-01-30", "2026-06-11"),
-            SeedProduct("store-05", "Moonstone Silver Ring", "moonstone-silver-ring", "Sterling silver ring set with a rainbow moonstone from Meetiyagoda.", "moonstonering", StoreCategory.JEWELRY, 8500, null, 20, ProductStatus.ACTIVE, "LGJ-RIN-02", 4.8, 33, "2025-03-18", "2026-05-19"),
-            SeedProduct("store-05", "Ceylon Sapphire Stud Earrings", "ceylon-sapphire-stud-earrings", "Petite blue sapphire studs in sterling silver, everyday wear.", "sapphireearrings", StoreCategory.JEWELRY, 32000, null, 7, ProductStatus.ACTIVE, "LGJ-EAR-03", 4.9, 9, "2025-09-02", "2026-04-28"),
+            SeedProduct("store-05", "Boulder Opal Pendant (Sterling Silver)", "boulder-opal-pendant-sterling-silver", "Certified natural boulder opal set in a sterling silver pendant. Comes with an Australian gem certificate.", "opalpendant", StoreCategory.JEWELRY, 320, null, 4, ProductStatus.ACTIVE, "OOC-PEN-01", 5.0, 12, "2025-01-30", "2026-06-11"),
+            SeedProduct("store-05", "Opal Doublet Ring", "opal-doublet-ring", "Sterling silver ring set with a Coober Pedy opal doublet.", "opalring", StoreCategory.JEWELRY, 145, null, 20, ProductStatus.ACTIVE, "OOC-RIN-02", 4.8, 33, "2025-03-18", "2026-05-19"),
+            SeedProduct("store-05", "Opal Stud Earrings", "opal-stud-earrings", "Petite opal studs in sterling silver, everyday wear.", "opalearrings", StoreCategory.JEWELRY, 210, null, 7, ProductStatus.ACTIVE, "OOC-EAR-03", 4.9, 9, "2025-09-02", "2026-04-28"),
 
-            SeedProduct("store-06", "Type-C Fast Charger 33W", "type-c-fast-charger-33w", "33W PD fast charger, compatible with most Android and iPhone devices.", "fastcharger", StoreCategory.ELECTRONICS, 2450, null, 140, ProductStatus.ACTIVE, "THL-CHG-01", 4.5, 312, "2025-01-05", "2026-07-15"),
-            SeedProduct("store-06", "Wireless Earbuds Pro", "wireless-earbuds-pro", "Bluetooth 5.3 earbuds with ANC and 30-hour case battery life.", "earbuds", StoreCategory.ELECTRONICS, 5990, 6990, 54, ProductStatus.ACTIVE, "THL-EAR-02", 4.3, 189, "2025-02-19", "2026-07-08"),
-            SeedProduct("store-06", "Adjustable Phone Ring Stand", "adjustable-phone-ring-stand", "360° rotating ring holder and kickstand for phones.", "ringstand", StoreCategory.ELECTRONICS, 590, null, 220, ProductStatus.ACTIVE, "THL-RIN-03", 4.2, 98, "2025-03-11", "2026-06-20"),
-            SeedProduct("store-06", "Power Bank 10000mAh", "power-bank-10000mah", "Slim 10000mAh power bank with dual USB output and LED indicator.", "powerbank", StoreCategory.ELECTRONICS, 4200, null, 0, ProductStatus.OUT_OF_STOCK, "THL-PWR-04", 4.4, 145, "2025-04-02", "2026-07-19"),
+            SeedProduct("store-06", "USB-C Fast Charger 33W", "usb-c-fast-charger-33w", "33W PD fast charger, compatible with most Android and iPhone devices.", "fastcharger", StoreCategory.ELECTRONICS, 25, null, 140, ProductStatus.ACTIVE, "THA-CHG-01", 4.5, 312, "2025-01-05", "2026-07-15"),
+            SeedProduct("store-06", "Wireless Earbuds Pro", "wireless-earbuds-pro", "Bluetooth 5.3 earbuds with ANC and 30-hour case battery life.", "earbuds", StoreCategory.ELECTRONICS, 69, 89, 54, ProductStatus.ACTIVE, "THA-EAR-02", 4.3, 189, "2025-02-19", "2026-07-08"),
+            SeedProduct("store-06", "Adjustable Phone Stand", "adjustable-phone-stand", "360° rotating stand and kickstand for phones.", "phonestand", StoreCategory.ELECTRONICS, 12, null, 220, ProductStatus.ACTIVE, "THA-STA-03", 4.2, 98, "2025-03-11", "2026-06-20"),
+            SeedProduct("store-06", "Power Bank 10000mAh", "power-bank-10000mah", "Slim 10000mAh power bank with dual USB output and LED indicator.", "powerbank", StoreCategory.ELECTRONICS, 39, null, 0, ProductStatus.OUT_OF_STOCK, "THA-PWR-04", 4.4, 145, "2025-04-02", "2026-07-19"),
 
-            SeedProduct("store-07", "Organic Kithul Jaggery (500g)", "organic-kithul-jaggery-500g", "Traditionally tapped kithul palm jaggery, unrefined and organic.", "jaggery", StoreCategory.GROCERY, 480, null, 90, ProductStatus.ACTIVE, "VB-JAG-01", 4.9, 61, "2025-05-25", "2026-07-03"),
-            SeedProduct("store-07", "Raw Bee Honey (750ml)", "raw-bee-honey-750ml", "Unprocessed wildflower honey harvested from Kurunegala apiaries.", "honey", StoreCategory.GROCERY, 1350, null, 44, ProductStatus.ACTIVE, "VB-HON-02", 4.8, 52, "2025-06-14", "2026-06-27"),
-            SeedProduct("store-07", "Red Rice (5kg)", "red-rice-5kg", "Traditional unpolished red rice, stone-ground and sun-dried.", "redrice", StoreCategory.GROCERY, 1450, null, 33, ProductStatus.ACTIVE, "VB-RIC-03", 4.7, 40, "2025-06-14", "2026-05-16"),
-            SeedProduct("store-07", "Dried Anchovies / Karawala (250g)", "dried-anchovies-karawala-250g", "Sun-dried anchovies, cleaned and ready to cook.", "karawala", StoreCategory.GROCERY, 620, null, 4, ProductStatus.ACTIVE, "VB-KAR-04", 4.5, 27, "2025-07-30", "2026-07-11"),
+            SeedProduct("store-07", "Raw Australian Bush Honey (500g)", "raw-australian-bush-honey-500g", "Unprocessed native bush honey harvested from Darling Downs apiaries.", "honey", StoreCategory.GROCERY, 14, null, 90, ProductStatus.ACTIVE, "AFB-HON-01", 4.9, 61, "2025-05-25", "2026-07-03"),
+            SeedProduct("store-07", "Macadamia Nuts Roasted & Salted (300g)", "macadamia-nuts-roasted-salted-300g", "Queensland-grown macadamias, roasted and lightly salted.", "macadamias", StoreCategory.GROCERY, 12, null, 44, ProductStatus.ACTIVE, "AFB-MAC-02", 4.8, 52, "2025-06-14", "2026-06-27"),
+            SeedProduct("store-07", "Sourdough Rye Flour (2kg)", "sourdough-rye-flour-2kg", "Stone-ground rye flour, milled on the farm.", "ryeflour", StoreCategory.GROCERY, 9, null, 33, ProductStatus.ACTIVE, "AFB-FLR-03", 4.7, 40, "2025-06-14", "2026-05-16"),
+            SeedProduct("store-07", "Free-Range Farm Eggs (Dozen)", "free-range-farm-eggs-dozen", "Pasture-raised free-range eggs, collected fresh daily.", "eggs", StoreCategory.GROCERY, 8, null, 4, ProductStatus.ACTIVE, "AFB-EGG-04", 4.5, 27, "2025-07-30", "2026-07-11"),
 
-            SeedProduct("store-08", "Handmade Clay Cooking Pot", "handmade-clay-cooking-pot", "Traditional unglazed clay pot from Molagoda potters, seasoned and ready to use.", "claypot", StoreCategory.HOME_LIVING, 1650, null, 26, ProductStatus.ACTIVE, "HHL-POT-01", 4.6, 21, "2025-04-27", "2026-06-05"),
-            SeedProduct("store-08", "Coconut Shell Bowl Set (4pc)", "coconut-shell-bowl-set-4pc", "Hand-polished coconut shell bowls, food-safe lacquer finish.", "shellbowl", StoreCategory.HOME_LIVING, 1200, null, 37, ProductStatus.ACTIVE, "HHL-BWL-02", 4.7, 16, "2025-05-08", "2026-06-09"),
-            SeedProduct("store-08", "Woven Reed Table Runner", "woven-reed-table-runner", "Hand-woven pan (reed) table runner in natural tones, 180cm.", "reedrunner", StoreCategory.HOME_LIVING, 950, null, 19, ProductStatus.ACTIVE, "HHL-RUN-03", 4.4, 11, "2025-08-14", "2026-07-06"),
+            SeedProduct("store-08", "Handwoven Seagrass Basket", "handwoven-seagrass-basket", "Natural seagrass storage basket, handwoven in Fremantle.", "seagrassbasket", StoreCategory.HOME_LIVING, 45, null, 26, ProductStatus.ACTIVE, "CHC-BAS-01", 4.6, 21, "2025-04-27", "2026-06-05"),
+            SeedProduct("store-08", "Recycled Glass Vase Set (3pc)", "recycled-glass-vase-set-3pc", "Hand-blown vases made from recycled glass, in coastal tones.", "glassvase", StoreCategory.HOME_LIVING, 38, null, 37, ProductStatus.ACTIVE, "CHC-VAS-02", 4.7, 16, "2025-05-08", "2026-06-09"),
+            SeedProduct("store-08", "Driftwood Table Runner", "driftwood-table-runner", "Hand-finished driftwood table runner, 180cm, sourced from local beaches.", "driftwoodrunner", StoreCategory.HOME_LIVING, 32, null, 19, ProductStatus.ACTIVE, "CHC-RUN-03", 4.4, 11, "2025-08-14", "2026-07-06"),
         )
 
         val ids = mutableMapOf<String, UUID>()
@@ -265,8 +307,8 @@ class DataSeeder(
                 slug = p.slug,
                 description = p.description,
                 category = p.category,
-                priceLkr = p.priceLkr,
-                compareAtPriceLkr = p.compareAtPriceLkr,
+                price = p.price,
+                compareAtPrice = p.compareAtPrice,
                 stockQuantity = p.stockQuantity,
                 status = p.status,
                 sku = p.sku,
@@ -285,21 +327,21 @@ class DataSeeder(
 
     private fun seedBuyer(): UUID {
         val buyer = Buyer(
-            name = "Tharindu Silva",
-            email = "tharindu@example.com",
-            phone = "+94 77 890 1234",
+            name = "Jack Thompson",
+            email = "jack.thompson@example.com",
+            phone = "+61 412 890 123",
             defaultShipping = ShippingDetails(
-                fullName = "Tharindu Silva",
-                phone = "+94 77 890 1234",
-                addressLine1 = "45 Independence Avenue",
-                city = "Colombo",
-                district = "Colombo",
-                postalCode = "00700",
+                fullName = "Jack Thompson",
+                phone = "+61 412 890 123",
+                addressLine1 = "45 Harbour Street",
+                city = "Sydney",
+                state = "New South Wales",
+                postalCode = "2000",
             ),
         )
         val saved = buyerRepository.saveAndFlush(buyer)
         val id = requireNotNull(saved.id)
-        backdate("buyers", id, dt("2026-06-01T09:00:00+05:30"), dt("2026-06-01T09:00:00+05:30"))
+        backdate("buyers", id, dt("2026-06-01T09:00:00+10:00"), dt("2026-06-01T09:00:00+10:00"))
         return id
     }
 
@@ -310,8 +352,8 @@ class DataSeeder(
         fun order(
             key: String,
             orderNumber: String,
-            items: List<Triple<String, Int, Int>>, // productKey, unitPriceLkr, quantity
-            subtotalLkr: Int,
+            items: List<Triple<String, Int, Int>>, // productKey, unitPrice, quantity
+            subtotal: Int,
             status: OrderStatus,
             paymentMethod: PaymentMethod,
             paymentStatus: PaymentStatus,
@@ -320,26 +362,26 @@ class DataSeeder(
             phone: String,
             addressLine1: String,
             city: String,
-            district: String,
+            state: String,
             postalCode: String,
             timeline: List<Triple<OrderStatus, String, String>>, // status, note?, timestamp
             createdAt: String,
         ) {
-            val platformFeeLkr = (BigDecimal(subtotalLkr) * PLATFORM_FEE_PERCENT).divide(BigDecimal(100), 0, java.math.RoundingMode.HALF_UP).toInt()
+            val platformFee = (BigDecimal(subtotal) * platformProperties.platformFeePercent).divide(BigDecimal(100), 0, java.math.RoundingMode.HALF_UP).toInt()
             val order = Order(
                 orderNumber = orderNumber,
                 store = store,
-                subtotalLkr = subtotalLkr,
-                shippingFeeLkr = FLAT_SHIPPING_FEE_LKR,
-                platformFeeLkr = platformFeeLkr,
-                totalLkr = subtotalLkr + FLAT_SHIPPING_FEE_LKR,
+                subtotal = subtotal,
+                shippingFee = platformProperties.flatShippingFee,
+                platformFee = platformFee,
+                total = subtotal + platformProperties.flatShippingFee,
                 status = status,
                 paymentMethod = paymentMethod,
                 paymentStatus = paymentStatus,
-                shipping = ShippingDetails(buyerName, phone, addressLine1, city, district, postalCode),
+                shipping = ShippingDetails(buyerName, phone, addressLine1, city, state, postalCode),
                 buyerEmail = buyerEmail,
             )
-            items.forEach { (productKey, unitPriceLkr, quantity) ->
+            items.forEach { (productKey, unitPrice, quantity) ->
                 val product = productRepository.findById(productIds.getValue(productKey)).orElseThrow()
                 order.items.add(
                     OrderItem(
@@ -347,7 +389,7 @@ class DataSeeder(
                         productId = requireNotNull(product.id),
                         productName = product.name,
                         productImageUrl = product.images.firstOrNull()?.url ?: "",
-                        unitPriceLkr = unitPriceLkr,
+                        unitPrice = unitPrice,
                         quantity = quantity,
                     ),
                 )
@@ -364,64 +406,64 @@ class DataSeeder(
         }
 
         order(
-            "order-1001", "SL-20260722-1001",
-            items = listOf(Triple("prod-001", 850, 2), Triple("prod-002", 650, 1)),
-            subtotalLkr = 2350, status = OrderStatus.PENDING, paymentMethod = PaymentMethod.COD, paymentStatus = PaymentStatus.UNPAID,
-            buyerName = "Nadeesha Perera", buyerEmail = "nadeesha.perera@example.com", phone = "+94 77 456 7890",
-            addressLine1 = "24/3 Galle Road", city = "Dehiwala", district = "Colombo", postalCode = "10350",
-            timeline = listOf(Triple(OrderStatus.PENDING, "", "2026-07-22T09:14:00+05:30")),
-            createdAt = "2026-07-22T09:14:00+05:30",
+            "order-1001", "AU-20260722-1001",
+            items = listOf(Triple("prod-001", 18, 2), Triple("prod-002", 14, 1)),
+            subtotal = 50, status = OrderStatus.PENDING, paymentMethod = PaymentMethod.COD, paymentStatus = PaymentStatus.UNPAID,
+            buyerName = "Amelia Clarke", buyerEmail = "amelia.clarke@example.com", phone = "+61 478 456 789",
+            addressLine1 = "24/3 George Street", city = "Parramatta", state = "New South Wales", postalCode = "2150",
+            timeline = listOf(Triple(OrderStatus.PENDING, "", "2026-07-22T09:14:00+10:00")),
+            createdAt = "2026-07-22T09:14:00+10:00",
         )
         order(
-            "order-1002", "SL-20260721-1002",
-            items = listOf(Triple("prod-004", 450, 3)),
-            subtotalLkr = 1350, status = OrderStatus.CONFIRMED, paymentMethod = PaymentMethod.PAYHERE, paymentStatus = PaymentStatus.PAID,
-            buyerName = "Kasun Jayawardena", buyerEmail = "kasun.jayawardena@example.com", phone = "+94 71 234 5678",
-            addressLine1 = "12 Temple Road", city = "Kurunegala", district = "Kurunegala", postalCode = "60000",
+            "order-1002", "AU-20260721-1002",
+            items = listOf(Triple("prod-004", 16, 3)),
+            subtotal = 48, status = OrderStatus.CONFIRMED, paymentMethod = PaymentMethod.BANK_TRANSFER, paymentStatus = PaymentStatus.PAID,
+            buyerName = "Liam Walker", buyerEmail = "liam.walker@example.com", phone = "+61 471 234 567",
+            addressLine1 = "12 Ruthven Street", city = "Toowoomba", state = "Queensland", postalCode = "4350",
             timeline = listOf(
-                Triple(OrderStatus.PENDING, "", "2026-07-21T14:02:00+05:30"),
-                Triple(OrderStatus.CONFIRMED, "", "2026-07-21T16:40:00+05:30"),
+                Triple(OrderStatus.PENDING, "", "2026-07-21T14:02:00+10:00"),
+                Triple(OrderStatus.CONFIRMED, "", "2026-07-21T16:40:00+10:00"),
             ),
-            createdAt = "2026-07-21T14:02:00+05:30",
+            createdAt = "2026-07-21T14:02:00+10:00",
         )
         order(
-            "order-1003", "SL-20260719-1003",
-            items = listOf(Triple("prod-002", 650, 2), Triple("prod-001", 850, 1)),
-            subtotalLkr = 2150, status = OrderStatus.SHIPPED, paymentMethod = PaymentMethod.PAYHERE, paymentStatus = PaymentStatus.PAID,
-            buyerName = "Ishara Fernando", buyerEmail = "ishara.fernando@example.com", phone = "+94 76 789 0123",
-            addressLine1 = "88 Station Road", city = "Negombo", district = "Gampaha", postalCode = "11500",
+            "order-1003", "AU-20260719-1003",
+            items = listOf(Triple("prod-002", 14, 2), Triple("prod-001", 18, 1)),
+            subtotal = 46, status = OrderStatus.SHIPPED, paymentMethod = PaymentMethod.BANK_TRANSFER, paymentStatus = PaymentStatus.PAID,
+            buyerName = "Sophie Nguyen", buyerEmail = "sophie.nguyen@example.com", phone = "+61 476 789 012",
+            addressLine1 = "88 Beach Road", city = "Byron Bay", state = "New South Wales", postalCode = "2481",
             timeline = listOf(
-                Triple(OrderStatus.PENDING, "", "2026-07-19T10:20:00+05:30"),
-                Triple(OrderStatus.CONFIRMED, "", "2026-07-19T11:05:00+05:30"),
-                Triple(OrderStatus.SHIPPED, "Tracking: Domex 8827412", "2026-07-20T15:30:00+05:30"),
+                Triple(OrderStatus.PENDING, "", "2026-07-19T10:20:00+10:00"),
+                Triple(OrderStatus.CONFIRMED, "", "2026-07-19T11:05:00+10:00"),
+                Triple(OrderStatus.SHIPPED, "Tracking: AusPost 8827412", "2026-07-20T15:30:00+10:00"),
             ),
-            createdAt = "2026-07-19T10:20:00+05:30",
+            createdAt = "2026-07-19T10:20:00+10:00",
         )
         order(
-            "order-1004", "SL-20260715-1004",
-            items = listOf(Triple("prod-003", 1200, 1)),
-            subtotalLkr = 1200, status = OrderStatus.DELIVERED, paymentMethod = PaymentMethod.COD, paymentStatus = PaymentStatus.PAID,
-            buyerName = "Ruwan Wickramasinghe", buyerEmail = "ruwan.wickramasinghe@example.com", phone = "+94 70 111 2233",
-            addressLine1 = "5 Lake Drive", city = "Kandy", district = "Kandy", postalCode = "20000",
+            "order-1004", "AU-20260715-1004",
+            items = listOf(Triple("prod-003", 24, 1)),
+            subtotal = 24, status = OrderStatus.DELIVERED, paymentMethod = PaymentMethod.COD, paymentStatus = PaymentStatus.PAID,
+            buyerName = "Noah Mitchell", buyerEmail = "noah.mitchell@example.com", phone = "+61 470 111 223",
+            addressLine1 = "5 Lakeside Drive", city = "Katoomba", state = "New South Wales", postalCode = "2780",
             timeline = listOf(
-                Triple(OrderStatus.PENDING, "", "2026-07-15T08:00:00+05:30"),
-                Triple(OrderStatus.CONFIRMED, "", "2026-07-15T09:12:00+05:30"),
-                Triple(OrderStatus.SHIPPED, "", "2026-07-16T13:00:00+05:30"),
-                Triple(OrderStatus.DELIVERED, "", "2026-07-17T17:45:00+05:30"),
+                Triple(OrderStatus.PENDING, "", "2026-07-15T08:00:00+10:00"),
+                Triple(OrderStatus.CONFIRMED, "", "2026-07-15T09:12:00+10:00"),
+                Triple(OrderStatus.SHIPPED, "", "2026-07-16T13:00:00+10:00"),
+                Triple(OrderStatus.DELIVERED, "", "2026-07-17T17:45:00+10:00"),
             ),
-            createdAt = "2026-07-15T08:00:00+05:30",
+            createdAt = "2026-07-15T08:00:00+10:00",
         )
         order(
-            "order-1005", "SL-20260710-1005",
-            items = listOf(Triple("prod-004", 450, 1)),
-            subtotalLkr = 450, status = OrderStatus.CANCELLED, paymentMethod = PaymentMethod.PAYHERE, paymentStatus = PaymentStatus.REFUNDED,
-            buyerName = "Dilani Rathnayake", buyerEmail = "dilani.rathnayake@example.com", phone = "+94 75 222 4455",
-            addressLine1 = "17 Hill Street", city = "Matale", district = "Matale", postalCode = "21000",
+            "order-1005", "AU-20260710-1005",
+            items = listOf(Triple("prod-004", 16, 1)),
+            subtotal = 16, status = OrderStatus.CANCELLED, paymentMethod = PaymentMethod.BANK_TRANSFER, paymentStatus = PaymentStatus.REFUNDED,
+            buyerName = "Chloe Anderson", buyerEmail = "chloe.anderson@example.com", phone = "+61 475 222 445",
+            addressLine1 = "17 Hill Street", city = "Leura", state = "New South Wales", postalCode = "2780",
             timeline = listOf(
-                Triple(OrderStatus.PENDING, "", "2026-07-10T12:00:00+05:30"),
-                Triple(OrderStatus.CANCELLED, "Buyer requested cancellation before dispatch", "2026-07-10T18:20:00+05:30"),
+                Triple(OrderStatus.PENDING, "", "2026-07-10T12:00:00+10:00"),
+                Triple(OrderStatus.CANCELLED, "Buyer requested cancellation before dispatch", "2026-07-10T18:20:00+10:00"),
             ),
-            createdAt = "2026-07-10T12:00:00+05:30",
+            createdAt = "2026-07-10T12:00:00+10:00",
         )
 
         return ids
@@ -432,25 +474,25 @@ class DataSeeder(
         val order1004 = orderRepository.findById(order1004Id).orElseThrow()
         val payout = Payout(
             store = store,
-            subtotalLkr = 1200,
-            platformFeeLkr = 42,
-            netLkr = 1158,
+            subtotal = 24,
+            platformFee = 1,
+            net = 23,
             status = PayoutStatus.PAID,
-            paidAt = dt("2026-07-18T14:32:00+05:30"),
-            bankReference = "CBC-TRF-88213",
+            paidAt = dt("2026-07-18T14:32:00+10:00"),
+            bankReference = "CBA-TRF-88213",
         )
         payout.orders.add(
             PayoutOrderRef(
                 payout = payout,
                 orderId = order1004Id,
                 orderNumber = order1004.orderNumber,
-                subtotalLkr = 1200,
-                platformFeeLkr = 42,
-                netLkr = 1158,
+                subtotal = 24,
+                platformFee = 1,
+                net = 23,
             ),
         )
         val saved = payoutRepository.saveAndFlush(payout)
-        backdate("payouts", requireNotNull(saved.id), dt("2026-07-18T09:00:00+05:30"), dt("2026-07-18T09:00:00+05:30"))
+        backdate("payouts", requireNotNull(saved.id), dt("2026-07-18T09:00:00+10:00"), dt("2026-07-18T09:00:00+10:00"))
     }
 
     private fun statusLabel(status: OrderStatus): String = when (status) {

@@ -1,50 +1,13 @@
-export const SITE_NAME = "IslandCart";
-export const SITE_TAGLINE = "Sri Lanka's marketplace for small business sellers";
-
-export const PLATFORM_FEE_PERCENT = 3.5;
-export const FLAT_SHIPPING_FEE_LKR = 350;
-
-export const SRI_LANKA_DISTRICTS = [
-  "Colombo",
-  "Gampaha",
-  "Kalutara",
-  "Kandy",
-  "Matale",
-  "Nuwara Eliya",
-  "Galle",
-  "Matara",
-  "Hambantota",
-  "Jaffna",
-  "Kurunegala",
-  "Puttalam",
-  "Anuradhapura",
-  "Polonnaruwa",
-  "Badulla",
-  "Ratnapura",
-  "Kegalle",
-] as const;
-
-/** Province for each district in SRI_LANKA_DISTRICTS — used to derive Store.address.province at onboarding. */
-export const DISTRICT_TO_PROVINCE: Record<string, string> = {
-  Colombo: "Western",
-  Gampaha: "Western",
-  Kalutara: "Western",
-  Kandy: "Central",
-  Matale: "Central",
-  "Nuwara Eliya": "Central",
-  Galle: "Southern",
-  Matara: "Southern",
-  Hambantota: "Southern",
-  Jaffna: "Northern",
-  Kurunegala: "North Western",
-  Puttalam: "North Western",
-  Anuradhapura: "North Central",
-  Polonnaruwa: "North Central",
-  Badulla: "Uva",
-  Ratnapura: "Sabaragamuwa",
-  Kegalle: "Sabaragamuwa",
-};
-
+/**
+ * Country-specific platform content (name, tagline, currency, fees, state
+ * options, ...) is no longer baked into this file or NEXT_PUBLIC_* build
+ * args — it's read from the backend's platform_settings/states tables at
+ * runtime via GET /api/platform-config and GET /api/states (see
+ * lib/platform-config.ts and hooks/use-platform-config.ts). That's what
+ * lets a second country's deployment (e.g. Australia alongside a future
+ * Sri Lanka one) be configured by editing DB rows, not rebuilding this
+ * image with different env vars.
+ */
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   confirmed: "Confirmed",

@@ -11,15 +11,20 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 
-/** Mirrors src/types/store.ts's StoreAddress — embedded, not its own table. */
+/**
+ * Mirrors src/types/store.ts's StoreAddress — embedded, not its own table.
+ * `state` is deliberately one generic "state/province" field (not a
+ * separate district+province pair) so the same shape works for any
+ * country's address model — Sri Lanka's district and Australia's state
+ * both fit here. Valid options come from the `states` reference table (see
+ * common/State.kt), not a hardcoded list.
+ */
 @Embeddable
 class StoreAddress(
     @Column(nullable = false)
     var city: String,
     @Column(nullable = false)
-    var district: String,
-    @Column(nullable = false)
-    var province: String,
+    var state: String,
 )
 
 /**

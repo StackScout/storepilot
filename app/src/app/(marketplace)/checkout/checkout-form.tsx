@@ -28,8 +28,8 @@ import { useCart } from "@/hooks/use-cart";
 import { useCartReconciliation } from "@/hooks/use-cart-reconciliation";
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { cn } from "@/lib/utils";
-import { formatLkr } from "@/lib/currency";
-import { FLAT_SHIPPING_FEE_LKR, SRI_LANKA_DISTRICTS } from "@/lib/constants";
+import { formatCurrency } from "@/lib/currency";
+import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
 import { ordersService, buyersService, storesService } from "@/services";
 import type { Order, PaymentMethod } from "@/types";
@@ -39,11 +39,11 @@ const checkoutSchema = z.object({
   email: z.string().email("Enter a valid email"),
   phone: z
     .string()
-    .min(9, "Enter a valid Sri Lankan phone number")
+    .min(9, "Enter a valid phone number")
     .regex(/^[0-9+\s]+$/, "Digits only"),
   addressLine1: z.string().min(5, "Enter the delivery address"),
   city: z.string().min(2, "Enter a city/town"),
-  district: z.string().min(1, "Select a district"),
+  state: z.string().min(1, "Select a state/province"),
   postalCode: z.string().min(4, "Enter a postal code"),
   paymentMethod: z.enum(["payhere", "cod", "bank-transfer"]),
 });
@@ -59,6 +59,9 @@ export function CheckoutForm() {
 
   const { session } = useAuthSession();
   const isSignedInBuyer = session.signedIn && session.role === "buyer";
+  const { name, currencyCode, currencySymbol, currencyLocale, flatShippingFee } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
+  const { data: states } = useStates();
 
   const { data: buyer } = useQuery({
     queryKey: ["buyer", "me"],
@@ -94,7 +97,7 @@ export function CheckoutForm() {
     formState: { errors },
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: { district: "", paymentMethod: "cod", email: session.email ?? "" },
+    defaultValues: { state: "", paymentMethod: "cod", email: session.email ?? "" },
   });
 
   // Prefill from the signed-in buyer's saved address once it loads — a
@@ -107,7 +110,7 @@ export function CheckoutForm() {
       phone: buyer.defaultShipping.phone,
       addressLine1: buyer.defaultShipping.addressLine1,
       city: buyer.defaultShipping.city,
-      district: buyer.defaultShipping.district,
+      state: buyer.defaultShipping.state,
       postalCode: buyer.defaultShipping.postalCode,
       paymentMethod: "cod",
     });
@@ -122,7 +125,7 @@ export function CheckoutForm() {
     setValue("email", session.email);
   }, [session.email, buyer, setValue]);
 
-  const district = watch("district");
+  const state = watch("state");
   const paymentMethod = watch("paymentMethod");
 
   // If the selected method isn't actually offered by this store (including
@@ -147,7 +150,7 @@ export function CheckoutForm() {
         phone: values.phone,
         addressLine1: values.addressLine1,
         city: values.city,
-        district: values.district,
+        state: values.state,
         postalCode: values.postalCode,
       };
       const order = await ordersService.createOrder({
@@ -246,7 +249,7 @@ export function CheckoutForm() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="fullName">Full name</Label>
-                  <Input id="fullName" placeholder="e.g. Nadeesha Perera" {...register("fullName")} />
+                  <Input id="fullName" placeholder="e.g. Jack Thompson" {...register("fullName")} />
                   {errors.fullName ? (
                     <p className="text-destructive text-xs">{errors.fullName.message}</p>
                   ) : null}
@@ -267,7 +270,7 @@ export function CheckoutForm() {
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="phone">Phone number</Label>
-                  <Input id="phone" placeholder="07X XXX XXXX" {...register("phone")} />
+                  <Input id="phone" placeholder="04XX XXX XXX" {...register("phone")} />
                   {errors.phone ? (
                     <p className="text-destructive text-xs">{errors.phone.message}</p>
                   ) : null}
@@ -285,35 +288,35 @@ export function CheckoutForm() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="city">City</Label>
-                  <Input id="city" placeholder="e.g. Dehiwala" {...register("city")} />
+                  <Input id="city" placeholder="e.g. Parramatta" {...register("city")} />
                   {errors.city ? <p className="text-destructive text-xs">{errors.city.message}</p> : null}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="postalCode">Postal code</Label>
-                  <Input id="postalCode" placeholder="e.g. 10350" {...register("postalCode")} />
+                  <Input id="postalCode" placeholder="e.g. 2150" {...register("postalCode")} />
                   {errors.postalCode ? (
                     <p className="text-destructive text-xs">{errors.postalCode.message}</p>
                   ) : null}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="district">District</Label>
+                  <Label htmlFor="state">State/Province</Label>
                   <Select
-                    value={district}
-                    onValueChange={(v) => setValue("district", v as string, { shouldValidate: true })}
+                    value={state}
+                    onValueChange={(v) => setValue("state", v as string, { shouldValidate: true })}
                   >
-                    <SelectTrigger id="district" className="w-full">
-                      <SelectValue placeholder="Select a district" />
+                    <SelectTrigger id="state" className="w-full">
+                      <SelectValue placeholder="Select a state/province" />
                     </SelectTrigger>
                     <SelectContent>
-                      {SRI_LANKA_DISTRICTS.map((d) => (
-                        <SelectItem key={d} value={d}>
-                          {d}
+                      {(states ?? []).map((s) => (
+                        <SelectItem key={s.name} value={s.name}>
+                          {s.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.district ? (
-                    <p className="text-destructive text-xs">{errors.district.message}</p>
+                  {errors.state ? (
+                    <p className="text-destructive text-xs">{errors.state.message}</p>
                   ) : null}
                 </div>
               </div>
@@ -427,7 +430,7 @@ export function CheckoutForm() {
                     </p>
                   </div>
                   {item.isUnavailable ? null : (
-                    <PriceDisplay priceLkr={item.unitPriceLkr * item.quantity} size="sm" />
+                    <PriceDisplay price={item.unitPrice * item.quantity} size="sm" />
                   )}
                 </div>
               ))}
@@ -448,16 +451,16 @@ export function CheckoutForm() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatLkr(subtotal)}</span>
+                <span>{formatCurrency(subtotal, currency)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
-                <span>{formatLkr(FLAT_SHIPPING_FEE_LKR)}</span>
+                <span>{formatCurrency(flatShippingFee, currency)}</span>
               </div>
               <Separator />
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>
-                <span>{formatLkr(subtotal + FLAT_SHIPPING_FEE_LKR)}</span>
+                <span>{formatCurrency(subtotal + flatShippingFee, currency)}</span>
               </div>
             </div>
             <Button
@@ -475,7 +478,7 @@ export function CheckoutForm() {
               Place order
             </Button>
             <p className="text-muted-foreground text-center text-xs">
-              By placing this order you agree to IslandCart&apos;s{" "}
+              By placing this order you agree to {name}&apos;s{" "}
               <Link href="#" className="underline">
                 terms
               </Link>

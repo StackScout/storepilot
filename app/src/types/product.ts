@@ -18,8 +18,8 @@ export interface Product {
   description: string;
   images: ProductImage[];
   category: StoreCategory;
-  priceLkr: number;
-  compareAtPriceLkr?: number;
+  price: number;
+  compareAtPrice?: number;
   stockQuantity: number;
   /** Whether this product tracks stock quantity — always false if the store has disabled stock management. */
   trackStock: boolean;
@@ -35,8 +35,8 @@ export interface ProductFormInput {
   name: string;
   description: string;
   category: StoreCategory;
-  priceLkr: number;
-  compareAtPriceLkr?: number;
+  price: number;
+  compareAtPrice?: number;
   stockQuantity: number;
   trackStock: boolean;
   sku?: string;

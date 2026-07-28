@@ -12,7 +12,7 @@ fun Store.toResponse(): StoreResponse =
         logoUrl = logoUrl,
         bannerUrl = bannerUrl,
         category = category.wireValue,
-        address = StoreAddressResponse(address.city, address.district, address.province),
+        address = StoreAddressResponse(address.city, address.state),
         whatsappNumber = whatsappNumber,
         rating = rating,
         reviewCount = reviewCount,
@@ -26,7 +26,7 @@ fun Store.toResponse(): StoreResponse =
         tiktokUrl = tiktokUrl,
     )
 
-/** nicDocumentUrl/businessRegDocumentUrl are resolved fresh on every call (never cached) — see FileStorageService.resolveUrl. */
+/** driverLicenceDocumentUrl/abnDocumentUrl are resolved fresh on every call (never cached) — see FileStorageService.resolveUrl. */
 fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSettingsResponse =
     StoreSettingsResponse(
         storeId = requireNotNull(store.id),
@@ -40,9 +40,13 @@ fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSetti
         onlinePaymentEnabled = onlinePaymentEnabled,
         bankTransferEnabled = bankTransferEnabled,
         sellerType = sellerType.wireValue,
+        driverLicenceNumber = driverLicenceNumber,
+        abn = abn,
         nicNumber = nicNumber,
         businessRegistrationNumber = businessRegistrationNumber,
         rejectionReason = rejectionReason,
+        driverLicenceDocumentUrl = driverLicenceDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        abnDocumentUrl = abnDocumentUrl?.let { fileStorageService.resolveUrl(it) },
         nicDocumentUrl = nicDocumentUrl?.let { fileStorageService.resolveUrl(it) },
         businessRegDocumentUrl = businessRegDocumentUrl?.let { fileStorageService.resolveUrl(it) },
         stockManagementEnabled = stockManagementEnabled,

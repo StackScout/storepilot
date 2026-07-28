@@ -31,7 +31,7 @@ export function useCartReconciliation() {
           productId: id,
           product: products[i]
             ? {
-                priceLkr: products[i]!.priceLkr,
+                price: products[i]!.price,
                 stockQuantity: products[i]!.stockQuantity,
                 trackStock: products[i]!.trackStock,
               }

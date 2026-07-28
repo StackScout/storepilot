@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,43 +17,72 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CATEGORIES } from "@/mock/categories";
-import { SRI_LANKA_DISTRICTS } from "@/lib/constants";
+import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { storesService, authService } from "@/services";
 import type { SellerType, StoreCategory } from "@/types";
 
-const onboardingSchema = z
-  .object({
-    storeName: z.string().min(3, "Enter your store name"),
-    category: z.string().min(1, "Select a category"),
-    tagline: z.string().min(5, "Add a short tagline"),
-    description: z.string().min(20, "Describe your store in a bit more detail (min 20 characters)"),
-    city: z.string().min(2, "Enter your city/town"),
-    district: z.string().min(1, "Select a district"),
-    whatsappNumber: z.string().min(9, "Enter a valid WhatsApp number"),
-    contactEmail: z.string().email("Enter a valid email"),
-    sellerType: z.enum(["individual", "business"]),
-    nicNumber: z.string().min(10, "Enter a valid NIC number"),
-    businessRegistrationNumber: z.string().optional(),
-    bankName: z.string().min(2, "Enter your bank name"),
-    bankAccountName: z.string().min(2, "Enter the account holder name"),
-    bankAccountNumber: z.string().min(4, "Enter the account number"),
-    agreeToTerms: z.boolean().refine((v) => v, "You must agree to continue"),
-  })
-  .superRefine((data, ctx) => {
-    if (data.sellerType === "business" && !data.businessRegistrationNumber?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["businessRegistrationNumber"],
-        message: "Enter your Business Registration number",
-      });
-    }
-  });
+/**
+ * Which identity-verification fields are required depends on this
+ * deployment's platform config country (`platform_settings.country_code`),
+ * not on anything the seller chooses — see StoreSettings' doc comment on
+ * the backend. Built per-render (via useMemo) since it closes over that.
+ */
+function buildOnboardingSchema(isSriLanka: boolean) {
+  return z
+    .object({
+      storeName: z.string().min(3, "Enter your store name"),
+      category: z.string().min(1, "Select a category"),
+      tagline: z.string().min(5, "Add a short tagline"),
+      description: z.string().min(20, "Describe your store in a bit more detail (min 20 characters)"),
+      city: z.string().min(2, "Enter your city/town"),
+      state: z.string().min(1, "Select a state/province"),
+      whatsappNumber: z.string().min(9, "Enter a valid WhatsApp number"),
+      contactEmail: z.string().email("Enter a valid email"),
+      sellerType: z.enum(["individual", "business"]),
+      driverLicenceNumber: z.string().optional(),
+      abn: z.string().optional(),
+      nicNumber: z.string().optional(),
+      businessRegistrationNumber: z.string().optional(),
+      bankName: z.string().min(2, "Enter your bank name"),
+      bankAccountName: z.string().min(2, "Enter the account holder name"),
+      bankAccountNumber: z.string().min(4, "Enter the account number"),
+      agreeToTerms: z.boolean().refine((v) => v, "You must agree to continue"),
+    })
+    .superRefine((data, ctx) => {
+      if (isSriLanka) {
+        if (!data.nicNumber || data.nicNumber.trim().length < 5) {
+          ctx.addIssue({ code: "custom", path: ["nicNumber"], message: "Enter a valid NIC number" });
+        }
+        if (data.sellerType === "business" && !data.businessRegistrationNumber?.trim()) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["businessRegistrationNumber"],
+            message: "Enter your business registration number",
+          });
+        }
+      } else {
+        if (!data.driverLicenceNumber || data.driverLicenceNumber.trim().length < 6) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["driverLicenceNumber"],
+            message: "Enter a valid driver's licence number",
+          });
+        }
+        if (data.sellerType === "business" && !data.abn?.trim()) {
+          ctx.addIssue({ code: "custom", path: ["abn"], message: "Enter your ABN" });
+        }
+      }
+    });
+}
 
-type OnboardingFormValues = z.infer<typeof onboardingSchema>;
+type OnboardingFormValues = z.infer<ReturnType<typeof buildOnboardingSchema>>;
 
 export default function OnboardingPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { name, platformFeePercent, countryCode } = usePlatformConfig();
+  const isSriLanka = countryCode === "LK";
+  const onboardingSchema = useMemo(() => buildOnboardingSchema(isSriLanka), [isSriLanka]);
   const {
     register,
     handleSubmit,
@@ -64,25 +93,35 @@ export default function OnboardingPage() {
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
       category: "",
-      district: "",
+      state: "",
       sellerType: "individual",
       agreeToTerms: false,
     },
   });
 
   const category = watch("category");
-  const district = watch("district");
+  const state = watch("state");
   const sellerType = watch("sellerType");
   const agreeToTerms = watch("agreeToTerms");
+  const { data: states } = useStates();
 
+  const [licenceFile, setLicenceFile] = useState<File | null>(null);
+  const [abnFile, setAbnFile] = useState<File | null>(null);
   const [nicFile, setNicFile] = useState<File | null>(null);
   const [businessRegFile, setBusinessRegFile] = useState<File | null>(null);
 
   const mutation = useMutation({
     mutationFn: async (values: OnboardingFormValues) => {
-      if (!nicFile) throw new Error("Upload a copy of your NIC to continue");
-      if (values.sellerType === "business" && !businessRegFile) {
-        throw new Error("Upload your Business Registration certificate to continue");
+      if (isSriLanka) {
+        if (!nicFile) throw new Error("Upload a copy of your NIC to continue");
+        if (values.sellerType === "business" && !businessRegFile) {
+          throw new Error("Upload your business registration document to continue");
+        }
+      } else {
+        if (!licenceFile) throw new Error("Upload a copy of your driver's licence to continue");
+        if (values.sellerType === "business" && !abnFile) {
+          throw new Error("Upload your ABN registration document to continue");
+        }
       }
 
       const store = await storesService.createStore({
@@ -91,7 +130,7 @@ export default function OnboardingPage() {
         tagline: values.tagline,
         description: values.description,
         city: values.city,
-        district: values.district,
+        state: values.state,
         whatsappNumber: values.whatsappNumber,
       });
       // createStore just granted the caller's account the "seller" Cognito
@@ -109,14 +148,22 @@ export default function OnboardingPage() {
         bankAccountName: values.bankAccountName,
         bankAccountNumber: values.bankAccountNumber,
         sellerType: values.sellerType,
-        nicNumber: values.nicNumber,
-        businessRegistrationNumber: values.businessRegistrationNumber,
+        ...(isSriLanka
+          ? { nicNumber: values.nicNumber, businessRegistrationNumber: values.businessRegistrationNumber }
+          : { driverLicenceNumber: values.driverLicenceNumber, abn: values.abn }),
         codEnabled: true,
         onlinePaymentEnabled: true,
       });
-      await storesService.uploadNicDocument(store.id, nicFile);
-      if (businessRegFile) {
-        await storesService.uploadBusinessRegDocument(store.id, businessRegFile);
+      if (isSriLanka) {
+        await storesService.uploadNicDocument(store.id, nicFile!);
+        if (businessRegFile) {
+          await storesService.uploadBusinessRegDocument(store.id, businessRegFile);
+        }
+      } else {
+        await storesService.uploadDriverLicenceDocument(store.id, licenceFile!);
+        if (abnFile) {
+          await storesService.uploadAbnDocument(store.id, abnFile);
+        }
       }
     },
     onSuccess: () => {
@@ -138,7 +185,7 @@ export default function OnboardingPage() {
         <span className="bg-primary/10 text-primary mx-auto flex size-12 items-center justify-center rounded-full">
           <Store className="size-6" />
         </span>
-        <h1 className="text-2xl font-bold">Start selling on IslandCart</h1>
+        <h1 className="text-2xl font-bold">Start selling on {name}</h1>
         <p className="text-muted-foreground text-sm">
           We review every new store before it goes live to buyers — it helps keep the marketplace
           safe. Approval typically takes 1–3 business days.
@@ -151,7 +198,7 @@ export default function OnboardingPage() {
             <h2 className="font-semibold">Store details</h2>
             <div className="space-y-1.5">
               <Label htmlFor="storeName">Store name</Label>
-              <Input id="storeName" placeholder="e.g. Kandy Handloom Co." {...register("storeName")} />
+              <Input id="storeName" placeholder="e.g. Blue Mountains Roasters" {...register("storeName")} />
               {errors.storeName ? (
                 <p className="text-destructive text-xs">{errors.storeName.message}</p>
               ) : null}
@@ -204,31 +251,31 @@ export default function OnboardingPage() {
                 ) : null}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="district">District</Label>
+                <Label htmlFor="state">State/Province</Label>
                 <Select
-                  value={district}
-                  onValueChange={(v) => setValue("district", v as string, { shouldValidate: true })}
+                  value={state}
+                  onValueChange={(v) => setValue("state", v as string, { shouldValidate: true })}
                 >
-                  <SelectTrigger id="district" className="w-full">
-                    <SelectValue placeholder="Select district" />
+                  <SelectTrigger id="state" className="w-full">
+                    <SelectValue placeholder="Select state/province" />
                   </SelectTrigger>
                   <SelectContent>
-                    {SRI_LANKA_DISTRICTS.map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
+                    {(states ?? []).map((s) => (
+                      <SelectItem key={s.name} value={s.name}>
+                        {s.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.district ? (
-                  <p className="text-destructive text-xs">{errors.district.message}</p>
+                {errors.state ? (
+                  <p className="text-destructive text-xs">{errors.state.message}</p>
                 ) : null}
               </div>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="city">City / town</Label>
-              <Input id="city" placeholder="e.g. Kandy" {...register("city")} />
+              <Input id="city" placeholder="e.g. Katoomba" {...register("city")} />
               {errors.city ? <p className="text-destructive text-xs">{errors.city.message}</p> : null}
             </div>
           </CardContent>
@@ -270,55 +317,98 @@ export default function OnboardingPage() {
                 <span>
                   <span className="block text-sm font-medium">Registered business</span>
                   <span className="text-muted-foreground block text-xs">
-                    Has a Business Registration certificate from the Registrar of Companies
+                    {isSriLanka
+                      ? "Has a business registration number with the Registrar of Companies"
+                      : "Has an ABN registered with the Australian Business Register"}
                   </span>
                 </span>
               </Label>
             </RadioGroup>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="nicNumber">NIC number</Label>
-              <Input id="nicNumber" placeholder="e.g. 200012345678 or 851234567V" {...register("nicNumber")} />
-              {errors.nicNumber ? (
-                <p className="text-destructive text-xs">{errors.nicNumber.message}</p>
-              ) : null}
-            </div>
+            {isSriLanka ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="nicNumber">NIC number</Label>
+                <Input id="nicNumber" placeholder="e.g. 199512345678" {...register("nicNumber")} />
+                {errors.nicNumber ? (
+                  <p className="text-destructive text-xs">{errors.nicNumber.message}</p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="driverLicenceNumber">Driver&apos;s licence number</Label>
+                <Input id="driverLicenceNumber" placeholder="e.g. 12345678" {...register("driverLicenceNumber")} />
+                {errors.driverLicenceNumber ? (
+                  <p className="text-destructive text-xs">{errors.driverLicenceNumber.message}</p>
+                ) : null}
+              </div>
+            )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="nicDocument">NIC copy (photo or PDF)</Label>
+              <Label htmlFor="licenceDocument">
+                {isSriLanka ? "NIC copy (photo or PDF)" : "Driver's licence copy (photo or PDF)"}
+              </Label>
               <Input
-                id="nicDocument"
+                id="licenceDocument"
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
-                onChange={(e) => setNicFile(e.target.files?.[0] ?? null)}
+                onChange={(e) =>
+                  isSriLanka
+                    ? setNicFile(e.target.files?.[0] ?? null)
+                    : setLicenceFile(e.target.files?.[0] ?? null)
+                }
               />
             </div>
 
             {sellerType === "business" ? (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="businessRegistrationNumber">Business Registration number</Label>
-                  <Input
-                    id="businessRegistrationNumber"
-                    placeholder="e.g. PV 00219845"
-                    {...register("businessRegistrationNumber")}
-                  />
-                  {errors.businessRegistrationNumber ? (
-                    <p className="text-destructive text-xs">
-                      {errors.businessRegistrationNumber.message}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="businessRegDocument">Business Registration certificate (photo or PDF)</Label>
-                  <Input
-                    id="businessRegDocument"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    onChange={(e) => setBusinessRegFile(e.target.files?.[0] ?? null)}
-                  />
-                </div>
-              </>
+              isSriLanka ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="businessRegistrationNumber">Business registration number</Label>
+                    <Input
+                      id="businessRegistrationNumber"
+                      placeholder="e.g. PV 12345"
+                      {...register("businessRegistrationNumber")}
+                    />
+                    {errors.businessRegistrationNumber ? (
+                      <p className="text-destructive text-xs">{errors.businessRegistrationNumber.message}</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="businessRegDocument">Business registration document (photo or PDF)</Label>
+                    <Input
+                      id="businessRegDocument"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={(e) => setBusinessRegFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="abn">ABN</Label>
+                    <Input
+                      id="abn"
+                      placeholder="e.g. 51 824 753 556"
+                      {...register("abn")}
+                    />
+                    {errors.abn ? (
+                      <p className="text-destructive text-xs">
+                        {errors.abn.message}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="abnDocument">ABN registration document (photo or PDF)</Label>
+                    <Input
+                      id="abnDocument"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={(e) => setAbnFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                </>
+              )
             ) : null}
           </CardContent>
         </Card>
@@ -328,7 +418,7 @@ export default function OnboardingPage() {
             <h2 className="font-semibold">Contact & payout details</h2>
             <div className="space-y-1.5">
               <Label htmlFor="whatsappNumber">WhatsApp number</Label>
-              <Input id="whatsappNumber" placeholder="+94 7X XXX XXXX" {...register("whatsappNumber")} />
+              <Input id="whatsappNumber" placeholder="+61 4XX XXX XXX" {...register("whatsappNumber")} />
               {errors.whatsappNumber ? (
                 <p className="text-destructive text-xs">{errors.whatsappNumber.message}</p>
               ) : null}
@@ -347,7 +437,7 @@ export default function OnboardingPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="bankName">Bank name</Label>
-              <Input id="bankName" placeholder="e.g. Commercial Bank of Ceylon" {...register("bankName")} />
+              <Input id="bankName" placeholder="e.g. Commonwealth Bank of Australia" {...register("bankName")} />
               {errors.bankName ? <p className="text-destructive text-xs">{errors.bankName.message}</p> : null}
             </div>
 
@@ -368,8 +458,9 @@ export default function OnboardingPage() {
               </div>
             </div>
             <p className="text-muted-foreground text-xs">
-              Your account holder name should match your NIC/business registration name — payouts
-              are held until this can be confirmed.
+              Your account holder name should match your{" "}
+              {isSriLanka ? "NIC/business registration" : "driver's licence/ABN registration"} name —
+              payouts are held until this can be confirmed.
             </p>
           </CardContent>
         </Card>
@@ -380,7 +471,7 @@ export default function OnboardingPage() {
             onCheckedChange={(checked) => setValue("agreeToTerms", checked === true, { shouldValidate: true })}
           />
           <span className="text-muted-foreground">
-            I confirm the information above is accurate and agree to IslandCart&apos;s seller terms.
+            I confirm the information above is accurate and agree to {name}&apos;s seller terms.
           </span>
         </label>
         {errors.agreeToTerms ? (
@@ -392,7 +483,7 @@ export default function OnboardingPage() {
           Submit application
         </Button>
         <p className="text-muted-foreground text-center text-xs">
-          A 3.5% transaction fee applies only when you make a sale — no monthly costs.
+          A {platformFeePercent}% transaction fee applies only when you make a sale — no monthly costs.
         </p>
       </form>
     </div>

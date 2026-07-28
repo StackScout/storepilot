@@ -22,6 +22,22 @@ Parameters:
   GitHubRepo:
     Type: String
     Default: storepilot
+  GitHubOrgId:
+    Type: String
+    Description: >
+      GitHub's numeric, immutable org ID — required because GitHub's OIDC
+      "sub" claim is actually "repo:<org>@<org-id>/<repo>@<repo-id>:...",
+      not the plain org/repo names (confirmed via a failed
+      AssumeRoleWithWebIdentity in CloudTrail — GitHub added the IDs so a
+      trust policy keyed on names alone can't be hijacked by someone else
+      later reusing a renamed-away org/repo name). Find it with:
+      `curl -s https://api.github.com/orgs/<org> | grep '"id"'`.
+  GitHubRepoId:
+    Type: String
+    Description: >
+      GitHub's numeric, immutable repo ID — see GitHubOrgId above. Find it
+      with: `curl -s https://api.github.com/repos/<org>/<repo> | grep '"id"'`
+      (the first "id" field, not "owner"."id").
   CreateOidcProvider:
     Type: String
     AllowedValues: ["true", "false"]
@@ -83,9 +99,11 @@ Resources:
                 # Broad (:*) for now so `workflow_dispatch` from any branch
                 # works during initial testing (see infra/README.md's
                 # CI/CD section) — tighten to
-                # repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/main
+                # repo:${GitHubOrg}@${GitHubOrgId}/${GitHubRepo}@${GitHubRepoId}:ref:refs/heads/main
                 # once the pipeline is proven and wired to run on push.
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+                # The @<id> suffixes are GitHub's immutable org/repo IDs —
+                # required, not cosmetic (see GitHubOrgId's description).
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}@${GitHubOrgId}/${GitHubRepo}@${GitHubRepoId}:*"
       Policies:
         - PolicyName: deploy-artifact-upload
           PolicyDocument:

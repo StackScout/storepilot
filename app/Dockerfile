@@ -23,7 +23,6 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 RUN addgroup --system --gid 1001 storepilot && adduser --system --uid 1001 storepilot
-COPY --from=build /app/public public
 COPY --from=build --chown=storepilot:storepilot /app/.next/standalone ./
 COPY --from=build --chown=storepilot:storepilot /app/.next/static ./.next/static
 USER storepilot

@@ -67,7 +67,9 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentName="$ENV_NAME" \
     GitHubOrg="${GITHUB_ORG:-StackScout}" \
-    GitHubRepo="${GITHUB_REPO:-island-cart}" \
+    GitHubRepo="${GITHUB_REPO:-storepilot}" \
+    GitHubOrgId="$GITHUB_ORG_ID" \
+    GitHubRepoId="$GITHUB_REPO_ID" \
     CreateOidcProvider="${CREATE_OIDC_PROVIDER:-true}" \
     ExistingOidcProviderArn="${EXISTING_OIDC_PROVIDER_ARN:-}" \
     GithubOidcThumbprint="${GITHUB_OIDC_THUMBPRINT}" \

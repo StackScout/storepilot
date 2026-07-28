@@ -126,6 +126,24 @@ payhere:
   notify-url: ${PAYHERE_NOTIFY_URL:http://localhost:8080/api/payments/payhere/notify}
   return-url-base: ${PAYHERE_RETURN_URL_BASE:http://localhost:3000/orders}
 
+# Stripe Connect (Standard accounts, direct charges) — see StripeConnectService
+# and StripeService's doc comments. Empty-string defaults (unlike PayHere's
+# required vars above) so the app still boots before Stripe is configured —
+# Connect onboarding/checkout just fail until real keys are set.
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  success-url-base: ${STRIPE_SUCCESS_URL_BASE:http://localhost:3000/orders}
+  cancel-url-base: ${STRIPE_CANCEL_URL_BASE:http://localhost:3000/orders}
+
+# ABR "ABN Lookup" free web service — see AbnLookupService. Empty-string
+# default so the app boots fine before a real GUID is set; lookups just
+# report "not configured" until then. Register for a GUID (free, any email)
+# at https://abr.business.gov.au/Tools/WebServices.
+abr:
+  guid: ${ABR_GUID:}
+
 # Email notifications — LoggingEmailService (mock, logs only) by default;
 # SesEmailService under the aws profile, which needs ses-sender-email to be
 # an SES-verified address. reminder-check-interval-ms controls how often

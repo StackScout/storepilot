@@ -12,4 +12,7 @@ interface StoreRepository : JpaRepository<Store, UUID>, JpaSpecificationExecutor
     fun findBySellerId(sellerId: UUID): Store?
 }
 
-interface StoreSettingsRepository : JpaRepository<StoreSettings, UUID>
+interface StoreSettingsRepository : JpaRepository<StoreSettings, UUID> {
+    /** Looked up from the Stripe webhook's account.updated event — see StripeConnectService. */
+    fun findByStripeAccountId(stripeAccountId: String): StoreSettings?
+}

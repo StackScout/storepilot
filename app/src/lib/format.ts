@@ -4,6 +4,7 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cod: "Cash on Delivery",
   payhere: "PayHere (online)",
   "bank-transfer": "Bank transfer",
+  stripe: "Stripe (online)",
 };
 
 export function paymentMethodLabel(method: PaymentMethod): string {

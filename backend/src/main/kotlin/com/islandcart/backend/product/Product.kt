@@ -40,6 +40,7 @@ class Product(
     var description: String,
     @Column(nullable = false)
     var category: StoreCategory,
+    /** Cents (the currency's smallest unit), not whole dollars — see currency.ts#formatCurrency. */
     @Column(nullable = false)
     var price: Int,
     @Column(name = "compare_at_price")

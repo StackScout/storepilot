@@ -12,11 +12,9 @@ import java.math.BigDecimal
  * country, a fee change) by updating the DB row instead of rebuilding and
  * redeploying every container.
  *
- * Deliberately NOT covered by this class (bigger than a config value, needs
- * its own design if/when it comes up): currency decimal precision — every
- * amount in this codebase is a whole-unit Int (price, total, ...), fine for
- * LKR but means a deployment using currencyCode=AUD can only price in whole
- * dollars, no cents.
+ * Every money field in this codebase (here and elsewhere — Product.price,
+ * Order.total, ...) is an Int count of the currency's smallest unit (cents
+ * for AUD), not whole dollars — see Product.price's doc comment.
  */
 @ConfigurationProperties(prefix = "platform")
 data class PlatformProperties(
@@ -39,7 +37,8 @@ data class PlatformProperties(
     val currencySymbol: String = "$",
     val currencyLocale: String = "en-AU",
     val platformFeePercent: BigDecimal = BigDecimal("3.5"),
-    val flatShippingFee: Int = 10,
+    /** Cents — $10.00. */
+    val flatShippingFee: Int = 1000,
     /**
      * Defaults applied to a newly-onboarded store's StoreSettings — a
      * seller can still change these afterward via store settings, subject

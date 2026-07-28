@@ -9,6 +9,7 @@ import com.islandcart.backend.order.Order
 import com.islandcart.backend.order.OrderRepository
 import com.islandcart.backend.order.OrderResponse
 import com.islandcart.backend.order.OrderStatus
+import com.islandcart.backend.order.PaymentMethod
 import com.islandcart.backend.order.PaymentStatus
 import com.islandcart.backend.order.ReceiptStorageService
 import com.islandcart.backend.order.toResponse
@@ -34,9 +35,14 @@ class PayoutService(
     }
 
     /**
-     * Orders that are delivered + paid but not part of any payout (scheduled
-     * or already paid) yet — money the platform is still holding on the
-     * seller's behalf. Mirrors payouts.service.ts#getEligibleOrdersForPayout.
+     * PayHere orders that are delivered + paid but not part of any payout
+     * (scheduled or already paid) yet — money the platform is still holding
+     * on the seller's behalf. **Only PayHere** — it's the one payment method
+     * where the platform's own merchant account actually receives the
+     * charge; COD/bank-transfer pay the seller directly (see
+     * FeeCollectionService, the reverse-direction ledger for those), and
+     * Stripe Connect direct charges settle automatically at charge time
+     * (see PaymentMethod.STRIPE's doc comment) — neither ever belongs here.
      */
     fun getEligibleOrders(storeId: UUID): List<OrderResponse> {
         requireSellerOwnsStore(storeId)
@@ -54,7 +60,12 @@ class PayoutService(
             .flatMap { payout -> payout.orders.map { it.orderId } }
             .toSet()
         return orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .filter { it.status == OrderStatus.DELIVERED && it.paymentStatus == PaymentStatus.PAID && it.id !in alreadyIncluded }
+            .filter {
+                it.status == OrderStatus.DELIVERED &&
+                    it.paymentStatus == PaymentStatus.PAID &&
+                    it.paymentMethod == PaymentMethod.PAYHERE &&
+                    it.id !in alreadyIncluded
+            }
     }
 
     /** POST /api/admin/stores/{storeId}/payouts — bundle all eligible orders into one scheduled payout. */

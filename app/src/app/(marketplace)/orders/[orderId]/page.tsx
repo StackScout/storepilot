@@ -16,7 +16,9 @@ import { PriceDisplay } from "@/components/shared/price-display";
 import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, paymentMethodLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { useCart } from "@/hooks/use-cart";
 import { ordersService, storesService } from "@/services";
 import type { Order, Store, StoreSettings } from "@/types";
 
@@ -28,6 +30,7 @@ export default function OrderTrackingPage({
   const { orderId } = use(params);
   const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
+  const { clearCart } = useCart();
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [store, setStore] = useState<Store | null>(null);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
@@ -54,6 +57,19 @@ export default function OrderTrackingPage({
       cancelled = true;
     };
   }, [orderId]);
+
+  // Checkout deliberately leaves the cart untouched when redirecting to a
+  // payment gateway (PayHere/Stripe), so a declined/cancelled payment
+  // doesn't strand the buyer with an empty cart — see checkout-form.tsx.
+  // Only clear it here, once this exact order (recorded right before the
+  // redirect) comes back paid — never for an arbitrary order-page visit,
+  // which could otherwise wipe an unrelated cart from the same store.
+  useEffect(() => {
+    if (!order || order.paymentStatus !== "paid") return;
+    if (sessionStorage.getItem(PENDING_GATEWAY_ORDER_KEY) !== order.id) return;
+    sessionStorage.removeItem(PENDING_GATEWAY_ORDER_KEY);
+    clearCart();
+  }, [order, clearCart]);
 
   async function handleUploadReceipt() {
     if (!receiptFile || !order) return;

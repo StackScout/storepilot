@@ -31,6 +31,12 @@ class OrderController(
     @GetMapping("/api/me/orders")
     fun listByCurrentBuyer(): List<OrderResponse> = orderService.listByCurrentBuyer()
 
+    @GetMapping("/api/stores/{storeId}/stripe-settlements")
+    fun stripeSettlements(@PathVariable storeId: UUID): List<OrderResponse> = orderService.listStripeSettlementsByStore(storeId)
+
+    @GetMapping("/api/admin/stripe-settlements")
+    fun adminStripeSettlements(): List<OrderResponse> = orderService.adminListStripeSettlements()
+
     @GetMapping("/api/orders/lookup")
     fun lookup(
         @RequestParam orderNumber: String,

@@ -27,6 +27,7 @@ class Payout(
     var store: Store,
     @OneToMany(mappedBy = "payout", cascade = [CascadeType.ALL], orphanRemoval = true)
     var orders: MutableList<PayoutOrderRef> = mutableListOf(),
+    /** Cents, like every other money field in this codebase — see Product.price's doc comment. */
     @Column(nullable = false)
     var subtotal: Int,
     @Column(name = "platform_fee", nullable = false)

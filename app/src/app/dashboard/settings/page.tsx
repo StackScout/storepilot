@@ -31,15 +31,19 @@ const settingsSchema = z
     codEnabled: z.boolean(),
     onlinePaymentEnabled: z.boolean(),
     bankTransferEnabled: z.boolean(),
+    stripeEnabled: z.boolean(),
     stockManagementEnabled: z.boolean(),
     facebookUrl: urlOrEmpty,
     instagramUrl: urlOrEmpty,
     tiktokUrl: urlOrEmpty,
   })
-  .refine((data) => data.codEnabled || data.onlinePaymentEnabled || data.bankTransferEnabled, {
-    message: "Enable at least one payment method so buyers can check out",
-    path: ["bankTransferEnabled"],
-  });
+  .refine(
+    (data) => data.codEnabled || data.onlinePaymentEnabled || data.bankTransferEnabled || data.stripeEnabled,
+    {
+      message: "Enable at least one payment method so buyers can check out",
+      path: ["bankTransferEnabled"],
+    },
+  );
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
 
@@ -52,6 +56,10 @@ export default function DashboardSettingsPage() {
   const { data: settings, isLoading: isSettingsLoading } = useQuery({
     queryKey: ["store-settings", storeId],
     queryFn: () => storesService.getStoreSettings(storeId),
+    // Always refetch on mount — this page is where the seller lands back
+    // after Stripe's hosted onboarding flow, and we need the just-updated
+    // connection status, not a stale cached value.
+    refetchOnMount: "always",
   });
 
   const { data: store, isLoading: isStoreLoading } = useQuery({
@@ -79,6 +87,7 @@ export default function DashboardSettingsPage() {
       codEnabled: true,
       onlinePaymentEnabled: true,
       bankTransferEnabled: false,
+      stripeEnabled: false,
       stockManagementEnabled: true,
       facebookUrl: "",
       instagramUrl: "",
@@ -97,6 +106,7 @@ export default function DashboardSettingsPage() {
         codEnabled: settings.codEnabled,
         onlinePaymentEnabled: settings.onlinePaymentEnabled,
         bankTransferEnabled: settings.bankTransferEnabled,
+        stripeEnabled: settings.stripeEnabled,
         stockManagementEnabled: settings.stockManagementEnabled,
         facebookUrl: store.facebookUrl ?? "",
         instagramUrl: store.instagramUrl ?? "",
@@ -108,7 +118,16 @@ export default function DashboardSettingsPage() {
   const codEnabled = watch("codEnabled");
   const onlinePaymentEnabled = watch("onlinePaymentEnabled");
   const bankTransferEnabled = watch("bankTransferEnabled");
+  const stripeEnabled = watch("stripeEnabled");
   const stockManagementEnabled = watch("stockManagementEnabled");
+
+  const stripeOnboardingMutation = useMutation({
+    mutationFn: () => storesService.startStripeConnectOnboarding(storeId),
+    onSuccess: ({ onboardingUrl }) => {
+      window.location.href = onboardingUrl;
+    },
+    onError: () => toast.error("Couldn't start Stripe onboarding. Please try again."),
+  });
 
   const mutation = useMutation({
     mutationFn: async (values: SettingsFormValues) => {
@@ -292,6 +311,50 @@ export default function DashboardSettingsPage() {
 
         <Card>
           <CardContent className="space-y-4">
+            <h2 className="font-semibold">Stripe Connect</h2>
+            {!settings?.stripeAccountId ? (
+              <>
+                <p className="text-muted-foreground text-sm">
+                  Connect a Stripe account to accept card payments — buyers pay you directly and
+                  automatically, we never hold your money.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={stripeOnboardingMutation.isPending}
+                  onClick={() => stripeOnboardingMutation.mutate()}
+                >
+                  {stripeOnboardingMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Connect with Stripe
+                </Button>
+              </>
+            ) : !settings.stripeChargesEnabled ? (
+              <>
+                <p className="text-muted-foreground text-sm">
+                  You&apos;ve started connecting a Stripe account, but onboarding isn&apos;t finished
+                  yet — Stripe still needs a bit more information before you can accept payments.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={stripeOnboardingMutation.isPending}
+                  onClick={() => stripeOnboardingMutation.mutate()}
+                >
+                  {stripeOnboardingMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Finish onboarding
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="inline-block size-2 rounded-full bg-emerald-500" />
+                <span>Connected — Stripe account ready to accept payments.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-4">
             <h2 className="font-semibold">Payment methods</h2>
             <label className="flex items-start gap-3">
               <Checkbox
@@ -330,6 +393,21 @@ export default function DashboardSettingsPage() {
                 </span>
               </span>
             </label>
+            {settings?.stripeChargesEnabled ? (
+              <label className="flex items-start gap-3">
+                <Checkbox
+                  checked={stripeEnabled}
+                  onCheckedChange={(checked) => setValue("stripeEnabled", checked === true)}
+                />
+                <span>
+                  <span className="block text-sm font-medium">Stripe (cards)</span>
+                  <span className="text-muted-foreground block text-xs">
+                    Buyers pay by card, paid to you directly and automatically — a transaction fee
+                    is deducted at the same time
+                  </span>
+                </span>
+              </label>
+            ) : null}
             {errors.bankTransferEnabled ? (
               <p className="text-destructive text-xs">{errors.bankTransferEnabled.message}</p>
             ) : null}

@@ -67,8 +67,11 @@ export function ProductForm({
       name: initialProduct?.name ?? "",
       description: initialProduct?.description ?? "",
       category: initialProduct?.category ?? "fashion",
-      price: initialProduct?.price ?? undefined,
-      compareAtPrice: initialProduct?.compareAtPrice ?? undefined,
+      // Product.price/compareAtPrice are cents on the wire — this form
+      // collects/displays whole-and-cents dollars, converted back to cents
+      // only at submit time (see submit() below).
+      price: initialProduct ? initialProduct.price / 100 : undefined,
+      compareAtPrice: initialProduct?.compareAtPrice ? initialProduct.compareAtPrice / 100 : undefined,
       stockQuantity: initialProduct?.stockQuantity ?? 0,
       trackStock: initialProduct?.trackStock ?? true,
       sku: initialProduct?.sku ?? "",
@@ -94,9 +97,11 @@ export function ProductForm({
     onSubmit(
       {
         ...values,
+        // Convert dollars (what the form collects) to cents (the wire unit) here, once.
+        price: Math.round(values.price * 100),
         compareAtPrice:
           values.compareAtPrice && !Number.isNaN(values.compareAtPrice)
-            ? values.compareAtPrice
+            ? Math.round(values.compareAtPrice * 100)
             : undefined,
         trackStock: stockManagementEnabled && values.trackStock,
         stockQuantity: stockManagementEnabled && values.trackStock ? values.stockQuantity : 0,
@@ -174,7 +179,7 @@ export function ProductForm({
               <Input
                 id="price"
                 type="number"
-                step="1"
+                step="0.01"
                 {...register("price", { valueAsNumber: true })}
               />
               {errors.price ? (
@@ -186,7 +191,7 @@ export function ProductForm({
               <Input
                 id="compareAtPrice"
                 type="number"
-                step="1"
+                step="0.01"
                 placeholder="Optional"
                 {...register("compareAtPrice", { valueAsNumber: true })}
               />

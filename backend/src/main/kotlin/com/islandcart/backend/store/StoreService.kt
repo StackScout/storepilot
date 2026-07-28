@@ -1,5 +1,6 @@
 package com.islandcart.backend.store
 
+import com.islandcart.backend.abn.isValidAbnChecksum
 import com.islandcart.backend.admin.AdminNotificationService
 import com.islandcart.backend.common.ConflictException
 import com.islandcart.backend.common.ForbiddenException
@@ -215,6 +216,7 @@ class StoreService(
             if (input.businessRegistrationNumber != null) existing.businessRegistrationNumber = input.businessRegistrationNumber
             if (input.rejectionReason != null) existing.rejectionReason = input.rejectionReason
             input.stockManagementEnabled?.let { existing.stockManagementEnabled = it }
+            input.stripeEnabled?.let { existing.stripeEnabled = it }
             requireAtLeastOnePaymentMethod(existing.codEnabled, existing.onlinePaymentEnabled, existing.bankTransferEnabled)
             requireCountryVerificationFields(existing)
             val saved = storeSettingsRepository.save(existing)
@@ -278,6 +280,7 @@ class StoreService(
             require(!settings.driverLicenceNumber.isNullOrBlank()) { "Driver's licence number is required" }
             if (settings.sellerType == SellerType.BUSINESS) {
                 require(!settings.abn.isNullOrBlank()) { "ABN is required for a registered business" }
+                require(isValidAbnChecksum(settings.abn!!)) { "Enter a valid ABN" }
             }
         }
     }

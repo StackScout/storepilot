@@ -50,4 +50,8 @@ fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSetti
         nicDocumentUrl = nicDocumentUrl?.let { fileStorageService.resolveUrl(it) },
         businessRegDocumentUrl = businessRegDocumentUrl?.let { fileStorageService.resolveUrl(it) },
         stockManagementEnabled = stockManagementEnabled,
+        stripeAccountId = stripeAccountId,
+        stripeChargesEnabled = stripeChargesEnabled,
+        stripePayoutsEnabled = stripePayoutsEnabled,
+        stripeEnabled = stripeEnabled,
     )

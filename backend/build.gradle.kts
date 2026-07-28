@@ -37,6 +37,7 @@ dependencies {
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")
+	implementation("com.stripe:stripe-java:29.2.0")
 	// aws profile only (S3ReceiptStorageService, SesEmailService) — the
 	// default/dev profile never touches these classes, so no local AWS
 	// credentials are needed to build or run locally.

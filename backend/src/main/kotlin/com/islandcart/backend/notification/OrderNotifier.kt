@@ -6,6 +6,7 @@ import com.islandcart.backend.store.StoreSettingsRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.multipart.MultipartFile
+import java.math.BigDecimal
 
 /**
  * Owns order-lifecycle email copy and picks the right recipient for each
@@ -32,7 +33,7 @@ class OrderNotifier(
                 appendLine("Thanks for your order from ${order.store.name}!")
                 appendLine()
                 appendLine("Order: ${order.orderNumber}")
-                appendLine("Total: ${platformConfig.currencyCode} ${order.total}")
+                appendLine("Total: ${platformConfig.currencyCode} ${formatMoney(order.total)}")
                 appendLine()
                 appendLine("Track your order: ${orderUrl(order)}")
             },
@@ -51,7 +52,7 @@ class OrderNotifier(
             subject = "Receipt uploaded for order ${order.orderNumber}",
             body = buildString {
                 appendLine("A buyer has uploaded a payment receipt for order ${order.orderNumber}.")
-                appendLine("Amount: ${platformConfigService.current().currencyCode} ${order.total}")
+                appendLine("Amount: ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}")
                 appendLine()
                 appendLine("Review and verify it from your seller dashboard.")
             },
@@ -148,4 +149,7 @@ class OrderNotifier(
     }
 
     private fun orderUrl(order: Order): String = "${notificationProperties.frontendBaseUrl}/orders/${order.id}"
+
+    /** [cents] is this codebase's storage unit (see Product.price's doc comment) — plain-text email copy wants a decimal-string dollar amount. */
+    private fun formatMoney(cents: Int): String = BigDecimal(cents).movePointLeft(2).toPlainString()
 }

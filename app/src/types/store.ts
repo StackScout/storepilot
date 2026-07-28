@@ -90,6 +90,16 @@ export interface StoreSettings {
   businessRegDocumentUrl?: string;
   /** Store-wide switch — when false, no product in this store tracks stock, and the new-product page hides the stock UI entirely. */
   stockManagementEnabled: boolean;
+  /**
+   * Stripe Connect (Standard account) — see backend StoreSettings.kt's doc
+   * comment. `stripeChargesEnabled`/`stripePayoutsEnabled` are synced from
+   * Stripe via webhook, never client-settable; `stripeEnabled` is the
+   * seller's own on/off preference, independent of onboarding status.
+   */
+  stripeAccountId?: string;
+  stripeChargesEnabled: boolean;
+  stripePayoutsEnabled: boolean;
+  stripeEnabled: boolean;
 }
 
 /** Input for creating a new Store at seller onboarding time. */

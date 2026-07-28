@@ -5,7 +5,7 @@ export type OrderStatus =
   | "delivered"
   | "cancelled";
 
-export type PaymentMethod = "payhere" | "cod" | "bank-transfer";
+export type PaymentMethod = "payhere" | "cod" | "bank-transfer" | "stripe";
 
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
 

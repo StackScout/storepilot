@@ -29,3 +29,33 @@ export interface Payout {
   paidAt?: string;
   bankReference?: string;
 }
+
+/**
+ * The reverse ledger from Payout — COD and bank-transfer both pay the
+ * seller directly, so for those the platform is owed its fee *by* the
+ * seller, not the other way around. Same admin-batches-then-marks-settled
+ * shape as Payout, just tracking what's owed. Stripe orders never appear in
+ * either ledger — see the Stripe-settlements view instead, a read-only
+ * reconciliation list, not a batchable ledger.
+ */
+export type FeeCollectionStatus = "pending" | "collected";
+
+export interface FeeCollectionOrderRef {
+  orderId: string;
+  orderNumber: string;
+  subtotal: number;
+  platformFee: number;
+}
+
+export interface FeeCollection {
+  id: string;
+  storeId: string;
+  storeName: string;
+  orders: FeeCollectionOrderRef[];
+  subtotal: number;
+  platformFee: number;
+  status: FeeCollectionStatus;
+  createdAt: string;
+  collectedAt?: string;
+  reference?: string;
+}

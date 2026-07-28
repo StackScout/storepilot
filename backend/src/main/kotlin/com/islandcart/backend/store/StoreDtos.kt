@@ -57,6 +57,10 @@ data class StoreSettingsResponse(
     val nicDocumentUrl: String?,
     val businessRegDocumentUrl: String?,
     val stockManagementEnabled: Boolean,
+    val stripeAccountId: String?,
+    val stripeChargesEnabled: Boolean,
+    val stripePayoutsEnabled: Boolean,
+    val stripeEnabled: Boolean,
 )
 
 /** Mirrors src/types/store.ts's StoreApplicationInput — POST /api/stores (onboarding). */
@@ -100,6 +104,8 @@ data class StoreSettingsInput(
     val businessRegistrationNumber: String? = null,
     val rejectionReason: String? = null,
     val stockManagementEnabled: Boolean? = null,
+    /** The seller's own on/off preference — stripeAccountId/stripeChargesEnabled/stripePayoutsEnabled are never client-settable, only synced from Stripe via webhook (see StripeConnectService). */
+    val stripeEnabled: Boolean? = null,
 )
 
 /** PATCH /api/stores/{storeId}/profile — seller-editable public social links. A field left null is untouched; send an empty string to clear a link. */

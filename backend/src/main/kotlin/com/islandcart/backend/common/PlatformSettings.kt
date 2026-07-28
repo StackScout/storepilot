@@ -34,6 +34,7 @@ class PlatformSettings(
     var currencyLocale: String,
     @Column(name = "platform_fee_percent", nullable = false)
     var platformFeePercent: BigDecimal,
+    /** Cents, like every other money field in this codebase — see Product.price's doc comment. */
     @Column(name = "flat_shipping_fee", nullable = false)
     var flatShippingFee: Int,
     @Column(name = "default_cod_enabled", nullable = false)

@@ -10,7 +10,7 @@ import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { formatCurrency } from "@/lib/currency";
-import { formatDate } from "@/lib/format";
+import { formatDate, paymentMethodLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
@@ -110,8 +110,8 @@ export default function DashboardOrdersPage() {
                       </td>
                       <td className="text-muted-foreground px-6 py-3">{formatDate(order.createdAt)}</td>
                       <td className="px-6 py-3">{formatCurrency(order.total, currency)}</td>
-                      <td className="text-muted-foreground px-6 py-3 capitalize">
-                        {order.paymentMethod === "cod" ? "COD" : "PayHere"}
+                      <td className="text-muted-foreground px-6 py-3">
+                        {paymentMethodLabel(order.paymentMethod)}
                       </td>
                       <td className="px-6 py-3">
                         <OrderStatusBadge status={order.status} />

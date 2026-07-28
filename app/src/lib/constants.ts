@@ -15,3 +15,13 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
+
+/**
+ * sessionStorage key recording the order a buyer was just redirected to a
+ * payment gateway (PayHere/Stripe) for. Set right before the redirect,
+ * consumed on `/orders/[orderId]` to clear the cart only once that specific
+ * order comes back paid — not before, so a declined/cancelled gateway
+ * payment doesn't leave the buyer with an empty cart and a stuck unpaid
+ * order (see checkout-form.tsx and orders/[orderId]/page.tsx).
+ */
+export const PENDING_GATEWAY_ORDER_KEY = "islandcart_pending_gateway_order";

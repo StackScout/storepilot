@@ -63,6 +63,10 @@ class SecurityConfig {
                     // — the frontend fetches these instead of baking country
                     // content into NEXT_PUBLIC_* build args (see PlatformConfigController).
                     .requestMatchers(HttpMethod.GET, "/api/platform-config", "/api/states").permitAll()
+                    // Public ABR register data (see AbnLookupController) —
+                    // used by the onboarding form (no session yet) and by
+                    // /admin (already authenticated, but no extra gate needed).
+                    .requestMatchers(HttpMethod.GET, "/api/abn-lookup/**").permitAll()
                     // Locally-served uploaded files (product images, receipts,
                     // seller verification documents under the !aws profile) —
                     // plain static-asset fetches, not API calls; product
@@ -77,8 +81,10 @@ class SecurityConfig {
                     // client-supplied field (see OrderDtos.kt).
                     .requestMatchers(HttpMethod.POST, "/api/orders").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/orders/lookup", "/api/orders/*").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/orders/*/receipt", "/api/orders/*/cancel", "/api/orders/*/payhere-checkout").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/orders/*/receipt", "/api/orders/*/cancel", "/api/orders/*/payhere-checkout", "/api/orders/*/stripe-checkout").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/payments/payhere/notify").permitAll()
+                    // Signature-verified inside StripeWebhookService, not by auth here — see its doc comment.
+                    .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
                     // Seller's own store — must come before the broader
                     // /api/me/** buyer rule below (first-match-wins).
                     .requestMatchers(HttpMethod.GET, "/api/me/store").hasRole("SELLER")
@@ -96,11 +102,14 @@ class SecurityConfig {
                         "/api/stores/*/nic-document",
                         "/api/stores/*/business-reg-document",
                     ).hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/products/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/orders").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/payouts", "/api/stores/*/payouts/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/fee-collections", "/api/stores/*/fee-collections/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/stripe-settlements").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/verify-bank-transfer").hasRole("SELLER")
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")

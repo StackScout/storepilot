@@ -149,5 +149,6 @@ class PayHereService(
         return digest.joinToString("") { "%02x".format(it) }.uppercase(Locale.ROOT)
     }
 
-    private fun formatAmount(total: Int): String = BigDecimal(total).setScale(2).toPlainString()
+    /** [total] is cents (see Product.price's doc comment) — PayHere wants a decimal-string dollar amount. */
+    private fun formatAmount(total: Int): String = BigDecimal(total).movePointLeft(2).toPlainString()
 }

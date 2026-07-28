@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AbnVerificationBadge } from "@/components/shared/abn-verification-badge";
 import { CATEGORIES } from "@/mock/categories";
 import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { storesService, authService } from "@/services";
@@ -102,6 +103,7 @@ export default function OnboardingPage() {
   const category = watch("category");
   const state = watch("state");
   const sellerType = watch("sellerType");
+  const abn = watch("abn");
   const agreeToTerms = watch("agreeToTerms");
   const { data: states } = useStates();
 
@@ -396,7 +398,9 @@ export default function OnboardingPage() {
                       <p className="text-destructive text-xs">
                         {errors.abn.message}
                       </p>
-                    ) : null}
+                    ) : (
+                      <AbnVerificationBadge abn={abn} />
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="abnDocument">ABN registration document (photo or PDF)</Label>

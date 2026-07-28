@@ -20,6 +20,11 @@ interface OrderRepository : JpaRepository<Order, UUID> {
 
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Order>
 
+    /** Stripe Connect direct charges auto-settle at charge time (see PaymentMethod.STRIPE's doc comment) — this is a read-only reconciliation view, not a ledger like Payout/FeeCollection. */
+    fun findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId: UUID, paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): List<Order>
+
+    fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): List<Order>
+
     fun findByOrderNumberIgnoreCase(orderNumber: String): Order?
 
     /**

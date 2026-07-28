@@ -102,6 +102,12 @@ private data class SeedProduct(
  * (renamed from an earlier Sri Lanka NIC/Business Registration Number model
  * now that this platform is AU-only) — populated here with plausible
  * placeholder values.
+ *
+ * Money literals below (SeedProduct.price/compareAtPrice, order() call
+ * sites' subtotal/item unitPrice, seedPayout's amounts) are written as
+ * plain whole dollars for readability and converted to cents (this
+ * codebase's actual storage unit — see Product.price's doc comment) right
+ * where each entity is constructed, not here.
  */
 @Component
 class DataSeeder(
@@ -307,8 +313,8 @@ class DataSeeder(
                 slug = p.slug,
                 description = p.description,
                 category = p.category,
-                price = p.price,
-                compareAtPrice = p.compareAtPrice,
+                price = p.price * 100,
+                compareAtPrice = p.compareAtPrice?.times(100),
                 stockQuantity = p.stockQuantity,
                 status = p.status,
                 sku = p.sku,
@@ -367,14 +373,17 @@ class DataSeeder(
             timeline: List<Triple<OrderStatus, String, String>>, // status, note?, timestamp
             createdAt: String,
         ) {
-            val platformFee = (BigDecimal(subtotal) * platformProperties.platformFeePercent).divide(BigDecimal(100), 0, java.math.RoundingMode.HALF_UP).toInt()
+            // subtotal (and each item's unitPrice below) arrive as whole-dollar
+            // literals from the call sites — converted to cents here, once.
+            val subtotalCents = subtotal * 100
+            val platformFee = (BigDecimal(subtotalCents) * platformProperties.platformFeePercent).divide(BigDecimal(100), 0, java.math.RoundingMode.HALF_UP).toInt()
             val order = Order(
                 orderNumber = orderNumber,
                 store = store,
-                subtotal = subtotal,
+                subtotal = subtotalCents,
                 shippingFee = platformProperties.flatShippingFee,
                 platformFee = platformFee,
-                total = subtotal + platformProperties.flatShippingFee,
+                total = subtotalCents + platformProperties.flatShippingFee,
                 status = status,
                 paymentMethod = paymentMethod,
                 paymentStatus = paymentStatus,
@@ -389,7 +398,7 @@ class DataSeeder(
                         productId = requireNotNull(product.id),
                         productName = product.name,
                         productImageUrl = product.images.firstOrNull()?.url ?: "",
-                        unitPrice = unitPrice,
+                        unitPrice = unitPrice * 100,
                         quantity = quantity,
                     ),
                 )
@@ -472,11 +481,14 @@ class DataSeeder(
     private fun seedPayout(store01Id: UUID, order1004Id: UUID) {
         val store = storeRepository.findById(store01Id).orElseThrow()
         val order1004 = orderRepository.findById(order1004Id).orElseThrow()
+        val subtotal = 24 * 100
+        val platformFee = 1 * 100
+        val net = 23 * 100
         val payout = Payout(
             store = store,
-            subtotal = 24,
-            platformFee = 1,
-            net = 23,
+            subtotal = subtotal,
+            platformFee = platformFee,
+            net = net,
             status = PayoutStatus.PAID,
             paidAt = dt("2026-07-18T14:32:00+10:00"),
             bankReference = "CBA-TRF-88213",
@@ -486,9 +498,9 @@ class DataSeeder(
                 payout = payout,
                 orderId = order1004Id,
                 orderNumber = order1004.orderNumber,
-                subtotal = 24,
-                platformFee = 1,
-                net = 23,
+                subtotal = subtotal,
+                platformFee = platformFee,
+                net = net,
             ),
         )
         val saved = payoutRepository.saveAndFlush(payout)

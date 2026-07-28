@@ -72,6 +72,9 @@ class Order(
     /** Optional — stored reference (local path or S3 key), resolved fresh at read time like receiptUrl. */
     @Column(name = "courier_receipt_url")
     var courierReceiptUrl: String? = null,
+    /** Stripe PaymentIntent id, set once checkout.session.completed arrives — needed to issue a refund against the right connected-account charge later. See StripeService. */
+    @Column(name = "stripe_payment_intent_id")
+    var stripePaymentIntentId: String? = null,
 ) : BaseEntity()
 
 /**

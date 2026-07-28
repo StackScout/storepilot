@@ -78,4 +78,21 @@ class StoreSettings(
     /** Store-wide switch — when false, no product in this store tracks stock, regardless of each Product.trackStock; the new-product page hides the stock UI entirely. */
     @Column(name = "stock_management_enabled", nullable = false)
     var stockManagementEnabled: Boolean = true,
+    /** Stripe Connect (Standard account) — the seller's own connected account id, `acct_...`. Null until they start onboarding. See StripeConnectService. */
+    @Column(name = "stripe_account_id")
+    var stripeAccountId: String? = null,
+    /**
+     * Mirror the connected account's own `charges_enabled`/`payouts_enabled`
+     * — kept in sync via the `account.updated` webhook, never inferred from
+     * "an account id exists". This is the actual source of truth for
+     * whether Stripe checkout can be offered, checked server-side by
+     * StripeService, not just gated in the frontend.
+     */
+    @Column(name = "stripe_charges_enabled", nullable = false)
+    var stripeChargesEnabled: Boolean = false,
+    @Column(name = "stripe_payouts_enabled", nullable = false)
+    var stripePayoutsEnabled: Boolean = false,
+    /** The seller's own on/off preference for offering Stripe at checkout — independent of onboarding status, so they can pause it without disconnecting. Opt-in/off-by-default, same reasoning as bankTransferEnabled. */
+    @Column(name = "stripe_enabled", nullable = false)
+    var stripeEnabled: Boolean = false,
 ) : BaseEntity()

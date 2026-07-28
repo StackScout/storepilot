@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Banknote, Landmark, Truck, Loader2, TriangleAlert, UserCheck } from "lucide-react";
+import { Banknote, CreditCard, Landmark, Truck, Loader2, TriangleAlert, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
+import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
 import { ordersService, buyersService, storesService } from "@/services";
 import type { Order, PaymentMethod } from "@/types";
 
@@ -45,7 +46,7 @@ const checkoutSchema = z.object({
   city: z.string().min(2, "Enter a city/town"),
   state: z.string().min(1, "Select a state/province"),
   postalCode: z.string().min(4, "Enter a postal code"),
-  paymentMethod: z.enum(["payhere", "cod", "bank-transfer"]),
+  paymentMethod: z.enum(["payhere", "cod", "bank-transfer", "stripe"]),
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
@@ -82,10 +83,15 @@ export function CheckoutForm() {
   // Off by default while settings load, matching the backend's own default —
   // unlike COD/PayHere this is opt-in, so it shouldn't flash on then off.
   const bankTransferEnabled = storeSettings?.bankTransferEnabled ?? false;
+  // Stripe needs both the seller's own toggle AND a fully-connected account
+  // (stripeChargesEnabled, synced from Stripe via webhook) — never offer it
+  // just because the seller flipped the switch before finishing onboarding.
+  const stripeEnabled = (storeSettings?.stripeEnabled && storeSettings?.stripeChargesEnabled) ?? false;
   const paymentMethodEnabled: Record<PaymentMethod, boolean> = {
     cod: codEnabled,
     payhere: onlinePaymentEnabled,
     "bank-transfer": bankTransferEnabled,
+    stripe: stripeEnabled,
   };
 
   const {
@@ -134,10 +140,10 @@ export function CheckoutForm() {
   useEffect(() => {
     if (!storeSettings) return;
     if (paymentMethodEnabled[paymentMethod]) return;
-    const fallback = (["cod", "payhere", "bank-transfer"] as const).find((m) => paymentMethodEnabled[m]);
+    const fallback = (["cod", "payhere", "bank-transfer", "stripe"] as const).find((m) => paymentMethodEnabled[m]);
     if (fallback) setValue("paymentMethod", fallback);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depend on the primitive flags, not the object literal recreated each render
-  }, [storeSettings, codEnabled, onlinePaymentEnabled, bankTransferEnabled, paymentMethod, setValue]);
+  }, [storeSettings, codEnabled, onlinePaymentEnabled, bankTransferEnabled, stripeEnabled, paymentMethod, setValue]);
 
   // Set synchronously (before clearCart) so the empty-cart redirect effect
   // below can't race the post-order navigation to /orders/[id].
@@ -182,13 +188,18 @@ export function CheckoutForm() {
     },
     onSuccess: async (order) => {
       orderPlacedRef.current = true;
-      clearCart();
 
       // COD: the order is the whole flow — done. Bank transfer: the buyer
-      // still needs to upload a receipt, from the order page. PayHere: the
-      // order now exists (unpaid, stock already reserved) but payment
-      // itself still needs to happen in the popup before it's confirmed.
-      if (order.paymentMethod !== "payhere" || order.paymentStatus !== "unpaid") {
+      // still needs to upload a receipt, from the order page. PayHere/
+      // Stripe: the order now exists (unpaid, stock already reserved) but
+      // payment itself still needs to happen at the gateway before it's
+      // confirmed.
+      const needsGatewayRedirect =
+        (order.paymentMethod === "payhere" || order.paymentMethod === "stripe") &&
+        order.paymentStatus === "unpaid";
+      if (!needsGatewayRedirect) {
+        // No further payment step — safe to clear now.
+        clearCart();
         toast.success(
           order.paymentMethod === "bank-transfer"
             ? "Order placed! Upload your payment receipt to confirm it."
@@ -197,7 +208,16 @@ export function CheckoutForm() {
         router.push(`/orders/${order.id}`);
         return;
       }
-      await startPayHerePayment(order);
+      // Payment isn't confirmed yet — deliberately don't clear the cart
+      // here. If the gateway declines/cancels the payment (e.g. amount
+      // over PayHere's limit), the buyer comes back to a stuck unpaid
+      // order and needs their cart intact to retry. The order page clears
+      // it once this specific order comes back paid.
+      if (order.paymentMethod === "stripe") {
+        await startStripePayment(order);
+      } else {
+        await startPayHerePayment(order);
+      }
     },
     onError: () => toast.error("Something went wrong placing your order. Please try again."),
   });
@@ -210,10 +230,29 @@ export function CheckoutForm() {
       // payload.returnUrl (== /orders/[order.id]) once the buyer finishes or
       // cancels; that page shows live status fetched from the backend,
       // updated by the server-to-server notify webhook.
+      sessionStorage.setItem(PENDING_GATEWAY_ORDER_KEY, order.id);
       submitPayHereCheckout(payload);
     } catch (err) {
       console.error("PayHere checkout failed:", err);
       toast.error("Couldn't start PayHere checkout. Your order is saved — you can pay from the order page.");
+      router.push(`/orders/${order.id}`);
+    }
+  }
+
+  async function startStripePayment(order: Order) {
+    try {
+      const { checkoutUrl } = await ordersService.getStripeCheckoutUrl(order.id);
+      // Navigates the browser away to Stripe's hosted Checkout page
+      // immediately — no client-side Stripe.js needed, the backend already
+      // returns a ready-to-redirect URL. Stripe redirects back to
+      // /orders/[order.id] once the buyer finishes or cancels; that page
+      // shows live status fetched from the backend, updated by the
+      // server-to-server webhook.
+      sessionStorage.setItem(PENDING_GATEWAY_ORDER_KEY, order.id);
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      console.error("Stripe checkout failed:", err);
+      toast.error("Couldn't start Stripe checkout. Your order is saved — you can pay from the order page.");
       router.push(`/orders/${order.id}`);
     }
   }
@@ -326,7 +365,7 @@ export function CheckoutForm() {
           <Card>
             <CardContent className="space-y-4">
               <h2 className="font-semibold">Payment method</h2>
-              {!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled ? (
+              {!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled && !stripeEnabled ? (
                 <p className="text-destructive text-sm">
                   This store isn&apos;t accepting payments right now. Please check back later.
                 </p>
@@ -365,6 +404,23 @@ export function CheckoutForm() {
                       <span className="block text-sm font-medium">Pay online with PayHere</span>
                       <span className="text-muted-foreground block text-xs">
                         Card, LankaQR, eZ Cash or mCash
+                      </span>
+                    </span>
+                  </span>
+                </Label>
+                ) : null}
+                {stripeEnabled ? (
+                <Label
+                  htmlFor="stripe"
+                  className="hover:bg-accent/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 has-[[data-state=checked]]:border-primary"
+                >
+                  <RadioGroupItem value="stripe" id="stripe" className="mt-0.5" />
+                  <span className="flex flex-1 items-start gap-2.5">
+                    <CreditCard className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      <span className="block text-sm font-medium">Pay online with Stripe</span>
+                      <span className="text-muted-foreground block text-xs">
+                        Credit or debit card
                       </span>
                     </span>
                   </span>
@@ -471,7 +527,7 @@ export function CheckoutForm() {
                 mutation.isPending ||
                 hasUnavailable ||
                 availableItems.length === 0 ||
-                (!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled)
+                (!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled && !stripeEnabled)
               }
             >
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}

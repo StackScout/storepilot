@@ -51,9 +51,29 @@ export async function getPayHereCheckoutPayload(orderId: string): Promise<PayHer
   return apiClient.post<PayHereCheckoutPayload>(`/api/orders/${orderId}/payhere-checkout`);
 }
 
+/** POST /orders/:id/stripe-checkout — returns a ready-to-redirect Stripe Checkout URL, no client-side Stripe.js needed. */
+export async function getStripeCheckoutUrl(orderId: string): Promise<{ checkoutUrl: string }> {
+  return apiClient.post<{ checkoutUrl: string }>(`/api/orders/${orderId}/stripe-checkout`);
+}
+
 /** GET /api/me/orders — the signed-in buyer's own order history, derived from the auth cookie. */
 export async function listMyOrders(): Promise<Order[]> {
   return (await apiClient.get<Order[]>("/api/me/orders")).map(normalizeOrder);
+}
+
+/**
+ * GET /stores/:storeId/stripe-settlements — read-only reconciliation view of
+ * paid Stripe orders: what went through Stripe, what Stripe auto-paid the
+ * seller, what the platform automatically took. Never a batchable ledger
+ * like payouts/fee-collections — Connect already moved the money.
+ */
+export async function listStripeSettlementsByStore(storeId: string): Promise<Order[]> {
+  return (await apiClient.get<Order[]>(`/api/stores/${storeId}/stripe-settlements`)).map(normalizeOrder);
+}
+
+/** GET /admin/stripe-settlements — same view, platform-wide. */
+export async function adminListStripeSettlements(): Promise<Order[]> {
+  return (await apiClient.get<Order[]>("/api/admin/stripe-settlements")).map(normalizeOrder);
 }
 
 /**

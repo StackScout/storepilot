@@ -26,6 +26,15 @@ enum class PaymentMethod(override val wireValue: String) : WireValue {
     PAYHERE("payhere"),
     COD("cod"),
     BANK_TRANSFER("bank-transfer"),
+    /**
+     * Stripe Connect direct charge — settles automatically at charge time
+     * (seller's connected account gets the net, the platform's
+     * application_fee_amount is its whole take), so unlike every other
+     * method it never enters the Payout or FeeCollection ledgers. See
+     * StripeService and PayoutService/FeeCollectionService's eligibility
+     * filters.
+     */
+    STRIPE("stripe"),
 }
 
 @Converter(autoApply = true)

@@ -15,6 +15,7 @@ import com.islandcart.backend.notification.OrderNotifier
 import com.islandcart.backend.product.ProductService
 import com.islandcart.backend.store.StoreRepository
 import com.islandcart.backend.store.StoreSettingsRepository
+import com.islandcart.backend.stripe.StripeService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -54,6 +55,7 @@ class OrderService(
     private val orderNotifier: OrderNotifier,
     private val currentActor: CurrentActor,
     private val platformConfigService: PlatformConfigService,
+    private val stripeService: StripeService,
 ) {
     /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
     fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
@@ -84,6 +86,26 @@ class OrderService(
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         return orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.toResponse(receiptStorageService, fileStorageService) }
     }
+
+    /**
+     * GET /api/stores/{storeId}/stripe-settlements — read-only reconciliation
+     * view of paid Stripe orders for this store: what went through Stripe,
+     * what Stripe auto-paid the seller, what the platform automatically
+     * took. Never a ledger to release/collect from — Connect already moved
+     * the money at charge time (see PaymentMethod.STRIPE's doc comment).
+     */
+    fun listStripeSettlementsByStore(storeId: UUID): List<OrderResponse> {
+        val seller = currentActor.requireSeller()
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        return orderRepository.findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId, PaymentMethod.STRIPE, PaymentStatus.PAID)
+            .map { it.toResponse(receiptStorageService, fileStorageService) }
+    }
+
+    /** GET /api/admin/stripe-settlements — same view, platform-wide. */
+    fun adminListStripeSettlements(): List<OrderResponse> =
+        orderRepository.findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID)
+            .map { it.toResponse(receiptStorageService, fileStorageService) }
 
     fun getById(id: UUID): OrderResponse =
         orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }.toResponse(receiptStorageService, fileStorageService)
@@ -191,6 +213,14 @@ class OrderService(
             order.paymentStatus = PaymentStatus.PAID
         }
         if (status == OrderStatus.CANCELLED && order.paymentStatus == PaymentStatus.PAID) {
+            // Stripe money actually has to move — refundPayment throws (and
+            // rolls back this whole transaction) if the Stripe refund call
+            // fails, rather than letting an order claim REFUNDED status
+            // with no money actually returned. Every other payment
+            // method's cancel behavior is unchanged.
+            if (order.paymentMethod == PaymentMethod.STRIPE) {
+                stripeService.refundPayment(order)
+            }
             order.paymentStatus = PaymentStatus.REFUNDED
         }
 

@@ -110,6 +110,11 @@ export async function uploadBusinessRegDocument(storeId: string, file: File): Pr
   return normalizeStoreSettings(settings);
 }
 
+/** POST /stores/:id/stripe-connect/onboard — start or resume Stripe Connect onboarding; redirect the browser to the returned URL. */
+export async function startStripeConnectOnboarding(storeId: string): Promise<{ onboardingUrl: string }> {
+  return apiClient.post<{ onboardingUrl: string }>(`/api/stores/${storeId}/stripe-connect/onboard`);
+}
+
 /** POST /stores (seller onboarding) — creates a new store in "pending" verification status. Requires a signed-in account (any Cognito user); this call is what grants the seller role. */
 export async function createStore(input: StoreApplicationInput): Promise<Store> {
   return apiClient.post<Store>("/api/stores", input);

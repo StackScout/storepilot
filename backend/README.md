@@ -108,6 +108,51 @@ curl http://localhost:8080/actuator/health
 | `DB_PASSWORD` | `islandcart` |
 | `PORT` | `8080` |
 | `SHOW_SQL` | `false` |
+| `STRIPE_SECRET_KEY` | empty — Connect onboarding/checkout fail until set |
+| `STRIPE_PUBLISHABLE_KEY` | empty |
+| `STRIPE_WEBHOOK_SECRET` | empty |
+| `ABR_GUID` | empty — ABN verification (onboarding + admin) reports "not configured" until set |
+
+### ABN verification — local testing
+
+`AbnLookupService` calls the free ABR "ABN Lookup" web service to confirm an
+ABN is registered and pull back its entity name — shown on the onboarding
+form and on `/admin`'s pending-application review. Register for a free GUID
+(any email, not tied to owning a business) at
+[abr.business.gov.au/Tools/WebServices](https://abr.business.gov.au/Tools/WebServices)
+and set `ABR_GUID`. With no GUID set, the app boots fine and lookups just
+report "not configured" — the badge renders nothing rather than an error.
+
+The checksum-only validation (`AbnChecksum.kt`, also enforced server-side in
+`StoreService`) needs no GUID and works offline.
+
+Not verified against a live ABR response while building this — the JSON
+field names in `AbrRawResponse` are from ABR's documented shape, not a real
+call. The first lookup once a GUID is set is worth checking by hand; if
+`entityName` comes back empty for a known-good ABN, check the raw response
+body (logged on that path) before assuming the request itself is wrong.
+
+### Stripe Connect — local testing
+
+Stripe Checkout redirects the buyer's browser to a real `checkout.stripe.com`
+page even in test mode, so local testing needs a real Stripe sandbox
+account (secret + publishable keys) and the [Stripe
+CLI](https://stripe.com/docs/stripe-cli) to receive webhooks:
+
+```bash
+stripe listen --forward-to localhost:8080/api/payments/stripe/webhook \
+  --forward-connect-to localhost:8080/api/payments/stripe/webhook
+```
+
+Every event this integration cares about (`checkout.session.completed`,
+`account.updated`, ...) fires on the **connected account**, not the
+platform account, since every charge is a Stripe Connect direct charge —
+`--forward-connect-to` is what makes the CLI forward those too, not just
+platform-level events. The CLI prints a `whsec_...` value on startup; put
+it in `STRIPE_WEBHOOK_SECRET`. See `StripeConnectService`/`StripeService`/
+`StripeWebhookService`'s doc comments for the full picture, and the
+production equivalent (a Dashboard-configured webhook endpoint listening to
+connected-account events) is documented in `infra/.env.deploy.example`.
 
 ## What's built vs. what's next
 

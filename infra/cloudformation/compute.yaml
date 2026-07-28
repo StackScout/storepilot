@@ -143,6 +143,12 @@ Resources:
           PAYHERE_SANDBOX=true
           PAYHERE_NOTIFY_URL=$SITE_ADDRESS/api/payments/payhere/notify
           PAYHERE_RETURN_URL_BASE=$SITE_ADDRESS/orders
+          STRIPE_SECRET_KEY=$(get_param $SSM_PREFIX/stripe-secret-key)
+          STRIPE_PUBLISHABLE_KEY=$(get_param $SSM_PREFIX/stripe-publishable-key)
+          STRIPE_WEBHOOK_SECRET=$(get_param $SSM_PREFIX/stripe-webhook-secret)
+          STRIPE_SUCCESS_URL_BASE=$SITE_ADDRESS/orders
+          STRIPE_CANCEL_URL_BASE=$SITE_ADDRESS/orders
+          ABR_GUID=$(get_param $SSM_PREFIX/abr-guid)
           SES_SENDER_EMAIL=$(get_param $SSM_PREFIX/ses-sender-email)
           AWS_REGION=${AWS::Region}
           RECEIPTS_S3_BUCKET_NAME=${EnvironmentName}-receipts

@@ -165,7 +165,7 @@ Three distinct mechanisms, deliberately not unified:
 
 1. **Zustand (`src/store/cart-store.ts`)** — the cart, the only genuinely
    persistent *client* state. Uses `zustand/middleware`'s `persist` to
-   `localStorage` under key `islandcart_cart`. Wrapped by
+   `localStorage` under key `storepilot_cart`. Wrapped by
    `src/hooks/use-cart.ts`, which adds a hydration guard via
    `useSyncExternalStore` so server-rendered markup (always an empty cart —
    the server can't read `localStorage`) matches the first client render.

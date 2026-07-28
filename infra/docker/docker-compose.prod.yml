@@ -8,11 +8,17 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: islandcart
+      POSTGRES_DB: storepilot
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      # Loopback-only — never 0.0.0.0. Reachable from your machine via an
+      # SSH tunnel through the instance (see infra/README.md), not directly
+      # over the internet; security.yaml's security group doesn't open 5432
+      # either, so this is belt-and-suspenders.
+      - "127.0.0.1:5432:5432"
     volumes:
-      - islandcart-postgres-data:/var/lib/postgresql/data
+      - storepilot-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
       interval: 5s
@@ -28,7 +34,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: aws
-      DB_URL: jdbc:postgresql://postgres:5432/islandcart
+      DB_URL: jdbc:postgresql://postgres:5432/storepilot
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       PAYHERE_MERCHANT_ID: ${PAYHERE_MERCHANT_ID}
@@ -46,14 +52,22 @@ services:
       NOTIFICATIONS_SES_SENDER_EMAIL: ${SES_SENDER_EMAIL}
       AWS_REGION: ${AWS_REGION}
       RECEIPTS_S3_BUCKET_NAME: ${RECEIPTS_S3_BUCKET_NAME}
+      FILE_STORAGE_S3_BUCKET_NAME: ${FILE_STORAGE_S3_BUCKET_NAME}
       APP_CORS_ALLOWED_ORIGINS: ${FRONTEND_ORIGIN}
+      COGNITO_REGION: ${COGNITO_REGION}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      COGNITO_OAUTH_DOMAIN: ${COGNITO_OAUTH_DOMAIN}
+      COGNITO_OAUTH_CLIENT_ID: ${COGNITO_OAUTH_CLIENT_ID}
+      COGNITO_OAUTH_CLIENT_SECRET: ${COGNITO_OAUTH_CLIENT_SECRET}
+      COGNITO_OAUTH_REDIRECT_URI: ${COGNITO_OAUTH_REDIRECT_URI}
       # Bootstrap-only — read once by DataSeeder to insert the single
       # platform_settings row if it's missing (see PlatformProperties.kt's
       # doc comment); the running app reads that DB row afterward, not
       # these env vars. Defaults below are Australia's, the near-term
       # deployment target while the Sri Lanka launch is on hold — a Sri
       # Lanka deployment overrides these instead.
-      PLATFORM_NAME: ${PLATFORM_NAME:-IslandCart}
+      PLATFORM_NAME: ${PLATFORM_NAME:-StorePilot}
       PLATFORM_TAGLINE: ${PLATFORM_TAGLINE:-Australia's marketplace for small business sellers}
       PLATFORM_COUNTRY_NAME: ${PLATFORM_COUNTRY_NAME:-Australia}
       PLATFORM_COUNTRY_CODE: ${PLATFORM_COUNTRY_CODE:-AU}
@@ -65,7 +79,7 @@ services:
       PLATFORM_DEFAULT_COD_ENABLED: ${PLATFORM_DEFAULT_COD_ENABLED:-true}
       PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED: ${PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED:-false}
       PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED: ${PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED:-true}
-      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-hello@islandcart.au}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-hello@storepilot.au}
       COMPANY_LOCATION: ${COMPANY_LOCATION:-Sydney, Australia}
     # No AWS access key/secret here — the container inherits the EC2
     # instance role's credentials via the SDK's default provider chain.
@@ -89,6 +103,14 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    environment:
+      # --env-file only feeds Compose-level ${VAR} interpolation, not every
+      # container's actual runtime env — Caddy resolves {$SITE_ADDRESS} in
+      # the Caddyfile itself at its own process runtime, so it must be
+      # passed through explicitly or it resolves empty, leaving a bare `{`
+      # that Caddy misparses as the global options block instead of a site
+      # block ("unrecognized global option: handle").
+      SITE_ADDRESS: ${SITE_ADDRESS}
     ports:
       - "80:80"
       - "443:443"
@@ -101,6 +123,6 @@ services:
       - frontend
 
 volumes:
-  islandcart-postgres-data:
+  storepilot-postgres-data:
   caddy-data:
   caddy-config:

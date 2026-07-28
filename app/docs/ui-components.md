@@ -106,7 +106,7 @@ everything else gets full detail.
 ### `MobileNav`
 - **File**: `marketplace/mobile-nav.tsx`
 - **Purpose**: hamburger menu (Sheet) for small screens — home, browse
-  products, track order, sell-on-IslandCart, seller dashboard, and account
+  products, track order, sell-on-StorePilot, seller dashboard, and account
   (sign in / "Hi, `<first name>`") links.
 - **Props**: none (reads `useBuyerAccountLink()` internally, same as
   `SiteHeader` — both call the hook independently and React Query dedupes

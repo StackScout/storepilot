@@ -1,13 +1,13 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  IslandCart — security group for the single test EC2 instance. SSH is
+  StorePilot — security group for the single test EC2 instance. SSH is
   restricted to a CIDR you supply (your own IP); HTTP/HTTPS are open since
   this is a public test site.
 
 Parameters:
   EnvironmentName:
     Type: String
-    Default: islandcart-test
+    Default: storepilot-test
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: >
@@ -25,7 +25,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub "${EnvironmentName}-sg"
-      GroupDescription: IslandCart test instance — SSH (restricted), HTTP/HTTPS (public)
+      GroupDescription: "StorePilot test instance - SSH (restricted), HTTP/HTTPS (public)"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -42,7 +42,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Project
-          Value: islandcart
+          Value: storepilot
 
 Outputs:
   SecurityGroupId:

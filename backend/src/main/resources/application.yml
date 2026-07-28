@@ -17,7 +17,7 @@ spring:
   application:
     name: backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/islandcart}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/storepilot}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   jpa:
@@ -67,7 +67,7 @@ app:
 # these unset boots an AU-configured platform; a Sri Lanka deployment
 # overrides these via env vars instead.
 platform:
-  name: ${PLATFORM_NAME:IslandCart}
+  name: ${PLATFORM_NAME:StorePilot}
   tagline: ${PLATFORM_TAGLINE:Australia's marketplace for small business sellers}
   country-name: ${PLATFORM_COUNTRY_NAME:Australia}
   country-code: ${PLATFORM_COUNTRY_CODE:AU}
@@ -79,7 +79,7 @@ platform:
   default-cod-enabled: ${PLATFORM_DEFAULT_COD_ENABLED:true}
   default-online-payment-enabled: ${PLATFORM_DEFAULT_ONLINE_PAYMENT_ENABLED:false}
   default-bank-transfer-enabled: ${PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED:true}
-  support-email: ${SUPPORT_EMAIL:hello@islandcart.au}
+  support-email: ${SUPPORT_EMAIL:hello@storepilot.au}
   company-location: ${COMPANY_LOCATION:Sydney, Australia}
 
 # Shared AWS SDK config — only meaningful under the aws profile (S3/SES clients).
@@ -89,7 +89,7 @@ aws:
 # Cognito is the authorization server in every environment (not aws-profile
 # gated — there's no local/mock auth implementation, unlike S3/SES). Local
 # dev needs real AWS credentials with Cognito permissions on this pool (see
-# config.yml / the islandcart-dev CLI profile), since there's no emulator.
+# config.yml / the storepilot-dev CLI profile), since there's no emulator.
 cognito:
   region: ${COGNITO_REGION:ap-south-1}
   user-pool-id: ${COGNITO_USER_POOL_ID}
@@ -155,7 +155,7 @@ notifications:
   reminder-interval-hours: ${NOTIFICATIONS_REMINDER_INTERVAL_HOURS:24}
   reminder-check-interval-ms: ${NOTIFICATIONS_REMINDER_CHECK_INTERVAL_MS:3600000}
   ses-sender-email: ${NOTIFICATIONS_SES_SENDER_EMAIL:}
-  admin-notification-email: ${NOTIFICATIONS_ADMIN_EMAIL:admin@islandcart.test}
+  admin-notification-email: ${NOTIFICATIONS_ADMIN_EMAIL:admin@storepilot.test}
 
 management:
   endpoints:

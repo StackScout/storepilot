@@ -4,6 +4,13 @@ import { Providers } from "./providers";
 import { getPlatformConfig } from "@/lib/platform-config";
 import "./globals.css";
 
+// Every page fetches live data from the backend (platform config, products,
+// session state) — nothing here can be statically prerendered at build
+// time anyway, and the production Docker build runs before the backend
+// container exists, which would otherwise fail the build outright trying
+// to fetch during static generation.
+export const dynamic = "force-dynamic";
+
 const publicSans = Public_Sans({
   variable: "--font-public-sans",
   subsets: ["latin"],

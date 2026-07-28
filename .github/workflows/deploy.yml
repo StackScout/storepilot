@@ -1,0 +1,141 @@
+name: Deploy
+
+# workflow_dispatch only for now — no `push` trigger yet. Prove this out
+# manually first (see infra/README.md's CI/CD section, Phase 2/3), then
+# add `push: branches: [main]` once several clean runs confirm the whole
+# path works end to end.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch/tag/SHA to deploy"
+        required: false
+        default: ""
+
+permissions:
+  id-token: write # required for OIDC — no AWS access keys are stored anywhere
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Configure AWS credentials (OIDC — no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Same file set infra/scripts/sync-and-deploy.sh already excludes
+      # from its rsync — kept in sync deliberately, don't drift.
+      - name: Package repo
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='build' \
+            --exclude='.gradle' \
+            --exclude='.kotlin' \
+            --exclude='backend/src/main/resources/config.yml' \
+            --exclude='infra/.env.deploy' \
+            -czf /tmp/deploy.tar.gz .
+
+      - name: Upload deploy artifact
+        env:
+          DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+        run: |
+          aws s3 cp /tmp/deploy.tar.gz "s3://${DEPLOY_BUCKET}/deploys/${GITHUB_SHA}.tar.gz"
+
+      - name: Resolve target instance
+        id: instance
+        env:
+          ENVIRONMENT_NAME: ${{ vars.ENVIRONMENT_NAME }}
+        run: |
+          IID=$(aws cloudformation describe-stacks \
+            --stack-name "${ENVIRONMENT_NAME}-compute" \
+            --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" \
+            --output text)
+          echo "id=$IID" >> "$GITHUB_OUTPUT"
+
+      - name: Send deploy command via SSM
+        id: ssm
+        env:
+          DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+          INSTANCE_ID: ${{ steps.instance.outputs.id }}
+        run: |
+          cat > /tmp/ssm-params.json <<EOF
+          {
+            "commands": [
+              "set -euo pipefail",
+              "command -v rsync >/dev/null || sudo dnf install -y rsync",
+              "rm -rf /tmp/storepilot-release && mkdir -p /tmp/storepilot-release",
+              "aws s3 cp s3://${DEPLOY_BUCKET}/deploys/${GITHUB_SHA}.tar.gz /tmp/deploy.tar.gz",
+              "tar xzf /tmp/deploy.tar.gz -C /tmp/storepilot-release",
+              "rsync -a --delete --exclude infra/docker/.env --exclude infra/.env.deploy /tmp/storepilot-release/ /opt/storepilot/",
+              "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env build backend",
+              "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env build frontend",
+              "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env up -d",
+              "docker image prune -f"
+            ]
+          }
+          EOF
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "storepilot deploy ${GITHUB_SHA}" \
+            --parameters file:///tmp/ssm-params.json \
+            --query "Command.CommandId" --output text)
+          echo "id=$CMD_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for deploy command to finish
+        env:
+          INSTANCE_ID: ${{ steps.instance.outputs.id }}
+          COMMAND_ID: ${{ steps.ssm.outputs.id }}
+        run: |
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo "Pending")
+            if [ "$STATUS" = "Success" ]; then
+              echo "Deploy command succeeded."
+              exit 0
+            fi
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
+              echo "Deploy command $STATUS — stderr:"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+                --query StandardErrorContent --output text
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Timed out waiting for the SSM deploy command to finish."
+          exit 1
+
+      - name: Health check
+        env:
+          ENVIRONMENT_NAME: ${{ vars.ENVIRONMENT_NAME }}
+        run: |
+          SITE=$(aws cloudformation describe-stacks \
+            --stack-name "${ENVIRONMENT_NAME}-compute" \
+            --query "Stacks[0].Outputs[?OutputKey=='SiteAddress'].OutputValue" \
+            --output text)
+          for i in $(seq 1 12); do
+            if curl -sf -o /dev/null "$SITE"; then
+              echo "OK: $SITE is responding."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Site did not come up healthy at $SITE"
+          exit 1

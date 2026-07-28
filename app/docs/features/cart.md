@@ -38,7 +38,7 @@ entity today.
   `storeSlug` to `null`), so a fresh add-from-another-store works
   immediately.
 - Cart persists across page reloads and browser sessions via `localStorage`
-  key `islandcart_cart` (no expiry).
+  key `storepilot_cart` (no expiry).
 - Cart is **not** tied to any buyer identity — clearing browser storage or
   switching devices loses it entirely; there is no server-side/cross-device
   cart.
@@ -105,7 +105,7 @@ singleton (`useCartStore`).
 ## State management
 
 `src/store/cart-store.ts` — Zustand `create()` wrapped in
-`persist(..., { name: "islandcart_cart", storage: createJSONStorage(() =>
+`persist(..., { name: "storepilot_cart", storage: createJSONStorage(() =>
 localStorage) })`. Shape:
 
 ```ts

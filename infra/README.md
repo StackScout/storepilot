@@ -1,4 +1,4 @@
-# IslandCart AWS deployment (test environment)
+# StorePilot AWS deployment (test environment)
 
 A minimal, free-tier-conscious deployment: **one EC2 instance** running
 Postgres + the Spring Boot backend + the Next.js frontend + Caddy (reverse
@@ -35,9 +35,9 @@ thrashing.
 - AWS CLI configured (`aws configure`) with credentials that can create
   IAM roles, EC2 instances, S3 buckets, and SSM parameters.
 - An EC2 key pair already created in your target region (`aws ec2
-  create-key-pair --key-name islandcart-test --query
-  'KeyMaterial' --output text > ~/.ssh/islandcart-test.pem && chmod 400
-  ~/.ssh/islandcart-test.pem`).
+  create-key-pair --key-name storepilot-test --query
+  'KeyMaterial' --output text > ~/.ssh/storepilot-test.pem && chmod 400
+  ~/.ssh/storepilot-test.pem`).
 - Your default VPC's ID and a subnet ID within it:
   ```
   aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query "Vpcs[0].VpcId"
@@ -58,12 +58,70 @@ thrashing.
    `SecureString` — a known, long-standing CloudFormation limitation.
 4. `infra/scripts/sync-and-deploy.sh` — rsyncs the repo to the instance and
    runs `docker compose up -d --build`. Re-run this any time you push a
-   code change.
+   code change, from your own machine, over SSH.
 5. Visit the `SiteAddress` output from step 2 (also printed at the end of
    step 4). Give Caddy a minute or two on first boot to obtain its TLS
    certificate.
 
 Re-running `deploy.sh` is safe (CloudFormation only updates what changed).
+Step 2 also deploys `cicd.yaml`, the GitHub Actions deploy pipeline's IAM
+role — see the "CI/CD" section below for what that's for and the one-time
+GitHub-side setup it needs.
+
+## CI/CD (GitHub Actions)
+
+`.github/workflows/deploy.yml` automates step 4 above — it does the
+equivalent of `sync-and-deploy.sh`, but from GitHub Actions instead of
+your own machine. It deliberately does **not** reuse SSH: GitHub-hosted
+runners have unpredictable IPs, and `security.yaml`'s SSH rule is locked
+to your own single IP on purpose (see that file's comment) — that stance
+isn't relaxed for CI. Instead the workflow authenticates to AWS via a
+**GitHub OIDC-federated IAM role** (`cicd.yaml`'s `DeployRole` — no AWS
+access keys or SSH key stored as a GitHub secret, ever) with permission to
+do exactly three things: upload a repo tarball to a small S3 bucket
+(`storage.yaml`'s `CiDeployBucket`, auto-expires objects after 3 days),
+tell the instance to pull and apply it via **SSM RunCommand** (which is
+why `iam.yaml`'s instance role now also carries the AWS-managed
+`AmazonSSMManagedInstanceCore` policy — AL2023's SSM agent is preinstalled
+but was previously never granted permission to register), and read the
+compute stack's outputs to find the instance/site address.
+
+One-time setup after `deploy.sh` has created the `cicd.yaml` stack:
+
+1. Read the `DeployRoleArn` output (`deploy.sh` prints it, or
+   `aws cloudformation describe-stacks --stack-name <env>-cicd --query "Stacks[0].Outputs"`).
+2. In the GitHub repo, go to **Settings → Secrets and variables → Actions
+   → Variables** (not *Secrets* — nothing here is sensitive, since OIDC
+   means no static credential exists at all) and set: `DEPLOY_ROLE_ARN`,
+   `AWS_REGION`, `ENVIRONMENT_NAME`, `DEPLOY_BUCKET` (the
+   `CiDeployBucketName` output from the same stack).
+3. Trigger the workflow manually (Actions tab → Deploy →
+   **Run workflow** — it's `workflow_dispatch`-only for now, no `push`
+   trigger yet) and confirm it succeeds end to end before trusting it on
+   every push. Once proven, `cicd.yaml`'s trust policy can be tightened
+   from `repo:<org>/<repo>:*` to `repo:<org>/<repo>:ref:refs/heads/main`
+   (redeploy the stack with that change) and a `push: branches: [main]`
+   trigger added to the workflow.
+
+`scripts/sync-and-deploy.sh` is unaffected and still works exactly as
+before, for local/emergency deploys from your own allowed IP.
+
+## Connecting a DB client to Postgres
+
+Postgres isn't exposed to the internet — `docker-compose.prod.yml` binds it
+to the instance's own loopback interface only (`127.0.0.1:5432`), and
+`security.yaml`'s security group doesn't open 5432 either. To connect a
+local GUI client (TablePlus, DBeaver, pgAdmin, ...), open an SSH tunnel
+first, then point the client at your own forwarded local port:
+
+```
+ssh -i <path-to-your-key.pem> -L 5433:localhost:5432 -N ec2-user@<instance-public-ip>
+```
+
+Leave that running, then connect your client to `localhost:5433`,
+database `storepilot`, with the `DB_USERNAME`/`DB_PASSWORD` values from
+`.env.deploy` (or `aws ssm get-parameter --name
+/storepilot/<env>/db-password --with-decryption`).
 
 ## SES sandbox
 
@@ -84,15 +142,25 @@ free while attached to a running instance, S3/SES/SSM are pennies at this
 scale. After the credit is used up (or 6 months, whichever first), this
 becomes a real ~$17-20/month bill unless torn down.
 
+The CI/CD pieces add effectively nothing: the GitHub OIDC provider, the
+deploy IAM role, and every SSM RunCommand invocation are $0 (no free-tier
+caveat, they're just free); `CiDeployBucket` holds a handful of MB-scale
+tarballs that auto-expire after 3 days, so it stays pennies regardless of
+how often the pipeline runs. GitHub Actions minutes are free too at this
+usage (unlimited on a public repo, 2,000 free min/month on private — this
+job runs a few minutes).
+
 ## Teardown
 
 ```
-aws cloudformation delete-stack --stack-name islandcart-test-compute
-aws cloudformation delete-stack --stack-name islandcart-test-security
-aws cloudformation delete-stack --stack-name islandcart-test-iam
-aws cloudformation delete-stack --stack-name islandcart-test-storage   # empty the S3 bucket first, CFN won't delete a non-empty bucket
+aws cloudformation delete-stack --stack-name storepilot-test-cicd
+aws cloudformation delete-stack --stack-name storepilot-test-compute
+aws cloudformation delete-stack --stack-name storepilot-test-security
+aws cloudformation delete-stack --stack-name storepilot-test-iam
+aws cloudformation delete-stack --stack-name storepilot-test-storage   # empty both S3 buckets first, CFN won't delete a non-empty bucket
 ```
-(reverse of deploy order — `compute` before `security`/`iam` since it
+(reverse of deploy order — `cicd` first since it imports both `storage`'s
+and `compute`'s exports; `compute` before `security`/`iam` since it
 imports their exports; `storage` last since `iam` imports its export).
 
 ## Layout
@@ -100,11 +168,16 @@ imports their exports; `storage` last since `iam` imports its export).
 ```
 infra/
   cloudformation/
-    storage.yaml      S3 bucket for receipts (private)
-    iam.yaml           EC2 instance role (S3 + SSM + SES policies)
+    storage.yaml      S3 buckets: receipts (private), ci-deploy (private,
+                       3-day lifecycle expiry)
+    iam.yaml           EC2 instance role (S3 + SSM param + SES + CI
+                        deploy bucket read policies, SSM Core managed
+                        policy)
     security.yaml        Security group (22 restricted, 80/443 public)
     compute.yaml            EC2 instance + Elastic IP, UserData installs
                              Docker and writes .env from SSM
+    cicd.yaml                  GitHub OIDC provider (or reuse) + repo-
+                                scoped deploy IAM role — see "CI/CD" above
   docker/
     docker-compose.prod.yml   postgres + backend + frontend + caddy
     Caddyfile                   reverse proxy + auto-HTTPS via sslip.io
@@ -112,5 +185,9 @@ infra/
     deploy.sh                    deploys the CFN stacks in order
     put-secrets.sh                  writes SecureString SSM parameters
     sync-and-deploy.sh                 rsyncs code, (re)starts the stack
+                                        (local/manual, over SSH)
   .env.deploy.example                   template — copy to .env.deploy (gitignored)
+../.github/workflows/
+  deploy.yml   GitHub Actions deploy pipeline (S3 + SSM RunCommand,
+               workflow_dispatch — see "CI/CD" above)
 ```

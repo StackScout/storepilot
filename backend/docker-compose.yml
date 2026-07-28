@@ -3,21 +3,21 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: islandcart
-      POSTGRES_USER: islandcart
-      POSTGRES_PASSWORD: islandcart
+      POSTGRES_DB: storepilot
+      POSTGRES_USER: storepilot
+      POSTGRES_PASSWORD: storepilot
     ports:
       # Host port 5433, not 5432 — kept consistent with the Homebrew Postgres
       # setup documented in README.md, in case this machine also has another
       # Postgres already using 5432.
       - "5433:5432"
     volumes:
-      - islandcart-postgres-data:/var/lib/postgresql/data
+      - storepilot-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U islandcart"]
+      test: ["CMD-SHELL", "pg_isready -U storepilot"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  islandcart-postgres-data:
+  storepilot-postgres-data:

@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# IslandCart — Project Memory
+# StorePilot — Project Memory
 
 Full documentation set lives in [`docs/`](docs). This file is the fast
 orientation + conventions reference; read the linked doc before making any
@@ -9,7 +9,7 @@ there is no real backend.**
 
 ## Project purpose
 
-IslandCart is a multi-vendor e-commerce marketplace connecting small Sri
+StorePilot is a multi-vendor e-commerce marketplace connecting small Sri
 Lankan sellers with buyers (LKR pricing, WhatsApp contact, PayHere/COD
 payment). Full detail, business problem, monetization model:
 [`docs/overview.md`](../docs/overview.md).
@@ -91,8 +91,8 @@ Full table with descriptions: [`docs/frontend-architecture.md`](docs/frontend-ar
   with a `/** METHOD /path */` comment above each one — keep this comment
   style when adding new service functions; it's what
   [`docs/api-contracts.md`](../docs/api-contracts.md) was derived from.
-- `localStorage` collection keys are prefixed `islandcart_` (e.g.
-  `islandcart_products`, `islandcart_cart`) — keep this prefix for any new
+- `localStorage` collection keys are prefixed `storepilot_` (e.g.
+  `storepilot_products`, `storepilot_cart`) — keep this prefix for any new
   collection.
 
 ## Component conventions

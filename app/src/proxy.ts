@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const ACCESS_TOKEN_COOKIE = "islandcart_access_token";
+const ACCESS_TOKEN_COOKIE = "storepilot_access_token";
 
 const region = process.env.NEXT_PUBLIC_COGNITO_REGION;
 const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;

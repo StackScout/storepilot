@@ -1,5 +1,5 @@
 -- Baseline schema, translated 1:1 from the current Kotlin entities under
--- src/main/kotlin/com/islandcart/backend. Table/column names match Spring's
+-- src/main/kotlin/com/storepilot/backend. Table/column names match Spring's
 -- default snake_case physical naming strategy applied to each entity's
 -- Kotlin property names — keep this file in sync by hand if an entity
 -- changes, since ddl-auto is set to "validate" (see application.yml), not

@@ -1,6 +1,6 @@
-# IslandCart Backend
+# StorePilot Backend
 
-Spring Boot (Kotlin) API for [IslandCart](../app) — a multi-vendor
+Spring Boot (Kotlin) API for [StorePilot](../app) — a multi-vendor
 marketplace for Sri Lankan small businesses. This service is what the
 frontend's mock `localStorage` service layer (`app/src/services/*.service.ts`)
 gets pointed at once the real backend is wired up — see
@@ -20,7 +20,7 @@ Package-by-feature, not package-by-layer — mirrors how the frontend groups
 by domain rather than by technical concern:
 
 ```
-src/main/kotlin/com/islandcart/backend/
+src/main/kotlin/com/storepilot/backend/
 ├── common/       BaseEntity, ShippingDetails (shared value object),
 │                 WireValueEnum (see below), ApiError, GlobalExceptionHandler,
 │                 domain exceptions, JPA auditing config
@@ -78,7 +78,7 @@ brew services start postgresql@16
 ```
 
 (Already configured to listen on port 5433 — see
-`/opt/homebrew/var/postgresql@16/postgresql.conf`. The `islandcart` role/database
+`/opt/homebrew/var/postgresql@16/postgresql.conf`. The `storepilot` role/database
 already exist locally.) A `docker-compose.yml` is also included as an
 alternative if you'd rather containerize Postgres — same port (5433 on the
 host) and credentials either way, so `application.yml`'s defaults work
@@ -103,9 +103,9 @@ curl http://localhost:8080/actuator/health
 
 | Variable | Default |
 |---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5433/islandcart` |
-| `DB_USERNAME` | `islandcart` |
-| `DB_PASSWORD` | `islandcart` |
+| `DB_URL` | `jdbc:postgresql://localhost:5433/storepilot` |
+| `DB_USERNAME` | `storepilot` |
+| `DB_PASSWORD` | `storepilot` |
 | `PORT` | `8080` |
 | `SHOW_SQL` | `false` |
 | `STRIPE_SECRET_KEY` | empty — Connect onboarding/checkout fail until set |

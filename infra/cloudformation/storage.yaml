@@ -1,14 +1,19 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  IslandCart — private S3 bucket for bank-transfer receipt uploads
-  (S3ReceiptStorageService). No public access; the backend reads/writes via
-  its EC2 instance role (see iam.yaml) and serves receipts to buyers/
-  sellers through short-lived presigned URLs, never a public bucket policy.
+  StorePilot — private S3 buckets. ReceiptsBucket holds bank-transfer
+  receipt uploads (S3ReceiptStorageService); FileStorageBucket holds
+  everything else S3FileStorageService writes (seller verification
+  documents, product images, courier receipts); CiDeployBucket is a
+  transient staging area the GitHub Actions deploy workflow uploads a repo
+  tarball to before telling the instance (via SSM RunCommand — see
+  cicd.yaml/iam.yaml) to pull and extract it. None of these buckets are
+  public; the backend/instance reads/writes via its EC2 instance role (see
+  iam.yaml).
 
 Parameters:
   EnvironmentName:
     Type: String
-    Default: islandcart-test
+    Default: storepilot-test
     Description: Used as a prefix for resource names/tags.
 
 Resources:
@@ -27,7 +32,49 @@ Resources:
               SSEAlgorithm: AES256
       Tags:
         - Key: Project
-          Value: islandcart
+          Value: storepilot
+
+  FileStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-file-storage"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: storepilot
+
+  CiDeployBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-ci-deploy"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # Self-cleaning — deploy tarballs are only ever needed for the few
+      # minutes between upload and the instance pulling them, never kept
+      # around or referenced again after that.
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireDeployArtifacts
+            Status: Enabled
+            ExpirationInDays: 3
+      Tags:
+        - Key: Project
+          Value: storepilot
 
 Outputs:
   BucketName:
@@ -38,3 +85,19 @@ Outputs:
     Value: !GetAtt ReceiptsBucket.Arn
     Export:
       Name: !Sub "${EnvironmentName}-ReceiptsBucketArn"
+  CiDeployBucketName:
+    Value: !Ref CiDeployBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-CiDeployBucketName"
+  CiDeployBucketArn:
+    Value: !GetAtt CiDeployBucket.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-CiDeployBucketArn"
+  FileStorageBucketName:
+    Value: !Ref FileStorageBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-FileStorageBucketName"
+  FileStorageBucketArn:
+    Value: !GetAtt FileStorageBucket.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-FileStorageBucketArn"

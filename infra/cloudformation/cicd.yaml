@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  StorePilot — GitHub Actions → AWS deploy pipeline auth. Creates (or
+  reuses) the GitHub OIDC identity provider and a repo-scoped IAM role the
+  .github/workflows/deploy.yml workflow assumes via
+  AssumeRoleWithWebIdentity — no static AWS access keys, no SSH key, ever
+  stored as a GitHub secret. The role can only: upload a deploy tarball to
+  the CI deploy bucket, tell the instance (via SSM RunCommand) to pull and
+  apply it, and read the compute stack's outputs to find the instance/site
+  address — the same three things scripts/sync-and-deploy.sh already does
+  locally over SSH. It explicitly cannot touch security groups, IAM, or
+  anything outside those three actions. Depends on storage.yaml (deploy
+  bucket ARN) and compute.yaml (instance ARN) — deploy both first.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: storepilot-test
+  GitHubOrg:
+    Type: String
+    Default: StackScout
+  GitHubRepo:
+    Type: String
+    Default: storepilot
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: >
+      IAM's GitHub OIDC provider is a per-AWS-account singleton — creating
+      a second one for the same URL fails with EntityAlreadyExists. Set to
+      "false" (and fill in ExistingOidcProviderArn) if another
+      project/stack in this account already created one; check first with
+      `aws iam list-open-id-connect-providers`.
+  ExistingOidcProviderArn:
+    Type: String
+    Default: ""
+    Description: Only used when CreateOidcProvider is "false".
+  GithubOidcThumbprint:
+    Type: String
+    AllowedPattern: "^[0-9A-Fa-f]{40}$"
+    Description: >
+      GitHub Actions OIDC's root-CA SHA1 thumbprint — no default on
+      purpose (a wrong-but-valid-looking hardcoded value would fail
+      silently until the first real deploy). Look up the current value at
+      https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect
+      or generate it yourself per AWS's IAM OIDC docs
+      (https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html)
+      before deploying this stack.
+
+Conditions:
+  ShouldCreateOidcProvider: !Equals [!Ref CreateOidcProvider, "true"]
+
+Resources:
+  GithubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - !Ref GithubOidcThumbprint
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-github-deploy-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateOidcProvider
+                - !Ref GithubOidcProvider
+                - !Ref ExistingOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                # Broad (:*) for now so `workflow_dispatch` from any branch
+                # works during initial testing (see infra/README.md's
+                # CI/CD section) — tighten to
+                # repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/main
+                # once the pipeline is proven and wired to run on push.
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+      Policies:
+        - PolicyName: deploy-artifact-upload
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub
+                  - "${BucketArn}/*"
+                  - BucketArn: !ImportValue
+                      Fn::Sub: "${EnvironmentName}-CiDeployBucketArn"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !ImportValue
+                  Fn::Sub: "${EnvironmentName}-CiDeployBucketArn"
+        - PolicyName: ssm-run-deploy-command
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                Resource:
+                  # SendCommand needs both the document and the target
+                  # instance listed — one ARN alone isn't sufficient.
+                  - !Sub "arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript"
+                  - !Sub
+                    - "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}"
+                    - InstanceId: !ImportValue
+                        Fn::Sub: "${EnvironmentName}-InstanceId"
+              - Effect: Allow
+                Action:
+                  # Not addressable by a narrower resource ARN — this is
+                  # documented AWS behavior for these two read-only status
+                  # actions, not an oversight.
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: "*"
+        - PolicyName: describe-compute-stack
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${EnvironmentName}-compute/*"
+
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt DeployRole.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-DeployRoleArn"

@@ -77,7 +77,7 @@ function AdminLoginForm() {
           <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@islandcart.lk" {...register("email")} />
+              <Input id="email" type="email" placeholder="you@storepilot.lk" {...register("email")} />
               {errors.email ? <p className="text-destructive text-xs">{errors.email.message}</p> : null}
             </div>
             <div className="space-y-1.5">

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  IslandCart — the single EC2 instance running the whole stack via Docker
+  StorePilot — the single EC2 instance running the whole stack via Docker
   Compose (Postgres + backend + frontend + Caddy). Depends on security.yaml
   and iam.yaml (imports their exports) — deploy those first. UserData only
   installs Docker and writes the .env file (secrets pulled from SSM); it
@@ -10,7 +10,7 @@ Description: >
 Parameters:
   EnvironmentName:
     Type: String
-    Default: islandcart-test
+    Default: storepilot-test
   SubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: >
@@ -38,7 +38,7 @@ Parameters:
   # stack overrides these instead.
   PlatformName:
     Type: String
-    Default: IslandCart
+    Default: StorePilot
   PlatformTagline:
     Type: String
     Default: Australia's marketplace for small business sellers
@@ -74,10 +74,25 @@ Parameters:
     Default: "true"
   SupportEmail:
     Type: String
-    Default: hello@islandcart.au
+    Default: hello@storepilot.au
   CompanyLocation:
     Type: String
     Default: Sydney, Australia
+  # Cognito is a separate, manually-created resource (not managed by any
+  # CFN template here — see infra/README.md's auth section) and is reused
+  # across every country deployment rather than recreated per-region: it's
+  # just an API the backend calls, so it doesn't need to live in the same
+  # region as this instance. The two OAuth values (client id/secret) are
+  # not parameters — they're pulled from SSM in UserData below, alongside
+  # the other put-secrets.sh secrets.
+  CognitoRegion:
+    Type: String
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+  CognitoOauthDomain:
+    Type: String
 
 Resources:
   Instance:
@@ -105,6 +120,22 @@ Resources:
           #!/bin/bash
           set -euxo pipefail
 
+          # --- Swap file — t3.small's 2GB RAM isn't enough headroom for
+          # building the backend (Gradle/Kotlin) and frontend (Next.js)
+          # images, which `docker compose ... up --build` builds
+          # concurrently by default; without this the OOM killer/swap
+          # thrashing can make the instance unresponsive (even SSH stops
+          # answering). scripts/sync-and-deploy.sh and deploy.yml also
+          # build the two images sequentially instead of relying on this
+          # alone — belt and suspenders. ---
+          if [ ! -f /swapfile ]; then
+            dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+          fi
+
           # --- Docker + Compose plugin ---
           dnf install -y docker
           systemctl enable --now docker
@@ -114,9 +145,19 @@ Resources:
             -o /usr/local/lib/docker/cli-plugins/docker-compose
           chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
+          # AL2023's dnf-packaged docker bundles an old buildx (0.12.x) that
+          # `docker compose build` rejects ("requires buildx 0.17.0 or
+          # later") — install a current one the same way as compose above.
+          # Buildx's release assets are versioned in the filename (unlike
+          # compose's), so resolve the latest tag via the GitHub API first.
+          BUILDX_URL=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest \
+            | grep browser_download_url | grep 'linux-amd64"' | cut -d'"' -f4)
+          curl -SL "$BUILDX_URL" -o /usr/local/lib/docker/cli-plugins/docker-buildx
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+
           # --- App directory (code is rsynced here later by
           # scripts/sync-and-deploy.sh, run from your own machine) ---
-          mkdir -p /opt/islandcart/infra/docker
+          mkdir -p /opt/storepilot/infra/docker
 
           # --- Derive this instance's public origin from its own Elastic
           # IP via the sslip.io trick, so Caddy can get a real Let's
@@ -129,13 +170,17 @@ Resources:
           # --- Secrets from SSM Parameter Store — put there ahead of time
           # by scripts/put-secrets.sh (CloudFormation itself can't create
           # SecureString parameters natively, see infra/README.md). Scoped
-          # per-environment (/islandcart/${EnvironmentName}/*) so a second
+          # per-environment (/storepilot/${EnvironmentName}/*) so a second
           # deployment (e.g. Australia) under a different EnvironmentName
           # doesn't read or collide with this one's secrets. ---
-          get_param() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text --region ${AWS::Region}; }
-          SSM_PREFIX="/islandcart/${EnvironmentName}"
+          # Falls back to "" for a parameter put-secrets.sh skipped writing
+          # (it doesn't write empty-valued secrets, since SSM rejects them)
+          # — matches application.yml's own empty-string-means-unconfigured
+          # defaults for optional secrets like Stripe/ABR.
+          get_param() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text --region ${AWS::Region} 2>/dev/null || echo ""; }
+          SSM_PREFIX="/storepilot/${EnvironmentName}"
 
-          cat > /opt/islandcart/infra/docker/.env <<EOF
+          cat > /opt/storepilot/infra/docker/.env <<EOF
           DB_USERNAME=$(get_param $SSM_PREFIX/db-username)
           DB_PASSWORD=$(get_param $SSM_PREFIX/db-password)
           PAYHERE_MERCHANT_ID=$(get_param $SSM_PREFIX/payhere-merchant-id)
@@ -152,9 +197,17 @@ Resources:
           SES_SENDER_EMAIL=$(get_param $SSM_PREFIX/ses-sender-email)
           AWS_REGION=${AWS::Region}
           RECEIPTS_S3_BUCKET_NAME=${EnvironmentName}-receipts
+          FILE_STORAGE_S3_BUCKET_NAME=${EnvironmentName}-file-storage
           SITE_ADDRESS=$SITE_ADDRESS
           FRONTEND_ORIGIN=$SITE_ADDRESS
           BACKEND_ORIGIN=$SITE_ADDRESS
+          COGNITO_REGION=${CognitoRegion}
+          COGNITO_USER_POOL_ID=${CognitoUserPoolId}
+          COGNITO_CLIENT_ID=${CognitoClientId}
+          COGNITO_OAUTH_DOMAIN=${CognitoOauthDomain}
+          COGNITO_OAUTH_CLIENT_ID=$(get_param $SSM_PREFIX/cognito-oauth-client-id)
+          COGNITO_OAUTH_CLIENT_SECRET=$(get_param $SSM_PREFIX/cognito-oauth-client-secret)
+          COGNITO_OAUTH_REDIRECT_URI=$SITE_ADDRESS/api/auth/google/callback
           PLATFORM_NAME=${PlatformName}
           PLATFORM_TAGLINE=${PlatformTagline}
           PLATFORM_COUNTRY_NAME=${PlatformCountryName}
@@ -171,7 +224,7 @@ Resources:
           COMPANY_LOCATION=${CompanyLocation}
           EOF
 
-          chown -R ec2-user:ec2-user /opt/islandcart
+          chown -R ec2-user:ec2-user /opt/storepilot
           echo "Bootstrap complete. Public origin: $SITE_ADDRESS"
           echo "Next: run scripts/sync-and-deploy.sh from your machine to ship the code and start the stack."
 
@@ -192,3 +245,13 @@ Outputs:
     Value: !Sub
       - "https://${DashedIp}.sslip.io"
       - DashedIp: !Join ["-", !Split [".", !Ref ElasticIp]]
+  InstanceId:
+    Description: >
+      Consumed by cicd.yaml to scope the GitHub Actions deploy role's SSM
+      permissions to this exact instance. Outputs-only addition — never add
+      a property here that would force an instance replacement (this
+      instance's Postgres data lives in a Docker volume on its own root EBS
+      volume with DeleteOnTermination: true, no RDS/snapshot behind it).
+    Value: !Ref Instance
+    Export:
+      Name: !Sub "${EnvironmentName}-InstanceId"

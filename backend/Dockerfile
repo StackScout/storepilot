@@ -12,9 +12,9 @@ COPY src src
 RUN ./gradlew bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre AS runtime
-RUN useradd --system --create-home --shell /usr/sbin/nologin islandcart
+RUN useradd --system --create-home --shell /usr/sbin/nologin storepilot
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
-USER islandcart
+USER storepilot
 EXPOSE 8080
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]

@@ -1,4 +1,4 @@
-# IslandCart — Product Overview
+# StorePilot — Product Overview
 
 > Cross-references: [`frontend-architecture.md`](../app/docs/frontend-architecture.md) ·
 > [`feature-index.md`](../app/docs/feature-index.md) · [`user-flows.md`](../app/docs/user-flows.md) ·
@@ -6,7 +6,7 @@
 
 ## Purpose of the application
 
-IslandCart is a **multi-vendor e-commerce marketplace** connecting small,
+StorePilot is a **multi-vendor e-commerce marketplace** connecting small,
 independent Sri Lankan businesses with local buyers. It lets a seller list
 and sell products online without building their own storefront, and lets
 buyers discover, browse, and buy from many independent local sellers through
@@ -26,7 +26,7 @@ Small Sri Lankan sellers (home businesses, craftspeople, small food
 producers, boutique fashion labels, etc.) typically sell through informal
 channels — Facebook/Instagram posts, WhatsApp — with no dedicated storefront,
 no structured catalog, no order/inventory tracking, and no formal online
-payment option beyond ad hoc bank transfers or cash. IslandCart's premise is to
+payment option beyond ad hoc bank transfers or cash. StorePilot's premise is to
 give these sellers:
 
 - A branded storefront page (`/stores/[slug]`) without needing their own
@@ -54,7 +54,7 @@ individually to place an order.
 |---|---|
 | **Buyer / shopper** | Anyone browsing the public marketplace. No account or login is required — checkout is guest-only, identified solely by name/phone/address entered at checkout. |
 | **Seller / merchant** | A small business owner who lists products through the seller dashboard. In the current build there is exactly **one** mock seller account (see [User roles](#user-roles)) — the product is designed for many sellers, but the demo only wires up one. |
-| **Platform operator** | IslandCart itself, which earns the platform fee on every sale and reviews new sellers before they go live. A minimal, **unauthenticated** internal tool exists at `/admin` (store approval, payout runs) — see [`features/seller-auth.md`](../app/docs/features/seller-auth.md#admin-not-a-real-role) — but there is no real admin login/role. |
+| **Platform operator** | StorePilot itself, which earns the platform fee on every sale and reviews new sellers before they go live. A minimal, **unauthenticated** internal tool exists at `/admin` (store approval, payout runs) — see [`features/seller-auth.md`](../app/docs/features/seller-auth.md#admin-not-a-real-role) — but there is no real admin login/role. |
 
 ## User roles
 
@@ -127,7 +127,7 @@ Full index with related pages/components: [`feature-index.md`](../app/docs/featu
 
 ## Monetization model
 
-IslandCart takes a **percentage-based platform (transaction) fee** on each
+StorePilot takes a **percentage-based platform (transaction) fee** on each
 sale, deducted from the seller's payout — **not** charged as an additional
 line item to the buyer.
 

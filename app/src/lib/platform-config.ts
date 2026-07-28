@@ -38,7 +38,7 @@ export interface PlatformConfig {
  * Mirrors PlatformProperties.kt's own bootstrap defaults.
  */
 const FALLBACK_CONFIG: PlatformConfig = {
-  name: "IslandCart",
+  name: "StorePilot",
   tagline: "Australia's marketplace for small business sellers",
   countryName: "Australia",
   countryCode: "AU",
@@ -50,7 +50,7 @@ const FALLBACK_CONFIG: PlatformConfig = {
   defaultCodEnabled: true,
   defaultOnlinePaymentEnabled: false,
   defaultBankTransferEnabled: true,
-  supportEmail: "hello@islandcart.au",
+  supportEmail: "hello@storepilot.au",
   companyLocation: "Sydney, Australia",
 };
 

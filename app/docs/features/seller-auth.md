@@ -57,7 +57,7 @@ behavior.
   dashboard banner.
 - Session payload: `{ role: "seller", storeId, email }`, stored as
   **unsigned, unencrypted base64 JSON** in an `httpOnly` cookie
-  (`islandcart_session`, 7-day `maxAge`). Explicitly documented in source as a
+  (`storepilot_session`, 7-day `maxAge`). Explicitly documented in source as a
   demo shortcut, not production-ready.
 - Route protection (`src/proxy.ts`, Next 16's `middleware.ts`): unauthenticated
   visitors to `/dashboard/*` are redirected to `/login?redirectTo=<path>`;

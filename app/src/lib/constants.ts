@@ -24,4 +24,4 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
  * payment doesn't leave the buyer with an empty cart and a stuck unpaid
  * order (see checkout-form.tsx and orders/[orderId]/page.tsx).
  */
-export const PENDING_GATEWAY_ORDER_KEY = "islandcart_pending_gateway_order";
+export const PENDING_GATEWAY_ORDER_KEY = "storepilot_pending_gateway_order";

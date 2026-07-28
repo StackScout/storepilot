@@ -158,7 +158,7 @@ Docs: [`features/seller-auth.md`](features/seller-auth.md)
    NIC number, business registration number (required only if Business),
    and bank account details (bank name, account name, account number) —
    all client-validated (zod, with `sellerType`-conditional requirements).
-3. Checks "I agree to IslandCart's seller terms" (required to submit).
+3. Checks "I agree to StorePilot's seller terms" (required to submit).
 4. Submits → a **real** `Store` + `StoreSettings` row is created
    client-side (`storesService.createStore` /
    `updateStoreSettings`), with `verificationStatus: "pending"`, then a
@@ -274,7 +274,7 @@ Docs: [`features/order-management.md`](features/order-management.md)
    count, subtotal, platform fee, net amount, status badge, bank
    reference once paid).
 4. The page is **read-only** — there is no "request payout" action. A note
-   explains payout batches are created and released by IslandCart (via
+   explains payout batches are created and released by StorePilot (via
    `/admin`, flow 22), not requested by the seller.
 
 Docs: [`features/payouts.md`](features/payouts.md)

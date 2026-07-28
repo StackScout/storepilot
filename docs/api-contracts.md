@@ -439,7 +439,7 @@ before implementing any of these for real; endpoints below are the
 - **Request body**: `{ email: string; password: string }` — TODO: product
   to confirm password vs. OTP vs. magic-link.
 - **Response**: `200`, sets a signed/encrypted session cookie
-  (`islandcart_session` or equivalent) containing at minimum `{ sellerId,
+  (`storepilot_session` or equivalent) containing at minimum `{ sellerId,
   storeId, role: "seller" }`. Body should not need to repeat the session
   payload if using cookie-based auth, but may return a minimal `{ seller:
   {...} }` for client-side display.

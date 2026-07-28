@@ -9,7 +9,7 @@
 Email buyers and sellers at the points in the order lifecycle where they
 need to act or be reassured, without coupling that logic to any specific
 email provider. Entirely backend-side
-(`backend/src/main/kotlin/com/islandcart/backend/notification/`) — there is
+(`backend/src/main/kotlin/com/storepilot/backend/notification/`) — there is
 no frontend involvement beyond the order confirmation page's static "A
 receipt has been sent to `<email>`" copy.
 

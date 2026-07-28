@@ -10,21 +10,28 @@ source .env.deploy
 set +a
 
 REGION="${AWS_REGION:-us-east-1}"
-ENV_NAME="${ENVIRONMENT_NAME:-islandcart-test}"
+ENV_NAME="${ENVIRONMENT_NAME:-storepilot-test}"
 
 INSTANCE_IP=$(aws cloudformation describe-stacks --stack-name "${ENV_NAME}-compute" \
   --query "Stacks[0].Outputs[?OutputKey=='PublicIp'].OutputValue" --output text --region "$REGION")
 
-echo "==> Syncing repo to ec2-user@${INSTANCE_IP}:/opt/islandcart"
+echo "==> Syncing repo to ec2-user@${INSTANCE_IP}:/opt/storepilot"
 rsync -avz --delete \
   --exclude .git --exclude node_modules --exclude .next --exclude build --exclude .gradle --exclude .kotlin \
   --exclude "backend/src/main/resources/config.yml" --exclude "infra/.env.deploy" \
+  --exclude "infra/docker/.env" \
   -e "ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=accept-new" \
-  ../ "ec2-user@${INSTANCE_IP}:/opt/islandcart/"
+  ../ "ec2-user@${INSTANCE_IP}:/opt/storepilot/"
 
-echo "==> Starting the stack (rebuilds images on first run / after code changes)"
+echo "==> Building images one at a time (backend + frontend build concurrently by"
+echo "    default under 'up --build', which can OOM a t3.small — see compute.yaml's"
+echo "    UserData comment on the swap file added as a second line of defense)"
 ssh -i "${SSH_KEY_PATH}" "ec2-user@${INSTANCE_IP}" \
-  "cd /opt/islandcart/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env up -d --build"
+  "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env build backend && docker compose -f docker-compose.prod.yml --env-file .env build frontend"
+
+echo "==> Starting the stack"
+ssh -i "${SSH_KEY_PATH}" "ec2-user@${INSTANCE_IP}" \
+  "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env up -d"
 
 SITE_ADDRESS=$(aws cloudformation describe-stacks --stack-name "${ENV_NAME}-compute" \
   --query "Stacks[0].Outputs[?OutputKey=='SiteAddress'].OutputValue" --output text --region "$REGION")

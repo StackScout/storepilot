@@ -6,9 +6,9 @@ plugins {
 	kotlin("plugin.jpa") version "2.3.21"
 }
 
-group = "com.islandcart"
+group = "com.storepilot"
 version = "0.0.1-SNAPSHOT"
-description = "IslandCart marketplace API"
+description = "StorePilot marketplace API"
 
 java {
 	toolchain {
@@ -49,7 +49,7 @@ dependencies {
 	implementation("software.amazon.awssdk:cognitoidentityprovider")
 	// Never called directly — the SDK's ProfileCredentialsProvider needs
 	// this on the classpath to resolve a role_arn/source_profile ("assume
-	// role") AWS CLI profile, e.g. local dev's AWS_PROFILE=islandcart-dev.
+	// role") AWS CLI profile, e.g. local dev's AWS_PROFILE=storepilot-dev.
 	runtimeOnly("software.amazon.awssdk:sts")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("org.postgresql:postgresql")

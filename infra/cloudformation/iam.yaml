@@ -1,14 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  IslandCart — EC2 instance role/profile, least-privilege for exactly what
+  StorePilot — EC2 instance role/profile, least-privilege for exactly what
   the backend needs: read/write the receipts bucket, read SSM parameters
-  under /islandcart/*, send email via SES. Depends on storage.yaml (imports
-  its bucket ARN) — deploy storage.yaml first.
+  under /storepilot/*, send email via SES, read deploy tarballs from the
+  CI deploy bucket. Also carries the AWS-managed SSM Core policy so the
+  GitHub Actions deploy workflow can reach this instance via SSM
+  RunCommand (see cicd.yaml) instead of SSH. Depends on storage.yaml
+  (imports its bucket ARNs) — deploy storage.yaml first.
 
 Parameters:
   EnvironmentName:
     Type: String
-    Default: islandcart-test
+    Default: storepilot-test
 
 Resources:
   InstanceRole:
@@ -22,6 +25,13 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Lets the preinstalled SSM agent (AL2023 ships it by default)
+        # register with Systems Manager and receive RunCommand
+        # invocations — without this the agent is present but inert.
+        # Attaching it doesn't require a reboot; the agent self-registers
+        # within a few minutes of the permission appearing.
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: receipts-bucket-access
           PolicyDocument:
@@ -35,6 +45,18 @@ Resources:
                   - "${BucketArn}/*"
                   - BucketArn: !ImportValue
                       Fn::Sub: "${EnvironmentName}-ReceiptsBucketArn"
+        - PolicyName: file-storage-bucket-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub
+                  - "${BucketArn}/*"
+                  - BucketArn: !ImportValue
+                      Fn::Sub: "${EnvironmentName}-FileStorageBucketArn"
         - PolicyName: ssm-parameter-read
           PolicyDocument:
             Version: "2012-10-17"
@@ -44,7 +66,7 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                   - ssm:GetParametersByPath
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/islandcart/*"
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/storepilot/*"
         - PolicyName: ses-send
           PolicyDocument:
             Version: "2012-10-17"
@@ -57,6 +79,17 @@ Resources:
                 # address/domain is verified — tighten this to that
                 # identity's ARN once you know it (see infra/README.md).
                 Resource: "*"
+        - PolicyName: ci-deploy-bucket-read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub
+                  - "${BucketArn}/*"
+                  - BucketArn: !ImportValue
+                      Fn::Sub: "${EnvironmentName}-CiDeployBucketArn"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile

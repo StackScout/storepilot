@@ -54,6 +54,16 @@ real launch," not as scheduled work.
 
 ## Should have (expected of a serious v1, not launch-blocking)
 
+- **MFA for seller and admin accounts** (buyers lower priority). Cognito
+  supports this natively (TOTP/authenticator app preferred over SMS — no
+  SNS cost, not phishable), but it's a real feature, not a config toggle:
+  `AuthController`'s current login flow does a direct
+  `ADMIN_USER_PASSWORD_AUTH` call that returns tokens immediately; with MFA
+  enabled on the User Pool, Cognito instead returns a challenge that needs a
+  second `AdminRespondToAuthChallenge` call, plus a new
+  enroll/verify-TOTP endpoint and QR-code UI in account settings, plus an
+  MFA-code prompt in the login UI. Applies to whichever actor types (buyer/
+  seller/admin) share this login path.
 - ~~**Buyer accounts**~~ **Implemented** — optional register/sign-in, one
   saved address, order history, guest checkout still fully supported. See
   [`features/buyer-accounts.md`](../app/docs/features/buyer-accounts.md). Still open:

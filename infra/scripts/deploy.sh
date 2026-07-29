@@ -26,6 +26,8 @@ aws cloudformation deploy \
   --stack-name "${ENV_NAME}-iam" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentName="$ENV_NAME" \
+    CognitoRegion="$COGNITO_REGION" \
+    CognitoUserPoolId="$COGNITO_USER_POOL_ID" \
   --region "$REGION"
 
 echo "==> security.yaml"

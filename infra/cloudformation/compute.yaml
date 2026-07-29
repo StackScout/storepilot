@@ -196,6 +196,7 @@ Resources:
           ABR_GUID=$(get_param $SSM_PREFIX/abr-guid)
           SES_SENDER_EMAIL=$(get_param $SSM_PREFIX/ses-sender-email)
           AWS_REGION=${AWS::Region}
+          ENVIRONMENT_NAME=${EnvironmentName}
           RECEIPTS_S3_BUCKET_NAME=${EnvironmentName}-receipts
           FILE_STORAGE_S3_BUCKET_NAME=${EnvironmentName}-file-storage
           SITE_ADDRESS=$SITE_ADDRESS

@@ -83,6 +83,13 @@ services:
       COMPANY_LOCATION: ${COMPANY_LOCATION:-Sydney, Australia}
     # No AWS access key/secret here — the container inherits the EC2
     # instance role's credentials via the SDK's default provider chain.
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: /storepilot/${ENVIRONMENT_NAME}
+        tag: "backend"
+        awslogs-create-group: "true"
 
   frontend:
     build:
@@ -99,6 +106,13 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: /storepilot/${ENVIRONMENT_NAME}
+        tag: "frontend"
+        awslogs-create-group: "true"
 
   caddy:
     image: caddy:2-alpine
@@ -121,6 +135,13 @@ services:
     depends_on:
       - backend
       - frontend
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: /storepilot/${ENVIRONMENT_NAME}
+        tag: "caddy"
+        awslogs-create-group: "true"
 
 volumes:
   storepilot-postgres-data:

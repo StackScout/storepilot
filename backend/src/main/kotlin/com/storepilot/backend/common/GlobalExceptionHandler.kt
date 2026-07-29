@@ -1,5 +1,6 @@
 package com.storepilot.backend.common
 
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -9,6 +10,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+    private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+
     /** E.g. a non-UUID string in a {id} path segment — a client bug, not a server error. */
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
     fun handleTypeMismatch(ex: MethodArgumentTypeMismatchException): ResponseEntity<ApiError> =
@@ -49,7 +52,9 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception::class)
-    fun handleUnexpected(ex: Exception): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+    fun handleUnexpected(ex: Exception): ResponseEntity<ApiError> {
+        log.error("Unhandled exception", ex)
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ApiError.of("INTERNAL_ERROR", "Something went wrong"))
+    }
 }

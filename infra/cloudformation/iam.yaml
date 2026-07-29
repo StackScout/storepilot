@@ -12,6 +12,16 @@ Parameters:
   EnvironmentName:
     Type: String
     Default: storepilot-test
+  CognitoRegion:
+    Type: String
+    Description: >
+      Region of the Cognito user pool the backend's AuthController calls
+      via Admin* APIs (AdminCreateUser, AdminInitiateAuth, ...) — may
+      differ from this stack's own region, since Cognito is reused across
+      deployments rather than recreated per-region.
+  CognitoUserPoolId:
+    Type: String
+    Description: The Cognito user pool ID the instance role is scoped to call Admin* actions against.
 
 Resources:
   InstanceRole:
@@ -90,6 +100,39 @@ Resources:
                   - "${BucketArn}/*"
                   - BucketArn: !ImportValue
                       Fn::Sub: "${EnvironmentName}-CiDeployBucketArn"
+        - PolicyName: cognito-admin-actions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  # Exactly the Admin* calls AuthController.kt makes on the
+                  # buyer/seller/admin's behalf — no end-user-facing Cognito
+                  # actions, no wildcard cognito-idp:*.
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:AdminInitiateAuth
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminListGroupsForUser
+                  - cognito-idp:AdminUserGlobalSignOut
+                Resource: !Sub "arn:aws:cognito-idp:${CognitoRegion}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
+        - PolicyName: docker-awslogs-driver
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                # Docker's built-in `awslogs` logging driver runs inside
+                # the host's dockerd process and picks up these instance
+                # role credentials automatically via IMDS — no separate
+                # CloudWatch agent needed. Scoped to this environment's
+                # own log group only (see docker-compose.prod.yml).
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/storepilot/${EnvironmentName}*:*"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile

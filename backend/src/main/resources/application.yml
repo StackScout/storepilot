@@ -162,3 +162,20 @@ management:
     web:
       exposure:
         include: health,info
+
+---
+# CloudWatch (via Docker's awslogs driver) ships each line written to
+# stdout as its own log event — a plain multi-line stack trace becomes
+# dozens of separate events. Structured logging writes one JSON object per
+# line instead (stack trace included as a single escaped field), so every
+# log entry — even an exception — is exactly one CloudWatch event. Built
+# into Boot's logging starter; no extra dependency. Local dev keeps the
+# default human-readable console format.
+spring:
+  config:
+    activate:
+      on-profile: aws
+logging:
+  structured:
+    format:
+      console: logstash

@@ -13,9 +13,21 @@ export interface AuthSession {
  * effect of the backend's response — there is no local session to manage.
  */
 
-/** POST /api/auth/register — creates a real Cognito account (buyer group) and signs in immediately. */
-export async function register(name: string, email: string, password: string): Promise<AuthSession> {
-  return apiClient.post<AuthSession>("/api/auth/register", { name, email, password });
+/**
+ * POST /api/auth/register — creates a real Cognito account and signs in
+ * immediately. `accountType` must match which page is calling this
+ * ("buyer" for account/register, "seller" for register) — buyer and
+ * seller are mutually exclusive identities, see backend
+ * AuthController.register()'s doc comment. A "seller" registration gets
+ * no Cognito group at all until /onboarding grants "seller".
+ */
+export async function register(
+  name: string,
+  email: string,
+  password: string,
+  accountType: "buyer" | "seller",
+): Promise<AuthSession> {
+  return apiClient.post<AuthSession>("/api/auth/register", { name, email, password, accountType });
 }
 
 /** POST /api/auth/login */

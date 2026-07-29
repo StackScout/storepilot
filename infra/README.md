@@ -68,6 +68,23 @@ Step 2 also deploys `cicd.yaml`, the GitHub Actions deploy pipeline's IAM
 role — see the "CI/CD" section below for what that's for and the one-time
 GitHub-side setup it needs.
 
+## Admin accounts
+
+Admin accounts are never self-registered — there's no `/admin/register`
+page, and the app never grants the Cognito `admin` group on its own (see
+backend `AuthController.register()`'s doc comment). To create one:
+
+```
+infra/scripts/create-admin.sh someone@example.com "Someone's Name"
+```
+
+Prompts for a password (or set `ADMIN_PASSWORD` to skip the prompt). This
+creates the Cognito user directly (bypassing the public registration
+endpoint entirely) with a permanent password and adds them to the `admin`
+group, so they can sign in immediately at `/admin/login`. Requires
+`COGNITO_REGION`/`COGNITO_USER_POOL_ID` in `.env.deploy` (already needed
+for `deploy.sh`).
+
 ## CI/CD (GitHub Actions)
 
 `.github/workflows/deploy.yml` automates step 4 above — it does the

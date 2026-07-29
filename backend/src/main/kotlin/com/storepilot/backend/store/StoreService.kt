@@ -115,9 +115,16 @@ class StoreService(
     @Transactional
     fun create(input: StoreApplicationInput): StoreResponse {
         val identity = currentActor.currentIdentityOrNull() ?: throw ForbiddenException("Authentication required")
+        // Buyer and seller are mutually exclusive identities (see
+        // AuthController.register()'s doc comment) — refuse to let an
+        // existing buyer account also become a seller, rather than
+        // silently polluting it with both Cognito groups.
+        if (currentActor.isBuyer()) {
+            throw ConflictException("This account is registered as a buyer — create a separate account to sell.")
+        }
         val seller = sellerRepository.findByCognitoSub(identity.sub) ?: run {
             val created = sellerRepository.save(Seller(cognitoSub = identity.sub, email = identity.email, name = identity.name))
-            grantSellerGroup(identity.sub)
+            grantSellerGroup(identity.username)
             created
         }
 
@@ -144,20 +151,20 @@ class StoreService(
     }
 
     /** Retries once — if this ultimately fails, the exception aborts create()'s whole transaction (rolling back the Store + Seller insert together) rather than leaving a seller with a store but no role. */
-    private fun grantSellerGroup(sub: String) {
+    private fun grantSellerGroup(username: String) {
         repeat(2) { attempt ->
             try {
                 cognitoClient.adminAddUserToGroup(
                     AdminAddUserToGroupRequest.builder()
                         .userPoolId(cognitoProperties.userPoolId)
-                        .username(sub)
+                        .username(username)
                         .groupName("seller")
                         .build(),
                 )
                 return
             } catch (e: CognitoIdentityProviderException) {
                 if (attempt == 1) {
-                    log.error("Failed to add {} to Cognito 'seller' group after retry — aborting onboarding", sub, e)
+                    log.error("Failed to add {} to Cognito 'seller' group after retry — aborting onboarding", username, e)
                     throw e
                 }
             }

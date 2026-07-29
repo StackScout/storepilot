@@ -60,6 +60,16 @@ private const val REFRESH_TOKEN_MAX_AGE_SECONDS = 60L * 60 * 24 * 30 // matches 
  * pragmatic MVP trade-off, not a security requirement being ignored. Adding
  * real email verification later is a frontend (confirmation-code UI) +
  * backend (ConfirmSignUp call) addition on top of this, not a rework.
+ *
+ * Buyer and seller are deliberately mutually exclusive identities, not two
+ * roles one account can hold — register() never grants "buyer" to a
+ * seller-track signup. A "seller" registration (input.accountType ==
+ * "seller") gets no Cognito group at all until onboarding (POST
+ * /api/stores, see StoreService.create) grants "seller"; StoreService also
+ * refuses to onboard an account that already holds "buyer". One email can
+ * never end up holding both groups going forward — someone who wants both
+ * needs a separate account, same as most marketplaces that keep merchant
+ * and consumer identities apart.
  */
 @RestController
 class AuthController(
@@ -78,6 +88,9 @@ class AuthController(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): AuthSessionResponse {
+        require(input.accountType == "buyer" || input.accountType == "seller") {
+            "accountType must be \"buyer\" or \"seller\""
+        }
         try {
             cognitoClient.adminCreateUser(
                 AdminCreateUserRequest.builder()
@@ -106,11 +119,21 @@ class AuthController(
                 .build(),
         )
 
-        addToGroupWithRetry(input.email, "buyer")
+        // Seller registrations get no group yet — StoreService.create()
+        // (onboarding) is the only thing that ever grants "seller", so a
+        // seller-track account can never end up also holding "buyer".
+        if (input.accountType == "buyer") {
+            addToGroupWithRetry(input.email, "buyer")
+        }
 
         val authResult = adminInitiateAuth(input.email, input.password)
         setAuthCookies(response, request.isSecure, authResult)
-        return AuthSessionResponse(signedIn = true, role = "buyer", email = input.email, name = input.name)
+        return AuthSessionResponse(
+            signedIn = true,
+            role = if (input.accountType == "buyer") "buyer" else null,
+            email = input.email,
+            name = input.name,
+        )
     }
 
     @PostMapping("/api/auth/login")
@@ -266,11 +289,15 @@ class AuthController(
     fun logout(request: HttpServletRequest, response: HttpServletResponse): AuthSessionResponse {
         val auth = SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
         if (auth != null) {
+            // Cognito's Username (required here) isn't necessarily the JWT's
+            // `sub` claim — see CurrentActor.fetchProfileFromCognito's doc
+            // comment — so use the token's own "username" claim instead.
+            val username = auth.token.getClaimAsString("username") ?: auth.token.subject
             try {
                 cognitoClient.adminUserGlobalSignOut(
                     AdminUserGlobalSignOutRequest.builder()
                         .userPoolId(cognitoProperties.userPoolId)
-                        .username(auth.token.subject)
+                        .username(username)
                         .build(),
                 )
             } catch (e: CognitoIdentityProviderException) {
@@ -278,7 +305,7 @@ class AuthController(
                 // the Cognito-side revocation call fails (e.g. transient
                 // network error) — same "don't fail the primary action for
                 // a secondary side effect" principle as OrderNotifier.
-                log.warn("Failed to revoke Cognito session for {} during logout", auth.token.subject, e)
+                log.warn("Failed to revoke Cognito session for {} during logout", username, e)
             }
         }
         clearAuthCookies(response, request.isSecure)
@@ -297,7 +324,13 @@ class AuthController(
     fun session(): AuthSessionResponse {
         val auth = SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
             ?: return AuthSessionResponse(signedIn = false)
-        val role = auth.authorities.firstOrNull()?.authority?.removePrefix("ROLE_")?.lowercase()
+        // Not just .firstOrNull() — Spring Security's OAuth2 resource server
+        // adds its own non-role authorities alongside CognitoGroupsAuthoritiesConverter's
+        // ROLE_* ones (e.g. a bearer-token authentication factor marker), so
+        // a groupless seller-track account (see StoreService.create's doc
+        // comment) could otherwise pick up a bogus "role" here.
+        val role = auth.authorities.firstOrNull { it.authority?.startsWith("ROLE_") == true }
+            ?.authority?.removePrefix("ROLE_")?.lowercase()
         val (email, name) = when (role) {
             "buyer" -> currentActor.buyerOrNull()?.let { it.email to it.name }
             "seller" -> currentActor.sellerOrNull()?.let { it.email to it.name }

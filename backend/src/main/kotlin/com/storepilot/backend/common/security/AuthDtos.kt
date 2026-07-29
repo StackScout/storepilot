@@ -13,6 +13,12 @@ data class RegisterInput(
     @field:NotBlank(message = "Password is required")
     @field:Size(min = 8, message = "Password must be at least 8 characters")
     val password: String,
+    // "buyer" or "seller" — determines which Cognito group (if any) is
+    // granted immediately. Buyer and seller are mutually exclusive
+    // identities (see AuthController.register()'s doc comment): a "seller"
+    // registration gets no group at all until onboarding grants "seller".
+    @field:NotBlank(message = "Account type is required")
+    val accountType: String,
 )
 
 data class LoginInput(

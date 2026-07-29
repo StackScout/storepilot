@@ -46,7 +46,7 @@ function BuyerRegisterForm() {
 
   const mutation = useMutation({
     mutationFn: (values: RegisterFormValues) =>
-      authService.register(values.name, values.email, values.password),
+      authService.register(values.name, values.email, values.password, "buyer"),
     onSuccess: () => {
       toast.success("Account created!");
       queryClient.clear();

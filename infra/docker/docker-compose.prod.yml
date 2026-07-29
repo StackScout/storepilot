@@ -95,14 +95,18 @@ services:
     build:
       context: ../../app
       args:
-        # The only build-time frontend config left — country content
-        # (platform name, currency, states, fees, ...) now comes from the
-        # backend's platform_settings/states tables at runtime, via GET
-        # /api/platform-config and GET /api/states (see
-        # app/src/lib/platform-config.ts), not NEXT_PUBLIC_* build args.
-        # This is what lets the same built image serve any country: only
-        # the backend's DB differs, not the frontend build.
+        # Country content (platform name, currency, states, fees, ...) comes
+        # from the backend's platform_settings/states tables at runtime, via
+        # GET /api/platform-config and GET /api/states (see
+        # app/src/lib/platform-config.ts), not a NEXT_PUBLIC_* build arg —
+        # that's what lets the same built image serve any country, only the
+        # backend's DB differs. NEXT_PUBLIC_COGNITO_* below is the exception:
+        # proxy.ts's own JWT verification needs the Cognito issuer at build
+        # time (see Dockerfile's comment) — same values as the backend's
+        # COGNITO_REGION/COGNITO_USER_POOL_ID env vars above.
         NEXT_PUBLIC_API_URL: ${BACKEND_ORIGIN}
+        NEXT_PUBLIC_COGNITO_REGION: ${COGNITO_REGION}
+        NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
     restart: unless-stopped
     depends_on:
       - backend

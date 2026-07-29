@@ -18,29 +18,32 @@ const jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
  * API call) — this is just fast route-gating so a signed-out visitor never
  * even renders the seller/buyer/admin shell.
  */
-async function getGroups(request: NextRequest): Promise<string[]> {
+async function getAuthState(request: NextRequest): Promise<{ groups: string[]; authenticated: boolean }> {
   const token = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
-  if (!token) return [];
+  if (!token) return { groups: [], authenticated: false };
   try {
     const { payload } = await jwtVerify(token, jwks, { issuer });
     const groups = payload["cognito:groups"];
-    return Array.isArray(groups) ? groups.filter((g): g is string => typeof g === "string") : [];
+    return {
+      groups: Array.isArray(groups) ? groups.filter((g): g is string => typeof g === "string") : [],
+      authenticated: true,
+    };
   } catch {
     // Expired/invalid/malformed token — treat exactly like "signed out"
     // rather than erroring the request.
-    return [];
+    return { groups: [], authenticated: false };
   }
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const groups = await getGroups(request);
-  // A single account can hold more than one group (e.g. a seller who is
-  // also a buyer) — check membership, don't assume one exclusive "role".
+  const { groups, authenticated } = await getAuthState(request);
+  // Buyer, seller, and admin are mutually exclusive identities (see
+  // backend AuthController.register()'s doc comment) — an account only
+  // ever holds one of these groups.
   const isSeller = groups.includes("seller");
   const isBuyer = groups.includes("buyer");
   const isAdmin = groups.includes("admin");
-  const isSignedIn = groups.length > 0;
   const isAccountAuthPage = pathname === "/account/login" || pathname === "/account/register";
   const isAdminLoginPage = pathname === "/admin/login";
 
@@ -54,9 +57,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Onboarding requires *some* account (buyer or seller — it's what grants
-  // the seller role in the first place), not specifically an existing seller.
-  if (pathname === "/onboarding" && !isSignedIn) {
+  // Onboarding requires *any* authenticated account — a freshly-registered
+  // seller-track account has zero Cognito groups until this step grants
+  // "seller", so this must check for a valid token, not group membership.
+  if (pathname === "/onboarding" && !authenticated) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);

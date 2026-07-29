@@ -25,10 +25,12 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 /**
  * Creates the Cognito account that seller onboarding then attaches a store
- * to — this is deliberately the same account type buyers register with
- * (POST /api/auth/register always grants the "buyer" group first); becoming
- * a seller is a separate, later step (see /onboarding) that adds the
- * seller role to whichever account is currently signed in.
+ * to. Unlike account/register (buyer), this grants no Cognito group at
+ * all — becoming a seller is a separate, later step (see /onboarding) that
+ * adds the "seller" group. Buyer and seller are mutually exclusive
+ * identities: this account can never become a buyer, and an existing
+ * buyer account is refused at /onboarding — see backend
+ * AuthController.register()'s doc comment.
  */
 export default function SellerRegisterPage() {
   return (
@@ -52,7 +54,7 @@ function SellerRegisterForm() {
 
   const mutation = useMutation({
     mutationFn: (values: RegisterFormValues) =>
-      authService.register(values.name, values.email, values.password),
+      authService.register(values.name, values.email, values.password, "seller"),
     onSuccess: () => {
       toast.success("Account created!");
       queryClient.clear();

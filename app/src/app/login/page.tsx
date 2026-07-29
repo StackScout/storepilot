@@ -46,20 +46,31 @@ function SellerLoginForm() {
     mutationFn: async (values: LoginFormValues) => {
       const session = await authService.login(values.email, values.password);
       // See the equivalent check in account/login/page.tsx — authService.login()
-      // is role-agnostic, so a buyer-only account would otherwise authenticate
+      // is role-agnostic, so a non-seller account would otherwise authenticate
       // here and then get silently bounced back by proxy.ts's /dashboard gate.
-      if (session.role !== "seller") {
+      // A groupless role (register() no longer grants "buyer" to a seller
+      // registration — see backend AuthController's doc comment) means they
+      // registered but never finished onboarding — resume it instead of
+      // rejecting. "buyer" is also accepted here, but only as backward
+      // compatibility for accounts created before this fix that still hold
+      // both groups; new registrations can never reach this state.
+      if (session.role && session.role !== "seller" && session.role !== "buyer") {
         await authService.logout();
         throw new Error("This account isn't registered as a seller. Try the buyer or admin sign-in instead.");
       }
       return session;
     },
-    onSuccess: () => {
+    onSuccess: (session) => {
       // React Query's own cache (auth-session, buyer/store lookups, ...) is
       // separate from Next's router cache — router.refresh() alone won't
       // clear a "signed out" result some component cached before login.
       queryClient.clear();
-      router.push(redirectTo);
+      if (session.role !== "seller") {
+        toast.message("Let's finish setting up your store.");
+        router.push("/onboarding");
+      } else {
+        router.push(redirectTo);
+      }
       router.refresh();
     },
     onError: (error: Error) => toast.error(error.message || "Invalid email or password"),

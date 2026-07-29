@@ -52,19 +52,23 @@ class CurrentActor(
             ?.authorities?.any { it.authority == "ROLE_$role" } ?: false
 
     /**
-     * This pool's UsernameAttributes is `email`, which makes Cognito
-     * auto-generate an opaque username for the account — that generated
-     * value equals the `sub` claim (verified against this project's dev
-     * pool), so `sub` is a valid AdminGetUser lookup key here.
+     * AdminGetUser needs Cognito's actual Username, which is NOT
+     * necessarily the `sub` claim — that only coincides when a pool's
+     * UsernameAttributes forces an opaque generated username (not the case
+     * for every pool this app has been deployed against). The access
+     * token's own "username" claim always carries the real Username
+     * regardless of pool config — same claim googleCallback() already
+     * reads for the same reason.
      */
-    private fun fetchProfileFromCognito(sub: String): Pair<String, String> {
+    private fun fetchProfileFromCognito(jwt: Jwt): Pair<String, String> {
+        val username = requireNotNull(jwt.getClaimAsString("username")) { "JWT has no username claim" }
         val request = AdminGetUserRequest.builder()
             .userPoolId(cognitoProperties.userPoolId)
-            .username(sub)
+            .username(username)
             .build()
         val attributes = cognitoClient.adminGetUser(request).userAttributes()
             .associate { it.name() to it.value() }
-        val email = requireNotNull(attributes["email"]) { "Cognito user $sub has no email attribute" }
+        val email = requireNotNull(attributes["email"]) { "Cognito user $username has no email attribute" }
         val name = attributes["name"] ?: email
         return email to name
     }
@@ -92,7 +96,7 @@ class CurrentActor(
         val sub = requireNotNull(jwt.subject) { "JWT has no sub claim" }
         buyerRepository.findByCognitoSub(sub)?.let { return it }
 
-        val (email, name) = fetchProfileFromCognito(sub)
+        val (email, name) = fetchProfileFromCognito(jwt)
         // Link an existing guest-checkout row by email if one exists (same
         // person checked out as a guest before creating an account) instead
         // of creating a duplicate.
@@ -105,6 +109,9 @@ class CurrentActor(
     }
 
     fun requireBuyer(): Buyer = buyerOrNull() ?: throw ForbiddenException("A buyer account is required for this action")
+
+    /** Used by StoreService.create() to refuse onboarding an existing buyer — buyer/seller are mutually exclusive identities, see AuthController.register()'s doc comment. */
+    fun isBuyer(): Boolean = hasRole("BUYER")
 
     /** Null until seller onboarding (POST /api/stores) creates the row — never JIT-created. */
     fun sellerOrNull(): Seller? {
@@ -124,8 +131,9 @@ class CurrentActor(
     fun currentIdentityOrNull(): CognitoIdentity? {
         val jwt = jwtOrNull() ?: return null
         val sub = requireNotNull(jwt.subject) { "JWT has no sub claim" }
-        val (email, name) = fetchProfileFromCognito(sub)
-        return CognitoIdentity(sub = sub, email = email, name = name)
+        val username = requireNotNull(jwt.getClaimAsString("username")) { "JWT has no username claim" }
+        val (email, name) = fetchProfileFromCognito(jwt)
+        return CognitoIdentity(sub = sub, username = username, email = email, name = name)
     }
 
     /** JIT-provisioned — safe because there's no public path into the Cognito `admin` group. Same read-only-transaction caveat as buyerOrNull — the caller must not be @Transactional(readOnly = true). */
@@ -136,11 +144,12 @@ class CurrentActor(
         val sub = requireNotNull(jwt.subject) { "JWT has no sub claim" }
         adminRepository.findByCognitoSub(sub)?.let { return it }
 
-        val (email, name) = fetchProfileFromCognito(sub)
+        val (email, name) = fetchProfileFromCognito(jwt)
         return adminRepository.save(Admin(cognitoSub = sub, email = email, name = name))
     }
 
     fun requireAdmin(): Admin = adminOrNull() ?: throw ForbiddenException("An admin account is required for this action")
 }
 
-data class CognitoIdentity(val sub: String, val email: String, val name: String)
+/** `username` (not `sub`) is what Cognito Admin* APIs require as the lookup/mutation key — see fetchProfileFromCognito's doc comment. */
+data class CognitoIdentity(val sub: String, val username: String, val email: String, val name: String)

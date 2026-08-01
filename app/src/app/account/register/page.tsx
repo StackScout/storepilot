@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,15 +12,22 @@ import { Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
 import { authService } from "@/services";
 
-const registerSchema = z.object({
-  name: z.string().min(2, "Enter your full name"),
-  email: z.string().email("Enter a valid email"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
+const registerSchema = z
+  .object({
+    name: z.string().min(2, "Enter your full name"),
+    email: z.string().email("Enter a valid email"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Confirm your password"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -37,6 +44,7 @@ function BuyerRegisterForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/account";
   const queryClient = useQueryClient();
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -86,11 +94,26 @@ function BuyerRegisterForm() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" {...register("password")} />
+              <Input id="password" type={showPassword ? "text" : "password"} {...register("password")} />
               {errors.password ? (
                 <p className="text-destructive text-xs">{errors.password.message}</p>
               ) : null}
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Input
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                {...register("confirmPassword")}
+              />
+              {errors.confirmPassword ? (
+                <p className="text-destructive text-xs">{errors.confirmPassword.message}</p>
+              ) : null}
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={showPassword} onCheckedChange={(checked) => setShowPassword(checked === true)} />
+              <span className="text-muted-foreground">Show password</span>
+            </label>
             <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               Create account

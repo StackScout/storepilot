@@ -20,6 +20,7 @@ fun Order.toResponse(receiptStorageService: ReceiptStorageService, fileStorageSe
             )
         },
         subtotal = subtotal,
+        deliveryMethod = deliveryMethod.wireValue,
         shippingFee = shippingFee,
         platformFee = platformFee,
         total = total,

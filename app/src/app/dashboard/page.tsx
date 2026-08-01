@@ -35,13 +35,14 @@ export default function DashboardOverviewPage() {
   const orders = ordersQuery.data?.content ?? [];
   const products = productsQuery.data ?? [];
 
-  const revenue = orders
-    .filter((o) => o.status !== "cancelled")
-    .reduce((sum, o) => sum + o.subtotal, 0);
-  const platformFees = orders
-    .filter((o) => o.status !== "cancelled")
-    .reduce((sum, o) => sum + o.platformFee, 0);
+  // "Paid" here matches the payouts page's own definition of earnings
+  // (see /dashboard/payouts) — a non-cancelled-but-still-unpaid COD order
+  // isn't money in hand yet, so it shouldn't count as revenue here either.
+  const paidOrders = orders.filter((o) => o.status !== "cancelled" && o.paymentStatus === "paid");
+  const revenue = paidOrders.reduce((sum, o) => sum + o.subtotal, 0);
+  const platformFees = paidOrders.reduce((sum, o) => sum + o.platformFee, 0);
   const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const activeProducts = products.filter((p) => p.status === "active");
   const lowStockProducts = products.filter(
     (p) => p.trackStock && p.status !== "out-of-stock" && p.stockQuantity <= 5,
   );
@@ -54,9 +55,9 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total revenue" value={formatCurrency(revenue, currency)} icon={Wallet} />
+        <StatCard label="Revenue (paid)" value={formatCurrency(revenue, currency)} icon={Wallet} />
         <StatCard label="Pending orders" value={String(pendingCount)} icon={ClipboardList} />
-        <StatCard label="Active products" value={String(products.length)} icon={Package} />
+        <StatCard label="Active products" value={String(activeProducts.length)} icon={Package} />
         <StatCard
           label={`Platform fees (${platformFeePercent}%)`}
           value={formatCurrency(platformFees, currency)}

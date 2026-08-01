@@ -56,6 +56,7 @@ class ProductService(
         val categoryEnum = category?.let { wireValueOf<StoreCategory>(it) }
         val spec = Specification.allOf(
             ProductSpecifications.storeActive(),
+            ProductSpecifications.notDraft(),
             ProductSpecifications.hasCategory(categoryEnum),
             ProductSpecifications.matchesQuery(query?.trim()),
             ProductSpecifications.priceBetween(minPrice, maxPrice),
@@ -71,17 +72,32 @@ class ProductService(
         return results.toPageResponse { it.toResponse(fileStorageService) }
     }
 
-    fun getById(id: UUID): ProductResponse =
-        productRepository.findById(id).orElseThrow { NotFoundException("Product $id not found") }.toResponse(fileStorageService)
+    /**
+     * A draft is invisible to anyone but its owning seller — reported as
+     * NotFoundException (not Forbidden) so a stranger probing product IDs
+     * can't distinguish "doesn't exist" from "exists but is a draft."
+     * Shared by both the public product-detail lookup and the seller's own
+     * edit-product page, so ownership (not just role) has to be checked.
+     */
+    fun getById(id: UUID): ProductResponse {
+        val product = productRepository.findById(id).orElseThrow { NotFoundException("Product $id not found") }
+        if (product.status == ProductStatus.DRAFT && !isOwnedByCurrentSeller(product.store)) {
+            throw NotFoundException("Product $id not found")
+        }
+        return product.toResponse(fileStorageService)
+    }
 
     /** For internal cross-service use (e.g. OrderService snapshotting item details) — returns the entity, not a DTO. */
     fun findEntity(id: UUID): Product? = productRepository.findById(id).orElse(null)
 
     /**
-     * Mirrors products.service.ts#decrementStock exactly: clamps to zero
-     * rather than rejecting insufficient stock, and silently skips a
-     * productId that no longer exists — both are documented, accepted gaps
-     * (see docs/gaps-and-assumptions.md), not something to "fix" here.
+     * OrderService.createOrder() already rejects a checkout whose quantity
+     * exceeds stock before this ever runs (for any trackStock product), so
+     * the maxOf(0, ...) clamp here is just defense-in-depth against a
+     * concurrent transaction racing the same product between that check and
+     * this decrement — not the primary guard against overselling anymore.
+     * Silently skipping a productId that no longer exists is still an
+     * accepted gap (see docs/gaps-and-assumptions.md).
      */
     @Transactional
     fun decrementStock(items: List<Pair<UUID, Int>>) {
@@ -94,8 +110,21 @@ class ProductService(
         }
     }
 
-    fun listByStore(storeId: UUID): List<ProductResponse> =
-        productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId).map { it.toResponse(fileStorageService) }
+    /**
+     * Shared by the seller's own product list (needs every status,
+     * including drafts) and the public storefront's per-store product grid
+     * (must never show a draft) — same endpoint, so the response depends on
+     * whether the caller owns this store, not on a query param a public
+     * caller could just set themselves.
+     */
+    fun listByStore(storeId: UUID): List<ProductResponse> {
+        val products = if (isOwnedByCurrentSeller(storeId)) {
+            productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId)
+        } else {
+            productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT)
+        }
+        return products.map { it.toResponse(fileStorageService) }
+    }
 
     @Transactional
     fun create(storeId: UUID, input: ProductFormInput, images: List<MultipartFile>): ProductResponse {
@@ -184,6 +213,15 @@ class ProductService(
     private fun requireOwnership(store: Store) {
         val seller = currentActor.requireSeller()
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store ${store.id}")
+    }
+
+    /** Unlike requireOwnership, never throws — used where a non-owner (or a guest) is a legitimate caller, just with a narrower view. */
+    private fun isOwnedByCurrentSeller(store: Store): Boolean = currentActor.sellerOrNull()?.id == store.seller.id
+
+    private fun isOwnedByCurrentSeller(storeId: UUID): Boolean {
+        val seller = currentActor.sellerOrNull() ?: return false
+        val store = storeRepository.findById(storeId).orElse(null) ?: return false
+        return store.seller.id == seller.id
     }
 
     private fun uniqueSlug(storeId: UUID, name: String): String {

@@ -18,6 +18,13 @@ class StripeController(
     fun startOnboarding(@PathVariable storeId: UUID): StripeOnboardingResponse =
         stripeConnectService.startOnboarding(storeId)
 
+    /** POST /api/stores/{storeId}/stripe-connect/refresh — see StripeConnectService.refreshAccountStatus's doc comment. */
+    @PostMapping("/api/stores/{storeId}/stripe-connect/refresh")
+    fun refreshStripeStatus(@PathVariable storeId: UUID): ResponseEntity<Void> {
+        stripeConnectService.refreshAccountStatus(storeId)
+        return ResponseEntity.noContent().build()
+    }
+
     /** POST /api/orders/{id}/stripe-checkout — guest-reachable, same as PayHere's equivalent (order id is the credential). */
     @PostMapping("/api/orders/{id}/stripe-checkout")
     fun checkout(@PathVariable id: UUID): StripeCheckoutSessionResponse = stripeService.createCheckoutSession(id)

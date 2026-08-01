@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Banknote, CreditCard, Landmark, Truck, Loader2, TriangleAlert, UserCheck } from "lucide-react";
+import { Banknote, CreditCard, Landmark, MapPin, Truck, Loader2, TriangleAlert, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,21 +33,40 @@ import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
 import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
 import { ordersService, buyersService, storesService } from "@/services";
-import type { Order, PaymentMethod } from "@/types";
+import type { DeliveryMethod, Order, PaymentMethod } from "@/types";
 
-const checkoutSchema = z.object({
-  fullName: z.string().min(2, "Enter the recipient's full name"),
-  email: z.string().email("Enter a valid email"),
-  phone: z
-    .string()
-    .min(9, "Enter a valid phone number")
-    .regex(/^[0-9+\s]+$/, "Digits only"),
-  addressLine1: z.string().min(5, "Enter the delivery address"),
-  city: z.string().min(2, "Enter a city/town"),
-  state: z.string().min(1, "Select a state/province"),
-  postalCode: z.string().min(4, "Enter a postal code"),
-  paymentMethod: z.enum(["payhere", "cod", "bank-transfer", "stripe"]),
-});
+const checkoutSchema = z
+  .object({
+    fullName: z.string().min(2, "Enter the recipient's full name"),
+    email: z.string().email("Enter a valid email"),
+    phone: z
+      .string()
+      .min(9, "Enter a valid phone number")
+      .regex(/^[0-9+\s]+$/, "Digits only"),
+    // Only required for deliveryMethod === "shipping" — see the
+    // superRefine below. A pickup order has no address at all.
+    addressLine1: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    postalCode: z.string().optional(),
+    paymentMethod: z.enum(["payhere", "cod", "bank-transfer", "stripe"]),
+    deliveryMethod: z.enum(["shipping", "pickup"]),
+  })
+  .superRefine((data, ctx) => {
+    if (data.deliveryMethod !== "shipping") return;
+    if (!data.addressLine1 || data.addressLine1.length < 5) {
+      ctx.addIssue({ code: "custom", path: ["addressLine1"], message: "Enter the delivery address" });
+    }
+    if (!data.city || data.city.length < 2) {
+      ctx.addIssue({ code: "custom", path: ["city"], message: "Enter a city/town" });
+    }
+    if (!data.state) {
+      ctx.addIssue({ code: "custom", path: ["state"], message: "Select a state/province" });
+    }
+    if (!data.postalCode || data.postalCode.length < 4) {
+      ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Enter a postal code" });
+    }
+  });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 
@@ -78,6 +97,16 @@ export function CheckoutForm() {
     queryFn: () => storesService.getStoreSettings(cart.storeId!),
     enabled: !!cart.storeId,
   });
+  // Store contact info shown on the pickup card (WhatsApp + city/state) —
+  // there's no separate pickup-location entity, buyers coordinate the
+  // actual meeting point/time with the seller directly, matching this
+  // marketplace's existing WhatsApp-first contact model.
+  const { data: store } = useQuery({
+    queryKey: ["store", cart.storeId],
+    queryFn: () => storesService.getStoreById(cart.storeId!),
+    enabled: !!cart.storeId,
+  });
+  const pickupEnabled = storeSettings?.pickupEnabled ?? false;
   const codEnabled = storeSettings?.codEnabled ?? true;
   const onlinePaymentEnabled = storeSettings?.onlinePaymentEnabled ?? true;
   // Off by default while settings load, matching the backend's own default —
@@ -103,7 +132,7 @@ export function CheckoutForm() {
     formState: { errors },
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: { state: "", paymentMethod: "cod", email: session.email ?? "" },
+    defaultValues: { state: "", paymentMethod: "cod", deliveryMethod: "shipping", email: session.email ?? "" },
   });
 
   // Prefill from the signed-in buyer's saved address once it loads — a
@@ -119,6 +148,7 @@ export function CheckoutForm() {
       state: buyer.defaultShipping.state,
       postalCode: buyer.defaultShipping.postalCode,
       paymentMethod: "cod",
+      deliveryMethod: "shipping",
     });
   }, [buyer, reset]);
 
@@ -133,6 +163,15 @@ export function CheckoutForm() {
 
   const state = watch("state");
   const paymentMethod = watch("paymentMethod");
+  const deliveryMethod = watch("deliveryMethod");
+
+  // Pickup always defaults to "shipping" (see defaultValues/reset above) —
+  // this only matters if the store's pickupEnabled flips off after the
+  // buyer already had it selected (e.g. settings still loading).
+  useEffect(() => {
+    if (!storeSettings) return;
+    if (deliveryMethod === "pickup" && !pickupEnabled) setValue("deliveryMethod", "shipping");
+  }, [storeSettings, pickupEnabled, deliveryMethod, setValue]);
 
   // If the selected method isn't actually offered by this store (including
   // right after the buyer-prefill reset above, which always defaults to
@@ -151,33 +190,37 @@ export function CheckoutForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: CheckoutFormValues) => {
+      const isPickup = values.deliveryMethod === "pickup";
       const shipping = {
         fullName: values.fullName,
         phone: values.phone,
-        addressLine1: values.addressLine1,
-        city: values.city,
-        state: values.state,
-        postalCode: values.postalCode,
+        // Omitted for pickup — there's no address to send.
+        addressLine1: isPickup ? undefined : values.addressLine1,
+        city: isPickup ? undefined : values.city,
+        state: isPickup ? undefined : values.state,
+        postalCode: isPickup ? undefined : values.postalCode,
       };
       const order = await ordersService.createOrder({
         storeId: cart.storeId!,
         items: availableItems.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         shipping,
         paymentMethod: values.paymentMethod as PaymentMethod,
+        deliveryMethod: values.deliveryMethod,
         email: values.email,
       });
       // Auto-save this address as the buyer's default, but only the first
       // time (no saved address yet) — once they have one, only an explicit
       // edit on the account page should change it, not whatever they
       // happened to type for one particular order (e.g. shipping a gift
-      // elsewhere). Awaited — not fire-and-forget — because the PayHere
+      // elsewhere). Skipped entirely for pickup — there's no real address
+      // to save. Awaited — not fire-and-forget — because the PayHere
       // path below navigates the browser away immediately afterwards
       // (submitPayHereCheckout does a real form submit, not client routing),
       // which would otherwise abort this request mid-flight. Still
       // best-effort: a failure here must never block order placement, and
       // the order itself is linked to the signed-in buyer server-side, from
       // the auth cookie — never a client-supplied id.
-      if (isSignedInBuyer && !buyer?.defaultShipping) {
+      if (!isPickup && isSignedInBuyer && !buyer?.defaultShipping) {
         try {
           await buyersService.updateDefaultShipping(shipping);
         } catch {
@@ -279,12 +322,50 @@ export function CheckoutForm() {
           <Card>
             <CardContent className="space-y-4">
               <h2 className="font-semibold">Delivery details</h2>
-              {buyer?.defaultShipping ? (
+              {buyer?.defaultShipping && deliveryMethod === "shipping" ? (
                 <div className="bg-primary/5 text-primary flex items-center gap-2 rounded-md p-2.5 text-xs">
                   <UserCheck className="size-3.5 shrink-0" />
                   Prefilled from your saved address — feel free to edit it below.
                 </div>
               ) : null}
+
+              {pickupEnabled ? (
+                <RadioGroup
+                  value={deliveryMethod}
+                  onValueChange={(v) => setValue("deliveryMethod", v as DeliveryMethod, { shouldValidate: true })}
+                  className="grid gap-3 sm:grid-cols-2"
+                >
+                  <Label
+                    htmlFor="delivery-shipping"
+                    className="hover:bg-accent/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 has-[[data-state=checked]]:border-primary"
+                  >
+                    <RadioGroupItem value="shipping" id="delivery-shipping" className="mt-0.5" />
+                    <span className="flex flex-1 items-start gap-2.5">
+                      <Truck className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        <span className="block text-sm font-medium">Ship to my address</span>
+                        <span className="text-muted-foreground block text-xs">
+                          {formatCurrency(flatShippingFee, currency)} delivery fee
+                        </span>
+                      </span>
+                    </span>
+                  </Label>
+                  <Label
+                    htmlFor="delivery-pickup"
+                    className="hover:bg-accent/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 has-[[data-state=checked]]:border-primary"
+                  >
+                    <RadioGroupItem value="pickup" id="delivery-pickup" className="mt-0.5" />
+                    <span className="flex flex-1 items-start gap-2.5">
+                      <MapPin className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        <span className="block text-sm font-medium">Pickup in store</span>
+                        <span className="text-muted-foreground block text-xs">Free — collect it yourself</span>
+                      </span>
+                    </span>
+                  </Label>
+                </RadioGroup>
+              ) : null}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="fullName">Full name</Label>
@@ -314,50 +395,68 @@ export function CheckoutForm() {
                     <p className="text-destructive text-xs">{errors.phone.message}</p>
                   ) : null}
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="addressLine1">Address</Label>
-                  <Input
-                    id="addressLine1"
-                    placeholder="House no, street, area"
-                    {...register("addressLine1")}
-                  />
-                  {errors.addressLine1 ? (
-                    <p className="text-destructive text-xs">{errors.addressLine1.message}</p>
-                  ) : null}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="city">City</Label>
-                  <Input id="city" placeholder="e.g. Parramatta" {...register("city")} />
-                  {errors.city ? <p className="text-destructive text-xs">{errors.city.message}</p> : null}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="postalCode">Postal code</Label>
-                  <Input id="postalCode" placeholder="e.g. 2150" {...register("postalCode")} />
-                  {errors.postalCode ? (
-                    <p className="text-destructive text-xs">{errors.postalCode.message}</p>
-                  ) : null}
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="state">State/Province</Label>
-                  <Select
-                    value={state}
-                    onValueChange={(v) => setValue("state", v as string, { shouldValidate: true })}
-                  >
-                    <SelectTrigger id="state" className="w-full">
-                      <SelectValue placeholder="Select a state/province" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(states ?? []).map((s) => (
-                        <SelectItem key={s.name} value={s.name}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.state ? (
-                    <p className="text-destructive text-xs">{errors.state.message}</p>
-                  ) : null}
-                </div>
+
+                {deliveryMethod === "pickup" ? (
+                  <div className="bg-muted/50 space-y-1 rounded-lg border p-3.5 text-sm sm:col-span-2">
+                    <p className="font-medium">Collect from {store?.name ?? "the seller"}</p>
+                    {store ? (
+                      <p className="text-muted-foreground">
+                        {store.address.city}, {store.address.state}
+                      </p>
+                    ) : null}
+                    <p className="text-muted-foreground pt-1 text-xs">
+                      After placing your order, message the seller on WhatsApp
+                      {store?.whatsappNumber ? ` (${store.whatsappNumber})` : ""} to arrange a pickup time.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="addressLine1">Address</Label>
+                      <Input
+                        id="addressLine1"
+                        placeholder="House no, street, area"
+                        {...register("addressLine1")}
+                      />
+                      {errors.addressLine1 ? (
+                        <p className="text-destructive text-xs">{errors.addressLine1.message}</p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="city">City</Label>
+                      <Input id="city" placeholder="e.g. Parramatta" {...register("city")} />
+                      {errors.city ? <p className="text-destructive text-xs">{errors.city.message}</p> : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="postalCode">Postal code</Label>
+                      <Input id="postalCode" placeholder="e.g. 2150" {...register("postalCode")} />
+                      {errors.postalCode ? (
+                        <p className="text-destructive text-xs">{errors.postalCode.message}</p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="state">State/Province</Label>
+                      <Select
+                        value={state}
+                        onValueChange={(v) => setValue("state", v as string, { shouldValidate: true })}
+                      >
+                        <SelectTrigger id="state" className="w-full">
+                          <SelectValue placeholder="Select a state/province" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(states ?? []).map((s) => (
+                            <SelectItem key={s.name} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.state ? (
+                        <p className="text-destructive text-xs">{errors.state.message}</p>
+                      ) : null}
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -510,13 +609,17 @@ export function CheckoutForm() {
                 <span>{formatCurrency(subtotal, currency)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Shipping</span>
-                <span>{formatCurrency(flatShippingFee, currency)}</span>
+                <span className="text-muted-foreground">{deliveryMethod === "pickup" ? "Pickup" : "Shipping"}</span>
+                <span>
+                  {deliveryMethod === "pickup" ? "Free" : formatCurrency(flatShippingFee, currency)}
+                </span>
               </div>
               <Separator />
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>
-                <span>{formatCurrency(subtotal + flatShippingFee, currency)}</span>
+                <span>
+                  {formatCurrency(subtotal + (deliveryMethod === "pickup" ? 0 : flatShippingFee), currency)}
+                </span>
               </div>
             </div>
             <Button

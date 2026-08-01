@@ -50,13 +50,13 @@ class StoreController(
     @PatchMapping("/api/stores/{storeId}/settings")
     fun upsertSettings(
         @PathVariable storeId: UUID,
-        @RequestBody input: StoreSettingsInput,
+        @Valid @RequestBody input: StoreSettingsInput,
     ): StoreSettingsResponse = storeService.updateSettingsAsSeller(storeId, input)
 
     @PatchMapping("/api/stores/{storeId}/profile")
     fun updateProfile(
         @PathVariable storeId: UUID,
-        @RequestBody input: StoreProfileInput,
+        @Valid @RequestBody input: StoreProfileInput,
     ): StoreResponse = storeService.updateProfileAsSeller(storeId, input)
 
     @PostMapping("/api/stores/{storeId}/driver-licence-document", consumes = ["multipart/form-data"])

@@ -240,8 +240,10 @@ export default function OrderTrackingPage({
               <span>{formatCurrency(order.subtotal, currency)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Shipping</span>
-              <span>{formatCurrency(order.shippingFee, currency)}</span>
+              <span className="text-muted-foreground">{order.deliveryMethod === "pickup" ? "Pickup" : "Shipping"}</span>
+              <span>
+                {order.deliveryMethod === "pickup" ? "Free" : formatCurrency(order.shippingFee, currency)}
+              </span>
             </div>
             <div className="flex justify-between text-base font-semibold">
               <span>Total</span>
@@ -317,12 +319,22 @@ export default function OrderTrackingPage({
           <Separator />
 
           <div>
-            <h2 className="mb-2 font-semibold">Delivering to</h2>
+            <h2 className="mb-2 font-semibold">
+              {order.deliveryMethod === "pickup" ? "Pickup" : "Delivering to"}
+            </h2>
             <p className="text-sm">{order.shipping.fullName}</p>
-            <p className="text-muted-foreground text-sm">
-              {order.shipping.addressLine1}, {order.shipping.city}, {order.shipping.state}{" "}
-              {order.shipping.postalCode}
-            </p>
+            {order.deliveryMethod === "pickup" ? (
+              <p className="text-muted-foreground text-sm">
+                Collect from {store?.name ?? "the seller"}
+                {store ? ` — ${store.address.city}, ${store.address.state}` : ""}. Message the
+                seller to arrange a time.
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                {order.shipping.addressLine1}, {order.shipping.city}, {order.shipping.state}{" "}
+                {order.shipping.postalCode}
+              </p>
+            )}
             <p className="text-muted-foreground text-sm">{order.shipping.phone}</p>
             <p className="text-muted-foreground text-sm">{order.buyerEmail}</p>
           </div>

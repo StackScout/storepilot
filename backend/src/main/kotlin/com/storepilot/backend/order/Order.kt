@@ -36,6 +36,8 @@ class Order(
     var items: MutableList<OrderItem> = mutableListOf(),
     @Column(nullable = false)
     var subtotal: Int,
+    @Column(name = "delivery_method", nullable = false)
+    var deliveryMethod: DeliveryMethod = DeliveryMethod.SHIPPING,
     @Column(name = "shipping_fee", nullable = false)
     var shippingFee: Int,
     @Column(name = "platform_fee", nullable = false)

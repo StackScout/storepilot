@@ -4,6 +4,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
+import jakarta.validation.constraints.Positive
 import java.time.Instant
 import java.util.UUID
 
@@ -40,6 +41,7 @@ data class OrderResponse(
     val storeSlug: String,
     val items: List<OrderItemResponse>,
     val subtotal: Int,
+    val deliveryMethod: String,
     val shippingFee: Int,
     val platformFee: Int,
     val total: Int,
@@ -57,23 +59,39 @@ data class OrderResponse(
     val buyerId: UUID?,
 )
 
+/**
+ * Address fields are nullable (unlike fullName/phone) because a pickup
+ * checkout omits them entirely — Jackson's Kotlin module rejects a missing
+ * JSON property against a non-nullable constructor param regardless of
+ * Bean Validation, so this has to be a real type-level nullability, not
+ * just a skipped `@Valid`. `@NotBlank` still fires on null, so
+ * BuyerController.updateDefaultShipping (which does apply `@Valid` here —
+ * that's a saved address book entry, always meant to be complete) keeps
+ * requiring them. CheckoutInput.shipping deliberately skips `@Valid`
+ * instead: OrderService.createOrder enforces fullName/phone
+ * unconditionally plus the address fields only when deliveryMethod is
+ * "shipping" — the same conditional-requiredness pattern
+ * OrderStatusUpdateInput's trackingNumber/courierServiceName already use
+ * for the SHIPPED-only case.
+ */
 data class ShippingDetailsInput(
     @field:NotBlank(message = "Enter the recipient's full name")
     val fullName: String,
     @field:NotBlank(message = "Enter a valid phone number")
     val phone: String,
     @field:NotBlank(message = "Enter the delivery address")
-    val addressLine1: String,
+    val addressLine1: String? = null,
     @field:NotBlank(message = "Enter a city/town")
-    val city: String,
+    val city: String? = null,
     @field:NotBlank(message = "Select a state/province")
-    val state: String,
+    val state: String? = null,
     @field:NotBlank(message = "Enter a postal code")
-    val postalCode: String,
+    val postalCode: String? = null,
 )
 
 data class CheckoutItemInput(
     val productId: UUID,
+    @field:Positive(message = "Quantity must be at least 1")
     val quantity: Int,
 )
 
@@ -87,11 +105,16 @@ data class CheckoutItemInput(
 data class CheckoutInput(
     val storeId: UUID,
     @field:NotEmpty(message = "Cart is empty")
-    val items: List<CheckoutItemInput>,
     @field:Valid
+    val items: List<CheckoutItemInput>,
+    // Deliberately not @Valid — see ShippingDetailsInput's doc comment.
+    // OrderService.createOrder enforces which fields are required, based
+    // on deliveryMethod below.
     val shipping: ShippingDetailsInput,
     @field:NotBlank(message = "Select a payment method")
     val paymentMethod: String,
+    @field:NotBlank(message = "Select a delivery method")
+    val deliveryMethod: String,
     @field:Email(message = "Enter a valid email")
     @field:NotBlank(message = "Enter a valid email")
     val email: String,

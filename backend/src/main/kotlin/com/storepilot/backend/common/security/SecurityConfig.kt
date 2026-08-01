@@ -102,7 +102,7 @@ class SecurityConfig {
                         "/api/stores/*/nic-document",
                         "/api/stores/*/business-reg-document",
                     ).hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard", "/api/stores/*/stripe-connect/refresh").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/products/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasRole("SELLER")

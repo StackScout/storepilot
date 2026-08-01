@@ -4,97 +4,150 @@
 > [`api-contracts.md`](api-contracts.md) · [`database-model.md`](database-model.md)
 > · [`overview.md`](overview.md)
 
-This is a snapshot of what's incomplete **as of the current frontend
-codebase**, organized by priority. It reflects gaps discovered by reading
-the code, not a committed product plan — treat "Must have" as "blocks a
-real launch," not as scheduled work.
+This is a snapshot of what's incomplete **as of the current codebase**
+(Spring Boot/Postgres backend + Next.js frontend), organized by priority.
+It reflects gaps discovered by reading the code, not a committed product
+plan — treat "Must have" as "blocks a real launch," not as scheduled work.
 
 ## Must have (blocks any real/production launch)
 
-- **A real backend and database.** Everything today is `localStorage`
-  pretending to be a server (see
-  [`frontend-architecture.md`](../app/docs/frontend-architecture.md)). No data survives
-  a cleared browser or is shared across devices/users.
-- **Real seller authentication.** Any email signs in as the one mock
-  seller; there is no password/credential check and no user table at all.
-  See [`features/seller-auth.md`](../app/docs/features/seller-auth.md).
-- ~~**Real seller/store registration.**~~ **Partially resolved** —
-  `/onboarding` now creates a real `Store` + `StoreSettings` row in
-  `"pending"` verification status. Still missing: a `User`/`Seller`
-  entity, so `/login` still can't route a returning email back to the
-  store it created. See
-  [`api-contracts.md#post-apiauthregister`](api-contracts.md#post-apiauthregister).
-- **Real authentication/authorization for `/admin`.** The new mock admin
-  tool (store approval, payout release) has **zero** auth today — see
-  [`gaps-and-assumptions.md`](gaps-and-assumptions.md#admin-has-no-authentication-or-authorization-at-all).
-- **A real credential for buyer accounts.** `/account/login` does a real
-  email lookup (unlike seller `/login`) but still has no password/OTP —
-  knowing an email is sufficient to sign in as that buyer. See
-  [`features/buyer-accounts.md`](../app/docs/features/buyer-accounts.md).
-- **Authorization/ownership checks on every seller-scoped resource**
-  (products, orders, store settings). Nothing today verifies a signed-in
-  seller's `storeId` matches the resource being read or written — invisible
-  with one seller, a critical security hole with more than one. See
-  [`api-contracts.md#authorization`](api-contracts.md#authorization).
-- **Server-side re-validation of all form input.** Every zod schema in the
-  frontend is client-side only; a real API must not trust it.
-- **Server-side stock validation at checkout.** Orders can currently be
-  placed for more units than are in stock; the mock just clamps to zero
-  instead of rejecting. See [`features/checkout.md`](../app/docs/features/checkout.md#edge-cases).
-- **A real payment gateway integration for PayHere**, including
-  webhook-driven `paymentStatus` updates. The mock marks `payhere` orders
-  "paid" instantly with no gateway interaction at all.
-- **A real order-status state machine enforced server-side**, not just by
+This section is kept current against the actual backend
+(`backend/src/main/kotlin/com/storepilot/backend/`), not the original
+`localStorage`-mock frontend the earlier version of this doc described.
+Everything below marked **Resolved** was verified against the current
+source, not assumed.
+
+- ~~**A real backend and database.**~~ **Resolved** — Spring Boot +
+  Postgres, package-by-feature, Flyway-migrated schema. See
+  [`frontend-architecture.md`](../app/docs/frontend-architecture.md) for
+  what this replaced.
+- ~~**Real seller authentication.**~~ **Resolved** — Cognito
+  `AdminInitiateAuth` password check in `AuthController.login()`; no more
+  "any email signs in as the mock seller."
+- ~~**Real seller/store registration.**~~ **Resolved** — a real `Seller`
+  JPA entity (keyed by Cognito `sub`) now exists; `GET /api/me/store`
+  routes a returning seller to the store they actually own, not a
+  hardcoded demo store.
+- ~~**Real authentication/authorization for `/admin`.**~~ **Resolved** —
+  `/api/admin/**` requires `ROLE_ADMIN` server-side
+  (`SecurityConfig.kt`), and `proxy.ts` gates the frontend `/admin/*`
+  routes on a verified JWT with the `admin` Cognito group. Admins are
+  bootstrapped out-of-band via `infra/scripts/create-admin.sh`, never
+  self-registered or promoted from a buyer/seller account.
+- ~~**A real credential for buyer accounts.**~~ **Resolved** — buyer
+  `/account/login` now does the same Cognito password check as sellers,
+  not just an email lookup.
+- ~~**Authorization/ownership checks on every seller-scoped resource.**~~
+  **Resolved** — `ProductService.requireOwnership()`,
+  `StoreService.requireOwnedStore()`, `OrderService.requireSellerOwnsOrder()`
+  all verify the signed-in seller's own `Store`/`Seller` id before any
+  read/write, consistently across services.
+- **Server-side re-validation of all form input.** Mostly done — auth,
+  product, and order DTOs use jakarta validation
+  (`@NotBlank`/`@Email`/`@Positive`/etc.), and `StoreDtos.kt`'s
+  `StoreSettingsInput`/`StoreProfileInput` now validate email/phone/URL/fee
+  fields too, with `@Valid` wired up on both `StoreController` PATCH
+  endpoints. Remaining gap: none identified as of this pass, but re-check
+  any new DTO added later — this list only reflects what's been audited.
+- ~~**Server-side stock validation at checkout.**~~ **Resolved** —
+  `OrderService.createOrder()` rejects checkout with `409 CONFLICT` if a
+  line item's quantity exceeds `stockQuantity`, for any product (and
+  store) that has stock management enabled; skipped entirely when either
+  is opted out, matching the existing `trackStock`/`stockManagementEnabled`
+  toggles. `ProductService.decrementStock()`'s clamp-to-zero is now just a
+  defense against a same-product race between two concurrent checkouts,
+  not the primary guard. See
+  [`features/checkout.md`](../app/docs/features/checkout.md#edge-cases).
+- ~~**A real payment gateway integration for PayHere.**~~ **Resolved** —
+  `PayHereController.notify()` verifies the MD5 signature and flips
+  `paymentStatus` asynchronously via webhook; orders start `UNPAID`, not
+  instantly "paid." (Stripe Connect is also fully implemented, beyond
+  what this doc originally scoped.)
+- ~~**A real order-status state machine enforced server-side.**~~
+  **Resolved** — `OrderService.updateStatus()` now checks the target
+  status against `ALLOWED_STATUS_TRANSITIONS` (mirroring the frontend's
+  `OrderStatusSelect`) and rejects an illegal transition (e.g.
+  `pending → delivered`) with `409 CONFLICT`, instead of relying solely on
   which options a dropdown happens to render.
-- **Signed/encrypted sessions**, replacing the current unsigned base64
-  cookie.
-- **Unique, unguessable order IDs** (the public order-confirmation/tracking
-  endpoint has no auth — see
-  [`api-contracts.md#get-apiordersid`](api-contracts.md#get-apiordersid)).
+- ~~**Signed/encrypted sessions.**~~ **Resolved** — real Cognito JWTs
+  (httpOnly cookies), verified server-side via the OAuth2 resource server
+  and edge-verified in `proxy.ts` via `jwtVerify` against Cognito's JWKS.
+- **Unique, unguessable order IDs** — order IDs are now UUIDs (no longer
+  guessable), but `GET /api/orders/{id}` is still fully unauthenticated by
+  design ("possession of the order ID is the credential," per
+  `OrderService.kt`'s doc comment) — a deliberate tradeoff, not an
+  oversight, but still worth a product decision if buyer PII exposure via
+  a leaked/shared order ID becomes a concern.
 
 ## Should have (expected of a serious v1, not launch-blocking)
 
-- **MFA for seller and admin accounts** (buyers lower priority). Cognito
-  supports this natively (TOTP/authenticator app preferred over SMS — no
-  SNS cost, not phishable), but it's a real feature, not a config toggle:
-  `AuthController`'s current login flow does a direct
+Audited against the current backend/frontend the same way as "Must have"
+above — several items below were previously marked open on the strength of
+an out-of-date description (e.g. "a URL-paste field" for product images)
+and are now confirmed resolved; others are newly fixed as of this pass.
+
+- **MFA for seller and admin accounts** (buyers lower priority). Still not
+  implemented — no TOTP/challenge-response code anywhere in
+  `AuthController.kt`. Cognito supports this natively (TOTP/authenticator
+  app preferred over SMS — no SNS cost, not phishable), but it's a real
+  feature, not a config toggle: the current login flow does a direct
   `ADMIN_USER_PASSWORD_AUTH` call that returns tokens immediately; with MFA
   enabled on the User Pool, Cognito instead returns a challenge that needs a
   second `AdminRespondToAuthChallenge` call, plus a new
   enroll/verify-TOTP endpoint and QR-code UI in account settings, plus an
   MFA-code prompt in the login UI. Applies to whichever actor types (buyer/
   seller/admin) share this login path.
-- ~~**Buyer accounts**~~ **Implemented** — optional register/sign-in, one
-  saved address, order history, guest checkout still fully supported. See
-  [`features/buyer-accounts.md`](../app/docs/features/buyer-accounts.md). Still open:
-  a real credential (no password today) and a multi-address book.
-- **Real image upload/storage** for products (currently a URL-paste field
-  — explicitly marked as a placeholder in source).
-- **Review/rating submission system** — `rating`/`reviewCount` are static
-  display numbers today with no backing `Review` entity or submission UI.
+- ~~**Buyer accounts... real credential**~~ **Resolved** — buyer
+  `/account/login` now does the same Cognito password check as sellers.
+  **Still open: a multi-address book** — `Buyer.defaultShipping` is still
+  a single embedded field, no `Address` entity/list/CRUD endpoints. See
+  [`features/buyer-accounts.md`](../app/docs/features/buyer-accounts.md).
+- ~~**Real image upload/storage for products**~~ **Resolved** — this bullet
+  described the old mock's URL-paste field, which no longer exists.
+  `ProductController`/`ProductService.storeImages()` accept real
+  `multipart/form-data` uploads via `FileStorageService`, and the frontend
+  product form uses an `<ImageUploader />`, not a text input.
+- **Review/rating submission system** — still not implemented. No `Review`
+  entity/controller/service anywhere in the backend; `rating`/
+  `reviewCount` are still static fields on `Product`/`Store` with no write
+  path, only ever set by seed data.
 - ~~**Fix the platform-fee source-of-truth inconsistency**~~ **Resolved** —
-  `platformFeeLkr` now reads the order's store's
+  `platformFee` now reads the order's store's
   `StoreSettings.transactionFeePercent`. See
   [`gaps-and-assumptions.md`](gaps-and-assumptions.md).
-- **Wire `codEnabled`/`onlinePaymentEnabled` into checkout.** Sellers can
-  toggle these in settings today, but the checkout page always offers both
-  payment methods regardless.
-- **Reconcile "earnings" definitions** between the dashboard overview
-  (all non-cancelled orders) and the payouts page (only paid orders) — see
-  [`features/payouts.md`](../app/docs/features/payouts.md).
-- **Fix the "Active products" stat card** — currently counts all
-  statuses (including drafts/out-of-stock), not just active ones.
-- **Hide draft products from public storefront/product queries** —
-  currently visible to anyone with the URL.
+- ~~**Wire `codEnabled`/`onlinePaymentEnabled` into checkout.**~~
+  **Resolved** — `checkout-form.tsx` now conditionally renders each
+  payment option (COD/online/bank-transfer/Stripe) based on the store's
+  actual settings, with an auto-fallback and a disabled-submit guard if
+  none are enabled.
+- ~~**Reconcile "earnings" definitions**~~ **Resolved** — the dashboard
+  overview's "Revenue" stat now sums only `paymentStatus === "paid"`
+  orders (same definition the payouts page's "available" figure already
+  used), instead of every non-cancelled order regardless of payment
+  status. See [`features/payouts.md`](../app/docs/features/payouts.md).
+- ~~**Fix the "Active products" stat card**~~ **Resolved** — now filters
+  to `status === "active"` before counting, instead of counting every
+  product regardless of status.
+- ~~**Hide draft products from public storefront/product queries**~~
+  **Resolved** — public search (`ProductSpecifications.notDraft()`), the
+  public per-store product listing, and direct-by-id lookup
+  (`GET /api/products/{id}`) now all exclude/404 a draft product for
+  anyone but its owning seller (`ProductService.isOwnedByCurrentSeller`).
+  The seller's own product list and edit page are unaffected — they still
+  see every status. Verified locally: an anonymous request for a seeded
+  draft product 404s from search, the store's public listing, and direct
+  ID lookup; an active product is unaffected.
 - ~~**Auto-create a default `StoreSettings` row**~~ **Resolved** —
   `updateStoreSettings` is now an upsert (creates a default-filled row if
   missing). 7 of 8 *seed* stores still have no row (untouched mock data,
   not a code gap), but every store created via `/onboarding` gets one.
-- ~~**Email capture at checkout**~~ **Implemented** — email is now a
-  required checkout field, and a mock receipt is "sent" (logged, not
-  actually delivered) on order creation. Still open: a real email provider
-  — see [`gaps-and-assumptions.md`](gaps-and-assumptions.md).
-- **Duplicate-SKU validation** within a store.
+- ~~**Email capture at checkout**~~ **Implemented** — email is a required
+  checkout field. ~~Still open: a real email provider~~ **Resolved** —
+  `SesEmailService` is `@Profile("aws")` and `docker-compose.prod.yml`
+  sets `SPRING_PROFILES_ACTIVE: aws`, so SES (not just the logging stub)
+  is genuinely active in production.
+- **Duplicate-SKU validation** within a store — deliberately still not
+  implemented (see `Product.kt`'s doc comment); unchanged from before.
 - ~~**What happens to a cart when its held product is deleted, or its
   price changes?**~~ **Implemented** — `useCartReconciliation()` now
   re-syncs the cart against live product data on every load. See

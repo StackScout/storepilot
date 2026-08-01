@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,6 +33,7 @@ const settingsSchema = z
     bankTransferEnabled: z.boolean(),
     stripeEnabled: z.boolean(),
     stockManagementEnabled: z.boolean(),
+    pickupEnabled: z.boolean(),
     facebookUrl: urlOrEmpty,
     instagramUrl: urlOrEmpty,
     tiktokUrl: urlOrEmpty,
@@ -89,6 +90,7 @@ export default function DashboardSettingsPage() {
       bankTransferEnabled: false,
       stripeEnabled: false,
       stockManagementEnabled: true,
+      pickupEnabled: false,
       facebookUrl: "",
       instagramUrl: "",
       tiktokUrl: "",
@@ -108,6 +110,7 @@ export default function DashboardSettingsPage() {
         bankTransferEnabled: settings.bankTransferEnabled,
         stripeEnabled: settings.stripeEnabled,
         stockManagementEnabled: settings.stockManagementEnabled,
+        pickupEnabled: settings.pickupEnabled,
         facebookUrl: store.facebookUrl ?? "",
         instagramUrl: store.instagramUrl ?? "",
         tiktokUrl: store.tiktokUrl ?? "",
@@ -120,6 +123,7 @@ export default function DashboardSettingsPage() {
   const bankTransferEnabled = watch("bankTransferEnabled");
   const stripeEnabled = watch("stripeEnabled");
   const stockManagementEnabled = watch("stockManagementEnabled");
+  const pickupEnabled = watch("pickupEnabled");
 
   const stripeOnboardingMutation = useMutation({
     mutationFn: () => storesService.startStripeConnectOnboarding(storeId),
@@ -128,6 +132,25 @@ export default function DashboardSettingsPage() {
     },
     onError: () => toast.error("Couldn't start Stripe onboarding. Please try again."),
   });
+
+  // Normally account.updated webhook keeps stripeChargesEnabled in sync —
+  // this is a fallback for when that webhook is misconfigured or drops an
+  // event (see backend StripeConnectService's doc comment), so a seller who
+  // actually finished Stripe's hosted onboarding isn't stuck seeing "Finish
+  // onboarding" forever with no way to unstick themselves. Runs once per
+  // page load whenever we're in that stuck-looking state.
+  const stripeRefreshedRef = useRef(false);
+  const stripeRefreshMutation = useMutation({
+    mutationFn: () => storesService.refreshStripeConnectStatus(storeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["store-settings"] }),
+  });
+  useEffect(() => {
+    if (stripeRefreshedRef.current) return;
+    if (!settings?.stripeAccountId || settings.stripeChargesEnabled) return;
+    stripeRefreshedRef.current = true;
+    stripeRefreshMutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount, not on every settings refetch
+  }, [settings?.stripeAccountId, settings?.stripeChargesEnabled]);
 
   const mutation = useMutation({
     mutationFn: async (values: SettingsFormValues) => {
@@ -331,18 +354,30 @@ export default function DashboardSettingsPage() {
             ) : !settings.stripeChargesEnabled ? (
               <>
                 <p className="text-muted-foreground text-sm">
-                  You&apos;ve started connecting a Stripe account, but onboarding isn&apos;t finished
-                  yet — Stripe still needs a bit more information before you can accept payments.
+                  {stripeRefreshMutation.isPending
+                    ? "Checking with Stripe for your latest status…"
+                    : "You've started connecting a Stripe account, but onboarding isn't finished yet — Stripe still needs a bit more information before you can accept payments. If you've already completed Stripe's form, try checking again below."}
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={stripeOnboardingMutation.isPending}
-                  onClick={() => stripeOnboardingMutation.mutate()}
-                >
-                  {stripeOnboardingMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Finish onboarding
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={stripeOnboardingMutation.isPending}
+                    onClick={() => stripeOnboardingMutation.mutate()}
+                  >
+                    {stripeOnboardingMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Finish onboarding
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={stripeRefreshMutation.isPending}
+                    onClick={() => stripeRefreshMutation.mutate()}
+                  >
+                    {stripeRefreshMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Check again
+                  </Button>
+                </div>
               </>
             ) : (
               <div className="flex items-center gap-2 text-sm">
@@ -427,6 +462,25 @@ export default function DashboardSettingsPage() {
                 <span className="text-muted-foreground block text-xs">
                   When off, the stock quantity field is hidden on the product form and every
                   product in your store is treated as always available.
+                </span>
+              </span>
+            </label>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-4">
+            <h2 className="font-semibold">Delivery</h2>
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={pickupEnabled}
+                onCheckedChange={(checked) => setValue("pickupEnabled", checked === true)}
+              />
+              <span>
+                <span className="block text-sm font-medium">Offer pickup in store</span>
+                <span className="text-muted-foreground block text-xs">
+                  Buyers can choose to collect their order themselves instead of paying for
+                  shipping — you&apos;ll coordinate the pickup time over WhatsApp.
                 </span>
               </span>
             </label>

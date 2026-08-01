@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,6 +12,7 @@ import { Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
 import { authService } from "@/services";
@@ -36,6 +37,7 @@ function BuyerLoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/account";
   const queryClient = useQueryClient();
+  const [showPassword, setShowPassword] = useState(false);
 
   // AuthController.googleCallback redirects here with this on failure
   // (e.g. the Google popup was cancelled, or the code exchange failed).
@@ -95,11 +97,15 @@ function BuyerLoginForm() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" {...register("password")} />
+              <Input id="password" type={showPassword ? "text" : "password"} {...register("password")} />
               {errors.password ? (
                 <p className="text-destructive text-xs">{errors.password.message}</p>
               ) : null}
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={showPassword} onCheckedChange={(checked) => setShowPassword(checked === true)} />
+              <span className="text-muted-foreground">Show password</span>
+            </label>
             {mutation.isError ? (
               <p className="text-destructive text-xs">
                 {mutation.error instanceof Error ? mutation.error.message : "Something went wrong."}

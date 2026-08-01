@@ -43,6 +43,22 @@ private val STATUS_LABELS = mapOf(
     OrderStatus.CANCELLED to "Cancelled",
 )
 
+/**
+ * Server-side mirror of the frontend's OrderStatusSelect NEXT_STATUS_OPTIONS
+ * map — the single source of truth now lives here (see updateStatus), not
+ * just in the dashboard dropdown. Each non-terminal status maps to itself
+ * plus its allowed forward moves (self-transition stays legal so a seller
+ * can resubmit shipping details without the status itself changing);
+ * delivered/cancelled are terminal — no transition out of either.
+ */
+private val ALLOWED_STATUS_TRANSITIONS: Map<OrderStatus, Set<OrderStatus>> = mapOf(
+    OrderStatus.PENDING to setOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED),
+    OrderStatus.CONFIRMED to setOf(OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.CANCELLED),
+    OrderStatus.SHIPPED to setOf(OrderStatus.SHIPPED, OrderStatus.DELIVERED),
+    OrderStatus.DELIVERED to setOf(OrderStatus.DELIVERED),
+    OrderStatus.CANCELLED to setOf(OrderStatus.CANCELLED),
+)
+
 @Service
 @Transactional(readOnly = true)
 class OrderService(
@@ -127,10 +143,42 @@ class OrderService(
                 ?: throw NotFoundException("Product ${line.productId} not found")
             Triple(product, line.quantity, product.store)
         }
+        // product.trackStock is already the AND of the store's and the
+        // product's own stock-management opt-in (see ProductService's
+        // effectiveTrackStock) — so a product with tracking off, or
+        // belonging to a store with stock management disabled, is skipped
+        // here entirely, same as decrementStock does after checkout.
+        resolvedItems.forEach { (product, quantity, _) ->
+            if (product.trackStock && quantity > product.stockQuantity) {
+                throw ConflictException("${product.name} only has ${product.stockQuantity} left in stock")
+            }
+        }
 
         val store = resolvedItems.first().third
         val subtotal = resolvedItems.sumOf { (product, quantity, _) -> product.price * quantity }
         val platformConfig = platformConfigService.current()
+
+        // fullName/phone matter regardless of delivery method (a courier or
+        // the seller both need someone to hand the order to); the rest of
+        // the address is meaningless for pickup, so it's only required for
+        // shipping — same conditional-requiredness pattern as updateStatus's
+        // SHIPPED-only tracking fields. See ShippingDetailsInput's doc
+        // comment for why this isn't just a @Valid annotation instead.
+        val deliveryMethod = wireValueOf<DeliveryMethod>(input.deliveryMethod)
+        require(input.shipping.fullName.isNotBlank()) { "Enter the recipient's full name" }
+        require(input.shipping.phone.isNotBlank()) { "Enter a valid phone number" }
+        if (deliveryMethod == DeliveryMethod.SHIPPING) {
+            require(!input.shipping.addressLine1.isNullOrBlank()) { "Enter the delivery address" }
+            require(!input.shipping.city.isNullOrBlank()) { "Enter a city/town" }
+            require(!input.shipping.state.isNullOrBlank()) { "Select a state/province" }
+            require(!input.shipping.postalCode.isNullOrBlank()) { "Enter a postal code" }
+        } else {
+            val storeAllowsPickup = store.id
+                ?.let { storeSettingsRepository.findById(it).orElse(null) }
+                ?.pickupEnabled ?: false
+            if (!storeAllowsPickup) throw ConflictException("This store doesn't offer pickup")
+        }
+        val shippingFee = if (deliveryMethod == DeliveryMethod.PICKUP) 0 else platformConfig.flatShippingFee
 
         val feePercent = store.id
             ?.let { storeSettingsRepository.findById(it).orElse(null) }
@@ -155,19 +203,22 @@ class OrderService(
             orderNumber = generateOrderNumber(now, platformConfig.countryCode),
             store = store,
             subtotal = subtotal,
-            shippingFee = platformConfig.flatShippingFee,
+            deliveryMethod = deliveryMethod,
+            shippingFee = shippingFee,
             platformFee = platformFee,
-            total = subtotal + platformConfig.flatShippingFee,
+            total = subtotal + shippingFee,
             status = OrderStatus.PENDING,
             paymentMethod = paymentMethod,
             paymentStatus = paymentStatus,
             shipping = ShippingDetails(
                 fullName = input.shipping.fullName,
                 phone = input.shipping.phone,
-                addressLine1 = input.shipping.addressLine1,
-                city = input.shipping.city,
-                state = input.shipping.state,
-                postalCode = input.shipping.postalCode,
+                // Normalized to null (never a blank/placeholder string) —
+                // a pickup order has no address at all.
+                addressLine1 = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.addressLine1,
+                city = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.city,
+                state = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.state,
+                postalCode = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.postalCode,
             ),
             buyerEmail = input.email,
             buyer = buyer,
@@ -207,6 +258,12 @@ class OrderService(
         val order = orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }
         requireSellerOwnsOrder(order)
         val status = wireValueOf<OrderStatus>(input.status)
+        val allowedNext = ALLOWED_STATUS_TRANSITIONS.getValue(order.status)
+        if (status !in allowedNext) {
+            throw ConflictException(
+                "Order ${order.id} can't move from \"${order.status.wireValue}\" to \"${status.wireValue}\"",
+            )
+        }
 
         order.status = status
         if (status == OrderStatus.DELIVERED && order.paymentMethod == PaymentMethod.COD) {

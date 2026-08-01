@@ -78,6 +78,9 @@ class StoreSettings(
     /** Store-wide switch — when false, no product in this store tracks stock, regardless of each Product.trackStock; the new-product page hides the stock UI entirely. */
     @Column(name = "stock_management_enabled", nullable = false)
     var stockManagementEnabled: Boolean = true,
+    /** Opt-in and off by default, same reasoning as bankTransferEnabled/stripeEnabled — not every seller has a physical location buyers can collect from. See DeliveryMethod's doc comment. */
+    @Column(name = "pickup_enabled", nullable = false)
+    var pickupEnabled: Boolean = false,
     /** Stripe Connect (Standard account) — the seller's own connected account id, `acct_...`. Null until they start onboarding. See StripeConnectService. */
     @Column(name = "stripe_account_id")
     var stripeAccountId: String? = null,

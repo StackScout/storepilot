@@ -1,5 +1,6 @@
 package com.storepilot.backend.stripe
 
+import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.security.CurrentActor
@@ -70,11 +71,35 @@ class StripeConnectService(
     }
 
     /**
-     * Called by StripeWebhookService for `account.updated` events — the
-     * only place stripeChargesEnabled/stripePayoutsEnabled are ever
-     * written. Silently ignored if the account isn't linked to any store
-     * (shouldn't happen for accounts this platform created, but a stray
-     * event for an unrelated account must not throw).
+     * POST /api/stores/{storeId}/stripe-connect/refresh — pulls the
+     * connected account's live status directly from Stripe and syncs it,
+     * the same way the `account.updated` webhook does. Exists because that
+     * webhook only arrives if the Stripe Dashboard endpoint is correctly
+     * configured to listen to **connected-account** events (see
+     * StripeController's doc comment) — if that's ever misconfigured, wrong,
+     * or an individual event is dropped, a seller would otherwise be stuck
+     * seeing "Finish onboarding" forever with no way to unstick themselves.
+     * Safe to call anytime; a no-op if nothing has actually changed.
+     */
+    @Transactional
+    fun refreshAccountStatus(storeId: UUID) {
+        val seller = currentActor.requireSeller()
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
+            NotFoundException("No settings for store $storeId yet")
+        }
+        val accountId = settings.stripeAccountId ?: throw ConflictException("No Stripe account connected yet")
+        syncAccountStatus(Account.retrieve(accountId))
+    }
+
+    /**
+     * Called by StripeWebhookService for `account.updated` events, and by
+     * refreshAccountStatus above — the only two places
+     * stripeChargesEnabled/stripePayoutsEnabled are ever written. Silently
+     * ignored if the account isn't linked to any store (shouldn't happen
+     * for accounts this platform created, but a stray event for an
+     * unrelated account must not throw).
      */
     @Transactional
     fun syncAccountStatus(account: Account) {

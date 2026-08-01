@@ -9,6 +9,9 @@ export type PaymentMethod = "payhere" | "cod" | "bank-transfer" | "stripe";
 
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
 
+/** "pickup" is only offered when the store's StoreSettings.pickupEnabled is true — see checkout-form.tsx. */
+export type DeliveryMethod = "shipping" | "pickup";
+
 export interface OrderItem {
   productId: string;
   productName: string;
@@ -27,10 +30,11 @@ export interface OrderTimelineEntry {
 export interface ShippingDetails {
   fullName: string;
   phone: string;
-  addressLine1: string;
-  city: string;
-  state: string;
-  postalCode: string;
+  /** Only present when deliveryMethod === "shipping" — a pickup order has no address. */
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
 }
 
 export interface Order {
@@ -41,6 +45,7 @@ export interface Order {
   storeSlug: string;
   items: OrderItem[];
   subtotal: number;
+  deliveryMethod: DeliveryMethod;
   shippingFee: number;
   platformFee: number;
   total: number;
@@ -69,6 +74,7 @@ export interface CheckoutInput {
   items: { productId: string; quantity: number }[];
   shipping: ShippingDetails;
   paymentMethod: PaymentMethod;
+  deliveryMethod: DeliveryMethod;
   email: string;
 }
 

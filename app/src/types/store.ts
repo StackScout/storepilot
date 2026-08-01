@@ -90,6 +90,8 @@ export interface StoreSettings {
   businessRegDocumentUrl?: string;
   /** Store-wide switch — when false, no product in this store tracks stock, and the new-product page hides the stock UI entirely. */
   stockManagementEnabled: boolean;
+  /** Opt-in, defaults false — offers "pickup in store" at checkout in addition to shipping. See order.ts's DeliveryMethod. */
+  pickupEnabled: boolean;
   /**
    * Stripe Connect (Standard account) — see backend StoreSettings.kt's doc
    * comment. `stripeChargesEnabled`/`stripePayoutsEnabled` are synced from

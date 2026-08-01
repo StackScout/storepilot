@@ -134,14 +134,21 @@ export default function DashboardOrderDetailPage({
 
           <Card>
             <CardContent className="space-y-2">
-              <h2 className="font-semibold">Delivery address</h2>
-              <p className="text-muted-foreground text-sm">
-                {order.shipping.addressLine1}
-                <br />
-                {order.shipping.city}, {order.shipping.state}
-                <br />
-                {order.shipping.postalCode}
-              </p>
+              <h2 className="font-semibold">{order.deliveryMethod === "pickup" ? "Pickup" : "Delivery address"}</h2>
+              {order.deliveryMethod === "pickup" ? (
+                <p className="text-muted-foreground text-sm">
+                  The buyer will collect this order in person — contact them on{" "}
+                  {order.shipping.phone} to arrange a time.
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  {order.shipping.addressLine1}
+                  <br />
+                  {order.shipping.city}, {order.shipping.state}
+                  <br />
+                  {order.shipping.postalCode}
+                </p>
+              )}
             </CardContent>
           </Card>
 

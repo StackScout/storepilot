@@ -6,10 +6,10 @@ import jakarta.persistence.Converter
 
 /**
  * Mirrors src/types/order.ts's OrderStatus. The allowed-transition state
- * machine (pending → confirmed|cancelled → shipped → delivered) lives only
- * in the frontend's OrderStatusSelect today — docs/gaps-and-assumptions.md
- * flags this as a must-fix-server-side gap. Enforce it in OrderService, not
- * here — this enum only defines the possible values.
+ * machine (pending → confirmed|cancelled → shipped → delivered) is enforced
+ * server-side in OrderService.updateStatus (see ALLOWED_STATUS_TRANSITIONS),
+ * mirroring the frontend's OrderStatusSelect — this enum only defines the
+ * possible values.
  */
 enum class OrderStatus(override val wireValue: String) : WireValue {
     PENDING("pending"),
@@ -48,3 +48,20 @@ enum class PaymentStatus(override val wireValue: String) : WireValue {
 
 @Converter(autoApply = true)
 class PaymentStatusConverter : WireValueEnumConverter<PaymentStatus>(PaymentStatus.entries.toTypedArray())
+
+/**
+ * A pickup order still carries a ShippingDetails (fullName/phone only —
+ * OrderService.createOrder skips the address-field requirement for
+ * pickup), and shippingFee is forced to 0 — see OrderService.createOrder.
+ * There's no separate pickup-location field: buyers coordinate the actual
+ * meeting point/time with the seller over WhatsApp
+ * (Store.whatsappNumber), matching this marketplace's existing
+ * WhatsApp-first contact model rather than adding a second address entity.
+ */
+enum class DeliveryMethod(override val wireValue: String) : WireValue {
+    SHIPPING("shipping"),
+    PICKUP("pickup"),
+}
+
+@Converter(autoApply = true)
+class DeliveryMethodConverter : WireValueEnumConverter<DeliveryMethod>(DeliveryMethod.entries.toTypedArray())

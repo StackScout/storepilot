@@ -31,6 +31,10 @@ object ProductSpecifications {
             )
         }
 
+    /** Public product search must never surface a draft — it's still being prepared, not ready for buyers. Out-of-stock products stay visible (they're a real, published listing, just unavailable to buy right now). */
+    fun notDraft(): Specification<Product> =
+        Specification { root, _, cb -> cb.notEqual(root.get<ProductStatus>("status"), ProductStatus.DRAFT) }
+
     fun hasCategory(category: StoreCategory?): Specification<Product> =
         Specification { root, _, cb ->
             if (category == null) null else cb.equal(root.get<StoreCategory>("category"), category)

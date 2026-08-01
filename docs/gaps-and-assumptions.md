@@ -86,12 +86,13 @@ suffix. Not secret, easily guessable/enumerable at scale. Flagged as a
 product decision (e.g. require an OTP instead), not silently patched. See
 [`features/order-tracking.md`](../app/docs/features/order-tracking.md#business-rules).
 
-### No stock re-validation at checkout (overselling is possible)
-`createOrder` checks that each `productId` exists, but never checks
-`quantity <= stockQuantity`. Combined with the cart's stale
-stock-quantity snapshot, two buyers can both "successfully" order the last
-unit of a low-stock product. `decrementStock` just clamps to zero rather
-than rejecting. See
+### ~~No stock re-validation at checkout~~ RESOLVED
+`OrderService.createOrder` now rejects checkout with a 409 if any line
+item's quantity exceeds `stockQuantity`, for products (and stores) that
+have stock management enabled — skipped entirely when either the product
+or its store has opted out. `ProductService.decrementStock`'s clamp-to-zero
+now only matters as a defense against a same-product race between two
+concurrent checkouts, not as the primary overselling guard. See
 [`features/checkout.md#edge-cases`](../app/docs/features/checkout.md#edge-cases).
 
 ## Data-model / business-logic inconsistencies

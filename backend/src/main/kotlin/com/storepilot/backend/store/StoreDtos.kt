@@ -1,6 +1,11 @@
 package com.storepilot.backend.store
 
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
+import org.hibernate.validator.constraints.URL
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
@@ -57,6 +62,7 @@ data class StoreSettingsResponse(
     val nicDocumentUrl: String?,
     val businessRegDocumentUrl: String?,
     val stockManagementEnabled: Boolean,
+    val pickupEnabled: Boolean,
     val stripeAccountId: String?,
     val stripeChargesEnabled: Boolean,
     val stripePayoutsEnabled: Boolean,
@@ -88,11 +94,15 @@ data class StoreApplicationInput(
  * either way, see StoreService).
  */
 data class StoreSettingsInput(
+    @field:Email(message = "Enter a valid email")
     val contactEmail: String? = null,
+    @field:Size(min = 9, message = "Enter a valid phone number")
     val contactPhone: String? = null,
     val bankAccountName: String? = null,
     val bankAccountNumber: String? = null,
     val bankName: String? = null,
+    @field:DecimalMin(value = "0.0", message = "Transaction fee must be zero or more")
+    @field:DecimalMax(value = "100.0", message = "Transaction fee can't exceed 100%")
     val transactionFeePercent: BigDecimal? = null,
     val codEnabled: Boolean? = null,
     val onlinePaymentEnabled: Boolean? = null,
@@ -104,14 +114,18 @@ data class StoreSettingsInput(
     val businessRegistrationNumber: String? = null,
     val rejectionReason: String? = null,
     val stockManagementEnabled: Boolean? = null,
+    val pickupEnabled: Boolean? = null,
     /** The seller's own on/off preference — stripeAccountId/stripeChargesEnabled/stripePayoutsEnabled are never client-settable, only synced from Stripe via webhook (see StripeConnectService). */
     val stripeEnabled: Boolean? = null,
 )
 
 /** PATCH /api/stores/{storeId}/profile — seller-editable public social links. A field left null is untouched; send an empty string to clear a link. */
 data class StoreProfileInput(
+    @field:URL(message = "Enter a valid URL")
     val facebookUrl: String? = null,
+    @field:URL(message = "Enter a valid URL")
     val instagramUrl: String? = null,
+    @field:URL(message = "Enter a valid URL")
     val tiktokUrl: String? = null,
 )
 

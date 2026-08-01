@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,6 +12,7 @@ import { Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { authService } from "@/services";
 
@@ -35,6 +36,7 @@ function SellerLoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/dashboard";
   const queryClient = useQueryClient();
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -98,11 +100,15 @@ function SellerLoginForm() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" {...register("password")} />
+              <Input id="password" type={showPassword ? "text" : "password"} {...register("password")} />
               {errors.password ? (
                 <p className="text-destructive text-xs">{errors.password.message}</p>
               ) : null}
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={showPassword} onCheckedChange={(checked) => setShowPassword(checked === true)} />
+              <span className="text-muted-foreground">Show password</span>
+            </label>
             <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               Sign in

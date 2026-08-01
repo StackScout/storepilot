@@ -223,6 +223,7 @@ class StoreService(
             if (input.businessRegistrationNumber != null) existing.businessRegistrationNumber = input.businessRegistrationNumber
             if (input.rejectionReason != null) existing.rejectionReason = input.rejectionReason
             input.stockManagementEnabled?.let { existing.stockManagementEnabled = it }
+            input.pickupEnabled?.let { existing.pickupEnabled = it }
             input.stripeEnabled?.let { existing.stripeEnabled = it }
             requireAtLeastOnePaymentMethod(existing.codEnabled, existing.onlinePaymentEnabled, existing.bankTransferEnabled)
             requireCountryVerificationFields(existing)
@@ -262,6 +263,7 @@ class StoreService(
             businessRegistrationNumber = input.businessRegistrationNumber,
             rejectionReason = input.rejectionReason,
             stockManagementEnabled = input.stockManagementEnabled ?: true,
+            pickupEnabled = input.pickupEnabled ?: false,
         )
         requireCountryVerificationFields(created)
         return storeSettingsRepository.save(created).toResponse(fileStorageService)

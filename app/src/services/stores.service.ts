@@ -115,6 +115,17 @@ export async function startStripeConnectOnboarding(storeId: string): Promise<{ o
   return apiClient.post<{ onboardingUrl: string }>(`/api/stores/${storeId}/stripe-connect/onboard`);
 }
 
+/**
+ * POST /stores/:id/stripe-connect/refresh — pulls the connected account's
+ * live status directly from Stripe, the same way the `account.updated`
+ * webhook normally would. Exists as a fallback for when that webhook is
+ * misconfigured or drops an event — see backend StripeConnectService's doc
+ * comment.
+ */
+export async function refreshStripeConnectStatus(storeId: string): Promise<void> {
+  await apiClient.post<void>(`/api/stores/${storeId}/stripe-connect/refresh`);
+}
+
 /** POST /stores (seller onboarding) — creates a new store in "pending" verification status. Requires a signed-in account (any Cognito user); this call is what grants the seller role. */
 export async function createStore(input: StoreApplicationInput): Promise<Store> {
   return apiClient.post<Store>("/api/stores", input);

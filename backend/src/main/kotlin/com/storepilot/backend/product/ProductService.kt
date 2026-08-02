@@ -178,16 +178,21 @@ class ProductService(
         return productRepository.save(product).toResponse(fileStorageService)
     }
 
-    /** Stores the FileStorageService reference (not a resolved URL) on each ProductImage — resolved fresh at read time, see ProductMapper. */
+    /**
+     * Stores the FileStorageService reference (not a resolved URL) on each
+     * ProductImage — resolved fresh at read time, see ProductMapper. [images]
+     * order becomes sortOrder, so index 0 (the frontend's "primary" pick,
+     * see ImageUploader) is always the first element on read-back too.
+     */
     private fun storeImages(product: Product, images: List<MultipartFile>) {
-        images.forEach { file ->
+        images.forEachIndexed { index, file ->
             val reference = fileStorageService.store(
                 "product-images",
                 file,
                 FileUploadPolicies.IMAGE_CONTENT_TYPES,
                 FileUploadPolicies.IMAGE_MAX_BYTES,
             )
-            product.images.add(ProductImage(product = product, url = reference, alt = product.name))
+            product.images.add(ProductImage(product = product, url = reference, alt = product.name, sortOrder = index))
         }
     }
 

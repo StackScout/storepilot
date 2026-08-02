@@ -37,6 +37,9 @@ class PlatformSettings(
     /** Cents, like every other money field in this codebase — see Product.price's doc comment. */
     @Column(name = "flat_shipping_fee", nullable = false)
     var flatShippingFee: Int,
+    /** Cents — see SellerPlan.kt. */
+    @Column(name = "pro_monthly_price_cents", nullable = false)
+    var proMonthlyPriceCents: Int,
     @Column(name = "default_cod_enabled", nullable = false)
     var defaultCodEnabled: Boolean,
     @Column(name = "default_online_payment_enabled", nullable = false)

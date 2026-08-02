@@ -1,5 +1,7 @@
 package com.storepilot.backend.payout
 
+import com.storepilot.backend.admin.AuditAction
+import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -29,6 +31,7 @@ class FeeCollectionService(
     private val receiptStorageService: ReceiptStorageService,
     private val fileStorageService: FileStorageService,
     private val currentActor: CurrentActor,
+    private val auditLogService: AuditLogService,
 ) {
     fun listByStore(storeId: UUID): List<FeeCollectionResponse> {
         requireSellerOwnsStore(storeId)
@@ -100,7 +103,15 @@ class FeeCollectionService(
         feeCollection.status = FeeCollectionStatus.COLLECTED
         feeCollection.collectedAt = Instant.now()
         feeCollection.reference = input.reference
-        return feeCollectionRepository.save(feeCollection).toResponse()
+        val saved = feeCollectionRepository.save(feeCollection)
+        val referenceSuffix = input.reference?.let { " (ref: $it)" } ?: ""
+        auditLogService.record(
+            AuditAction.FEE_COLLECTION_MARKED_COLLECTED,
+            "fee_collection",
+            feeCollectionId.toString(),
+            "Marked fee collection for \"${feeCollection.store.name}\" (${feeCollection.platformFee}) as collected$referenceSuffix",
+        )
+        return saved.toResponse()
     }
 
     fun adminList(): List<FeeCollectionResponse> =

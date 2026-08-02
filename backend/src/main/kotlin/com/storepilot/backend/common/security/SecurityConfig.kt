@@ -85,9 +85,12 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/payments/payhere/notify").permitAll()
                     // Signature-verified inside StripeWebhookService, not by auth here — see its doc comment.
                     .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
-                    // Seller's own store — must come before the broader
+                    // Signature-verified inside SellerBillingWebhookService — see its doc comment.
+                    .requestMatchers(HttpMethod.POST, "/api/billing/stripe/webhook").permitAll()
+                    // Seller's own store/plan — must come before the broader
                     // /api/me/** buyer rule below (first-match-wins).
                     .requestMatchers(HttpMethod.GET, "/api/me/store").hasRole("SELLER")
+                    .requestMatchers("/api/me/seller/**").hasRole("SELLER")
                     // Buyer's own profile/orders.
                     .requestMatchers("/api/me/**").hasRole("BUYER")
                     // Seller onboarding — any authenticated Cognito user;

@@ -14,7 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmailVerificationForm } from "@/components/shared/email-verification-form";
 import { authService } from "@/services";
+import { ApiRequestError } from "@/lib/api-client";
+import type { AuthSession } from "@/services/auth.service";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -37,6 +40,7 @@ function SellerLoginForm() {
   const redirectTo = searchParams.get("redirectTo") || "/dashboard";
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState<{ email: string; password: string } | null>(null);
 
   const {
     register,
@@ -44,39 +48,62 @@ function SellerLoginForm() {
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
+  const handleSession = (session: AuthSession) => {
+    // See the equivalent check in account/login/page.tsx — authService.login()
+    // is role-agnostic, so a non-seller account would otherwise authenticate
+    // here and then get silently bounced back by proxy.ts's /dashboard gate.
+    // A groupless role (register() no longer grants "buyer" to a seller
+    // registration — see backend AuthController's doc comment) means they
+    // registered but never finished onboarding — resume it instead of
+    // rejecting. "buyer" is also accepted here, but only as backward
+    // compatibility for accounts created before this fix that still hold
+    // both groups; new registrations can never reach this state.
+    if (session.role && session.role !== "seller" && session.role !== "buyer") {
+      void authService.logout();
+      toast.error("This account isn't registered as a seller. Try the buyer or admin sign-in instead.");
+      return;
+    }
+    // React Query's own cache (auth-session, buyer/store lookups, ...) is
+    // separate from Next's router cache — router.refresh() alone won't
+    // clear a "signed out" result some component cached before login.
+    queryClient.clear();
+    if (session.role !== "seller") {
+      toast.message("Let's finish setting up your store.");
+      router.push("/onboarding");
+    } else {
+      router.push(redirectTo);
+    }
+    router.refresh();
+  };
+
   const mutation = useMutation({
-    mutationFn: async (values: LoginFormValues) => {
-      const session = await authService.login(values.email, values.password);
-      // See the equivalent check in account/login/page.tsx — authService.login()
-      // is role-agnostic, so a non-seller account would otherwise authenticate
-      // here and then get silently bounced back by proxy.ts's /dashboard gate.
-      // A groupless role (register() no longer grants "buyer" to a seller
-      // registration — see backend AuthController's doc comment) means they
-      // registered but never finished onboarding — resume it instead of
-      // rejecting. "buyer" is also accepted here, but only as backward
-      // compatibility for accounts created before this fix that still hold
-      // both groups; new registrations can never reach this state.
-      if (session.role && session.role !== "seller" && session.role !== "buyer") {
-        await authService.logout();
-        throw new Error("This account isn't registered as a seller. Try the buyer or admin sign-in instead.");
+    mutationFn: (values: LoginFormValues) => authService.login(values.email, values.password),
+    onSuccess: handleSession,
+    onError: (error: Error, variables) => {
+      if (error instanceof ApiRequestError && error.code === "EMAIL_NOT_VERIFIED") {
+        setPendingVerification({ email: variables.email, password: variables.password });
+        return;
       }
-      return session;
+      toast.error(error.message || "Invalid email or password");
     },
-    onSuccess: (session) => {
-      // React Query's own cache (auth-session, buyer/store lookups, ...) is
-      // separate from Next's router cache — router.refresh() alone won't
-      // clear a "signed out" result some component cached before login.
-      queryClient.clear();
-      if (session.role !== "seller") {
-        toast.message("Let's finish setting up your store.");
-        router.push("/onboarding");
-      } else {
-        router.push(redirectTo);
-      }
-      router.refresh();
-    },
-    onError: (error: Error) => toast.error(error.message || "Invalid email or password"),
   });
+
+  if (pendingVerification) {
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">
+        <Card>
+          <CardContent>
+            <EmailVerificationForm
+              email={pendingVerification.email}
+              password={pendingVerification.password}
+              autoSend
+              onVerified={handleSession}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">

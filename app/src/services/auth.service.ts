@@ -13,24 +13,49 @@ export interface AuthSession {
  * effect of the backend's response — there is no local session to manage.
  */
 
+export interface RegisterResult {
+  email: string;
+  name: string;
+}
+
 /**
- * POST /api/auth/register — creates a real Cognito account and signs in
- * immediately. `accountType` must match which page is calling this
- * ("buyer" for account/register, "seller" for register) — buyer and
- * seller are mutually exclusive identities, see backend
- * AuthController.register()'s doc comment. A "seller" registration gets
- * no Cognito group at all until /onboarding grants "seller".
+ * POST /api/auth/register — creates a real Cognito account, but does NOT
+ * sign in: the account starts email-unverified, and this only triggers a
+ * verification code email (see verifyEmail below). `accountType` must
+ * match which page is calling this ("buyer" for account/register, "seller"
+ * for register) — buyer and seller are mutually exclusive identities, see
+ * backend AuthController.register()'s doc comment. A "seller" registration
+ * gets no Cognito group at all until /onboarding grants "seller".
  */
 export async function register(
   name: string,
   email: string,
   password: string,
   accountType: "buyer" | "seller",
-): Promise<AuthSession> {
-  return apiClient.post<AuthSession>("/api/auth/register", { name, email, password, accountType });
+): Promise<RegisterResult> {
+  return apiClient.post<RegisterResult>("/api/auth/register", { name, email, password, accountType });
 }
 
-/** POST /api/auth/login */
+/**
+ * POST /api/auth/verify-email — confirms the code emailed by register()/
+ * resendVerificationCode() and marks the account verified. Doesn't sign in
+ * by itself; callers pair this with login() using the password they still
+ * hold in memory (never persisted, never sent to this endpoint).
+ */
+export async function verifyEmail(email: string, code: string): Promise<void> {
+  await apiClient.post<void>("/api/auth/verify-email", { email, code });
+}
+
+/** POST /api/auth/resend-verification-code */
+export async function resendVerificationCode(email: string): Promise<void> {
+  await apiClient.post<void>("/api/auth/resend-verification-code", { email });
+}
+
+/**
+ * POST /api/auth/login — throws ApiRequestError with code
+ * "EMAIL_NOT_VERIFIED" (see api-client.ts) if the account exists but hasn't
+ * completed email verification yet.
+ */
 export async function login(email: string, password: string): Promise<AuthSession> {
   return apiClient.post<AuthSession>("/api/auth/login", { email, password });
 }

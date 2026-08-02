@@ -33,15 +33,18 @@ additionally check ownership even though the buyer-side read has no
 session to check. See
 [`api-contracts.md#get-apiordersid`](api-contracts.md#get-apiordersid).
 
-### `/admin` has no authentication or authorization at all
-Unlike `/dashboard/*`, the `/admin` route (store approval, payout batch
-creation/release) is **not** in `proxy.ts`'s matcher — there is no session
-check, no role check, nothing. Anyone who finds the URL can approve/reject
-any store or release any payout. This is a deliberate, visibly-flagged demo
-shortcut (the page itself renders a "no auth in this demo" badge), but it
-is the single highest-risk item in this list if this codebase is ever
-deployed anywhere reachable before a real admin role exists. See
-[`features/seller-auth.md#admin-not-a-real-role`](../app/docs/features/seller-auth.md#admin-not-a-real-role).
+### `/admin` has no authentication or authorization at all — RESOLVED
+This described the pre-Cognito, `localStorage`-mock era of this codebase.
+Since the real Spring Boot/Cognito backend landed, `/admin/**` is gated
+both client-side (`proxy.ts` checks the `admin` Cognito group, redirecting
+to `/admin/login` otherwise) and server-side (`SecurityConfig.kt`'s
+`.requestMatchers("/api/admin/**").hasRole("ADMIN")`). Admin accounts are
+never self-registered — the first one is bootstrapped out-of-band via
+`infra/scripts/create-admin.sh`, and existing admins can invite further
+ones in-app (`POST /api/admin/admins`, see `AdminManagementService.kt`).
+Every store-verification decision, admin invite, and payout/fee-collection
+settlement is now recorded in a durable `audit_logs` table (see
+`AuditLogService.kt`), viewable at `/admin/audit-log`.
 
 ### `mockDb` has no schema-migration story
 `src/lib/mock-db.ts` seeds a `localStorage` key once, the first time it's

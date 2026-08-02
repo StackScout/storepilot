@@ -3,6 +3,7 @@ package com.storepilot.backend.stripe
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.store.StoreRepository
@@ -32,12 +33,19 @@ class StripeConnectService(
     private val storeSettingsRepository: StoreSettingsRepository,
     private val currentActor: CurrentActor,
     private val notificationProperties: NotificationProperties,
+    private val platformConfigService: PlatformConfigService,
 ) {
     private val log = LoggerFactory.getLogger(StripeConnectService::class.java)
 
     /** POST /api/stores/{storeId}/stripe-connect/onboard */
     @Transactional
     fun startOnboarding(storeId: UUID): StripeOnboardingResponse {
+        // Stripe Connect is temporarily Australia-only (accounts are created
+        // with setCountry("AU") below) — UI already hides this; this is
+        // defense in depth for a stale client.
+        if (platformConfigService.current().countryCode != "AU") {
+            throw ConflictException("Stripe isn't available for this store's country yet")
+        }
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")

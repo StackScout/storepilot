@@ -28,7 +28,7 @@ export default function AdminNotificationsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Notifications</h1>
         <p className="text-muted-foreground text-sm">
-          Activity that needs an admin's attention — currently just payout bank-detail changes.
+          Activity that needs an admin&apos;s attention — currently just payout bank-detail changes.
         </p>
       </div>
 

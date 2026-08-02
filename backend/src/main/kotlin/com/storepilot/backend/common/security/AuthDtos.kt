@@ -28,6 +28,26 @@ data class LoginInput(
     val password: String,
 )
 
+/** What register() returns now that it no longer signs the caller in — see AuthController.register()'s doc comment. */
+data class RegisterResponse(
+    val email: String,
+    val name: String,
+)
+
+data class VerifyEmailInput(
+    @field:NotBlank(message = "Email is required")
+    @field:Email(message = "Must be a valid email")
+    val email: String,
+    @field:NotBlank(message = "Code is required")
+    val code: String,
+)
+
+data class ResendVerificationInput(
+    @field:NotBlank(message = "Email is required")
+    @field:Email(message = "Must be a valid email")
+    val email: String,
+)
+
 /**
  * What the frontend gets back to know "am I signed in, and as what" — the
  * access/refresh tokens themselves are httpOnly, so JS can never read them

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
+import { EmailVerificationForm } from "@/components/shared/email-verification-form";
 import { authService } from "@/services";
 
 const registerSchema = z
@@ -45,6 +46,7 @@ function BuyerRegisterForm() {
   const redirectTo = searchParams.get("redirectTo") || "/account";
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState<{ email: string; password: string } | null>(null);
 
   const {
     register,
@@ -55,14 +57,34 @@ function BuyerRegisterForm() {
   const mutation = useMutation({
     mutationFn: (values: RegisterFormValues) =>
       authService.register(values.name, values.email, values.password, "buyer"),
-    onSuccess: () => {
-      toast.success("Account created!");
-      queryClient.clear();
-      router.push(redirectTo);
-      router.refresh();
+    onSuccess: (_data, variables) => {
+      setPendingVerification({ email: variables.email, password: variables.password });
     },
     onError: (error: Error) => toast.error(error.message || "Something went wrong. Please try again."),
   });
+
+  const handleVerified = () => {
+    toast.success("Email verified! Welcome aboard.");
+    queryClient.clear();
+    router.push(redirectTo);
+    router.refresh();
+  };
+
+  if (pendingVerification) {
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">
+        <Card>
+          <CardContent>
+            <EmailVerificationForm
+              email={pendingVerification.email}
+              password={pendingVerification.password}
+              onVerified={handleVerified}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">

@@ -1,10 +1,11 @@
 import { apiClient, resolveAssetUrl, toQueryString } from "@/lib/api-client";
 import type { CheckoutInput, Order, OrderStatus, PageResponse, PayHereCheckoutPayload } from "@/types";
 
-/** courierReceiptUrl may be relative (local FileStorageService) or already absolute (S3 presigned) — normalize once here. receiptUrl is intentionally left untouched: render sites already call toApiUrl() on it directly. */
+/** courierReceiptUrl and each item's productImageUrl may be relative (local FileStorageService) or already absolute (S3 presigned) — normalize once here. receiptUrl is intentionally left untouched: render sites already call toApiUrl() on it directly. */
 function normalizeOrder(order: Order): Order {
   return {
     ...order,
+    items: order.items.map((item) => ({ ...item, productImageUrl: resolveAssetUrl(item.productImageUrl) })),
     courierReceiptUrl: order.courierReceiptUrl ? resolveAssetUrl(order.courierReceiptUrl) : order.courierReceiptUrl,
   };
 }

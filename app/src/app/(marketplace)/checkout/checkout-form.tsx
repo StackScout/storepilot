@@ -79,8 +79,13 @@ export function CheckoutForm() {
 
   const { session } = useAuthSession();
   const isSignedInBuyer = session.signedIn && session.role === "buyer";
-  const { name, currencyCode, currencySymbol, currencyLocale, flatShippingFee } = usePlatformConfig();
+  const { name, countryCode, currencyCode, currencySymbol, currencyLocale, flatShippingFee } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
+  // PayHere and Stripe are each temporarily restricted to their home
+  // market — PayHere (Sri Lanka) and Stripe (Australia) — see checkout's
+  // paymentMethodEnabled below.
+  const isSriLanka = countryCode === "LK";
+  const isAustralia = countryCode === "AU";
   const { data: states } = useStates();
 
   const { data: buyer } = useQuery({
@@ -108,14 +113,17 @@ export function CheckoutForm() {
   });
   const pickupEnabled = storeSettings?.pickupEnabled ?? false;
   const codEnabled = storeSettings?.codEnabled ?? true;
-  const onlinePaymentEnabled = storeSettings?.onlinePaymentEnabled ?? true;
+  // PayHere is temporarily Sri Lanka-only, regardless of the store's own
+  // toggle — see the isSriLanka/isAustralia comment above.
+  const onlinePaymentEnabled = isSriLanka && (storeSettings?.onlinePaymentEnabled ?? true);
   // Off by default while settings load, matching the backend's own default —
   // unlike COD/PayHere this is opt-in, so it shouldn't flash on then off.
   const bankTransferEnabled = storeSettings?.bankTransferEnabled ?? false;
   // Stripe needs both the seller's own toggle AND a fully-connected account
   // (stripeChargesEnabled, synced from Stripe via webhook) — never offer it
   // just because the seller flipped the switch before finishing onboarding.
-  const stripeEnabled = (storeSettings?.stripeEnabled && storeSettings?.stripeChargesEnabled) ?? false;
+  // Also temporarily Australia-only, same as PayHere/Sri Lanka above.
+  const stripeEnabled = isAustralia && ((storeSettings?.stripeEnabled && storeSettings?.stripeChargesEnabled) ?? false);
   const paymentMethodEnabled: Record<PaymentMethod, boolean> = {
     cod: codEnabled,
     payhere: onlinePaymentEnabled,

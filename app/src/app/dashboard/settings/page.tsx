@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { storesService } from "@/services";
+import { formatCurrency } from "@/lib/currency";
+import { formatDate } from "@/lib/format";
+import { storesService, billingService } from "@/services";
 
 const urlOrEmpty = z
   .string()
@@ -49,10 +54,24 @@ const settingsSchema = z
 type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 export default function DashboardSettingsPage() {
+  return (
+    <Suspense>
+      <DashboardSettingsForm />
+    </Suspense>
+  );
+}
+
+function DashboardSettingsForm() {
   const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
-  const { countryCode } = usePlatformConfig();
+  const { countryCode, currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const isSriLanka = countryCode === "LK";
+  // PayHere and Stripe are each temporarily restricted to their home
+  // market — see the "Stripe Connect" card and "Payment methods" section
+  // below, and checkout-form.tsx's matching gate on the buyer side.
+  const isAustralia = countryCode === "AU";
+  const searchParams = useSearchParams();
 
   const { data: settings, isLoading: isSettingsLoading } = useQuery({
     queryKey: ["store-settings", storeId],
@@ -68,7 +87,14 @@ export default function DashboardSettingsPage() {
     queryFn: () => storesService.getStoreById(storeId),
   });
 
-  const isLoading = isSettingsLoading || isStoreLoading;
+  const { data: planInfo, isLoading: isPlanLoading } = useQuery({
+    queryKey: ["seller-plan"],
+    queryFn: () => billingService.getMyPlan(),
+    refetchOnMount: "always",
+  });
+  const isPro = planInfo?.plan === "pro";
+
+  const isLoading = isSettingsLoading || isStoreLoading || isPlanLoading;
 
   const {
     register,
@@ -98,16 +124,22 @@ export default function DashboardSettingsPage() {
   });
 
   useEffect(() => {
-    if (settings && store) {
+    if (settings && store && planInfo) {
       reset({
         contactEmail: settings.contactEmail,
         contactPhone: settings.contactPhone,
         bankName: settings.bankName,
         bankAccountName: settings.bankAccountName,
         bankAccountNumber: settings.bankAccountNumber,
-        codEnabled: settings.codEnabled,
+        // Cash on Delivery and Bank transfer are Pro-only — the backend
+        // already refuses to persist `true` for either on a Free plan
+        // (see StoreService.upsertSettings), but a seller who downgraded
+        // after enabling them could still have a stale `true` sitting in
+        // the DB, so the form must not display/resubmit that as if it
+        // were still in effect.
+        codEnabled: isPro && settings.codEnabled,
         onlinePaymentEnabled: settings.onlinePaymentEnabled,
-        bankTransferEnabled: settings.bankTransferEnabled,
+        bankTransferEnabled: isPro && settings.bankTransferEnabled,
         stripeEnabled: settings.stripeEnabled,
         stockManagementEnabled: settings.stockManagementEnabled,
         pickupEnabled: settings.pickupEnabled,
@@ -116,7 +148,7 @@ export default function DashboardSettingsPage() {
         tiktokUrl: store.tiktokUrl ?? "",
       });
     }
-  }, [settings, store, reset]);
+  }, [settings, store, planInfo, isPro, reset]);
 
   const codEnabled = watch("codEnabled");
   const onlinePaymentEnabled = watch("onlinePaymentEnabled");
@@ -151,6 +183,40 @@ export default function DashboardSettingsPage() {
     stripeRefreshMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount, not on every settings refetch
   }, [settings?.stripeAccountId, settings?.stripeChargesEnabled]);
+
+  const checkoutMutation = useMutation({
+    mutationFn: () => billingService.startProCheckout(),
+    onSuccess: ({ checkoutUrl }) => {
+      window.location.href = checkoutUrl;
+    },
+    onError: () => toast.error("Couldn't start checkout. Please try again."),
+  });
+
+  const cancelProMutation = useMutation({
+    mutationFn: () => billingService.cancelPro(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["seller-plan"] });
+      toast.success("Pro won't renew — you'll keep access until the end of the current billing period.");
+    },
+    onError: () => toast.error("Couldn't cancel. Please try again."),
+  });
+
+  // Same "webhook might be misconfigured or drop an event" fallback as
+  // Stripe Connect's refresh above — this is where the seller lands right
+  // after paying, so a delayed webhook shouldn't leave them looking stuck
+  // on the Free plan.
+  const planRefreshedRef = useRef(false);
+  const planRefreshMutation = useMutation({
+    mutationFn: () => billingService.refreshPlanStatus(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["seller-plan"] }),
+  });
+  useEffect(() => {
+    if (planRefreshedRef.current) return;
+    if (searchParams.get("upgraded") !== "true") return;
+    planRefreshedRef.current = true;
+    planRefreshMutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount
+  }, [searchParams]);
 
   const mutation = useMutation({
     mutationFn: async (values: SettingsFormValues) => {
@@ -244,6 +310,66 @@ export default function DashboardSettingsPage() {
         <p className="text-muted-foreground text-sm">Contact info, payouts and payment methods.</p>
       </div>
 
+      <Card>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">Plan</h2>
+              <Badge
+                className={
+                  isPro
+                    ? "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                    : "border-0"
+                }
+                variant={isPro ? undefined : "secondary"}
+              >
+                {isPro ? (
+                  <>
+                    <Sparkles className="size-3" /> Pro
+                  </>
+                ) : (
+                  "Free"
+                )}
+              </Badge>
+            </div>
+            {!isPro ? (
+              <Button type="button" disabled={checkoutMutation.isPending} onClick={() => checkoutMutation.mutate()}>
+                {checkoutMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-3.5" />}
+                Upgrade to Pro
+              </Button>
+            ) : null}
+          </div>
+
+          {isPro ? (
+            <div className="space-y-2 text-sm">
+              <p className="text-muted-foreground">
+                {formatCurrency(planInfo?.monthlyPriceCents ?? 0, currency)}/month —{" "}
+                {planInfo?.cancelAtPeriodEnd ? "won't renew, Pro until" : "renews"}{" "}
+                {planInfo?.currentPeriodEnd ? formatDate(planInfo.currentPeriodEnd) : "—"}.
+              </p>
+              {!planInfo?.cancelAtPeriodEnd ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive -ml-2"
+                  disabled={cancelProMutation.isPending}
+                  onClick={() => cancelProMutation.mutate()}
+                >
+                  {cancelProMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Cancel Pro
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Unlock Cash on Delivery and Bank transfer as payment options for{" "}
+              {formatCurrency(planInfo?.monthlyPriceCents ?? 0, currency)}/month.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-6">
         <Card>
           <CardContent className="space-y-4">
@@ -332,6 +458,7 @@ export default function DashboardSettingsPage() {
           </CardContent>
         </Card>
 
+        {isAustralia ? (
         <Card>
           <CardContent className="space-y-4">
             <h2 className="font-semibold">Stripe Connect</h2>
@@ -387,22 +514,32 @@ export default function DashboardSettingsPage() {
             )}
           </CardContent>
         </Card>
+        ) : null}
 
         <Card>
           <CardContent className="space-y-4">
             <h2 className="font-semibold">Payment methods</h2>
-            <label className="flex items-start gap-3">
+            <label className={cn("flex items-start gap-3", !isPro && "cursor-not-allowed opacity-60")}>
               <Checkbox
                 checked={codEnabled}
+                disabled={!isPro}
                 onCheckedChange={(checked) => setValue("codEnabled", checked === true)}
               />
               <span>
-                <span className="block text-sm font-medium">Cash on Delivery</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Cash on Delivery</span>
+                  {!isPro ? (
+                    <Badge variant="secondary" className="border-0 text-[10px]">
+                      Included in Pro
+                    </Badge>
+                  ) : null}
+                </span>
                 <span className="text-muted-foreground block text-xs">
                   Let buyers pay in cash when their order arrives
                 </span>
               </span>
             </label>
+            {isSriLanka ? (
             <label className="flex items-start gap-3">
               <Checkbox
                 checked={onlinePaymentEnabled}
@@ -415,20 +552,29 @@ export default function DashboardSettingsPage() {
                 </span>
               </span>
             </label>
-            <label className="flex items-start gap-3">
+            ) : null}
+            <label className={cn("flex items-start gap-3", !isPro && "cursor-not-allowed opacity-60")}>
               <Checkbox
                 checked={bankTransferEnabled}
+                disabled={!isPro}
                 onCheckedChange={(checked) => setValue("bankTransferEnabled", checked === true)}
               />
               <span>
-                <span className="block text-sm font-medium">Bank transfer</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Bank transfer</span>
+                  {!isPro ? (
+                    <Badge variant="secondary" className="border-0 text-[10px]">
+                      Included in Pro
+                    </Badge>
+                  ) : null}
+                </span>
                 <span className="text-muted-foreground block text-xs">
                   Buyers see your bank details above and upload a payment receipt for you to
                   verify manually — no transaction fee
                 </span>
               </span>
             </label>
-            {settings?.stripeChargesEnabled ? (
+            {isAustralia && settings?.stripeChargesEnabled ? (
               <label className="flex items-start gap-3">
                 <Checkbox
                   checked={stripeEnabled}

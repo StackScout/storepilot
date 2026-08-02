@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -7,6 +6,7 @@ import { PriceDisplay } from "@/components/shared/price-display";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { AddToCartControls } from "@/components/marketplace/add-to-cart-controls";
 import { ProductCard } from "@/components/marketplace/product-card";
+import { ProductGallery } from "@/components/marketplace/product-gallery";
 import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { productsService, storesService } from "@/services";
 
@@ -47,16 +47,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       </nav>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <div className="bg-muted relative aspect-square overflow-hidden rounded-xl">
-          <Image
-            src={product.images[0]?.url}
-            alt={product.images[0]?.alt ?? product.name}
-            fill
-            priority
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            className="object-cover"
-          />
-        </div>
+        <ProductGallery images={product.images} productName={product.name} />
 
         <div className="space-y-5">
           <div className="space-y-2">

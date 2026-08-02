@@ -12,13 +12,15 @@ import {
   Store,
   ExternalLink,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { useAuthSession } from "@/hooks/use-auth-session";
-import { storesService, authService } from "@/services";
+import { storesService, authService, billingService } from "@/services";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -39,6 +41,11 @@ export function DashboardSidebarContent() {
     queryFn: () => storesService.getStoreById(storeId),
     staleTime: 0,
   });
+  const { data: planInfo } = useQuery({
+    queryKey: ["seller-plan"],
+    queryFn: () => billingService.getMyPlan(),
+  });
+  const isPro = planInfo?.plan === "pro";
 
   async function handleSignOut() {
     await authService.logout();
@@ -79,10 +86,22 @@ export function DashboardSidebarContent() {
           <span className="bg-muted flex size-8 items-center justify-center rounded-full">
             <Store className="size-4" />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{store?.name ?? "Your store"}</p>
             <p className="text-muted-foreground text-xs">{store?.address.city ?? ""}</p>
           </div>
+          {isPro ? (
+            <Badge className="border-0 bg-amber-100 text-amber-800 shrink-0 dark:bg-amber-950 dark:text-amber-300">
+              <Sparkles className="size-3" /> Pro
+            </Badge>
+          ) : (
+            <Link
+              href="/dashboard/settings"
+              className="text-primary shrink-0 text-xs font-medium underline-offset-4 hover:underline"
+            >
+              Upgrade
+            </Link>
+          )}
         </div>
         {store?.verificationStatus === "active" ? (
           <Link

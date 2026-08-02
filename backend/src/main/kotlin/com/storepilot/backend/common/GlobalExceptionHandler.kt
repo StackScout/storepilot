@@ -38,6 +38,11 @@ class GlobalExceptionHandler {
         ResponseEntity.status(HttpStatus.UNAUTHORIZED)
             .body(ApiError.of("UNAUTHENTICATED", ex.message ?: "Invalid credentials"))
 
+    @ExceptionHandler(EmailNotVerifiedException::class)
+    fun handleEmailNotVerified(ex: EmailNotVerifiedException): ResponseEntity<ApiError> =
+        ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiError.of("EMAIL_NOT_VERIFIED", ex.message ?: "Please verify your email before signing in"))
+
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgument(ex: IllegalArgumentException): ResponseEntity<ApiError> =
         ResponseEntity.status(HttpStatus.BAD_REQUEST)

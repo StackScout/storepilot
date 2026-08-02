@@ -58,11 +58,20 @@ class Product(
     @Column(name = "review_count", nullable = false)
     var reviewCount: Int = 0,
     @OneToMany(mappedBy = "product", cascade = [CascadeType.ALL], orphanRemoval = true)
-    @OrderBy("createdAt asc")
+    @OrderBy("sortOrder asc")
     var images: MutableList<ProductImage> = mutableListOf(),
 ) : BaseEntity()
 
-/** Mirrors src/types/product.ts's ProductImage — a child entity, not an @ElementCollection, so individual images can be reordered/removed later. */
+/**
+ * Mirrors src/types/product.ts's ProductImage — a child entity, not an
+ * @ElementCollection, so individual images can be reordered/removed later.
+ * index 0 (lowest sortOrder) is the product's primary image — shown as the
+ * thumbnail on cards, carts, order snapshots, etc. wherever only one image
+ * fits — see ProductService.storeImages, which sets sortOrder from upload
+ * order (deliberately explicit rather than relying on createdAt, which
+ * isn't a reliable distinguisher between images uploaded in the same
+ * request).
+ */
 @Entity
 @Table(name = "product_images")
 class ProductImage(
@@ -73,4 +82,6 @@ class ProductImage(
     var url: String,
     @Column(nullable = false)
     var alt: String,
+    @Column(name = "sort_order", nullable = false)
+    var sortOrder: Int = 0,
 ) : BaseEntity()

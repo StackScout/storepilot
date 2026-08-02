@@ -6,3 +6,5 @@ export * as buyersService from "./buyers.service";
 export * as authService from "./auth.service";
 export * as adminNotificationsService from "./admin-notifications.service";
 export * as abnService from "./abn.service";
+export * as adminService from "./admin.service";
+export * as billingService from "./billing.service";

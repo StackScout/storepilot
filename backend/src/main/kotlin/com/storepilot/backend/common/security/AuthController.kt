@@ -1,6 +1,7 @@
 package com.storepilot.backend.common.security
 
 import com.storepilot.backend.common.ConflictException
+import com.storepilot.backend.common.EmailNotVerifiedException
 import com.storepilot.backend.common.UnauthenticatedException
 import com.storepilot.backend.notification.NotificationProperties
 import jakarta.servlet.http.HttpServletRequest
@@ -11,6 +12,7 @@ import org.springframework.core.ParameterizedTypeReference
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseCookie
+import org.springframework.http.ResponseEntity
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.util.LinkedMultiValueMap
@@ -28,6 +30,7 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUse
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminListGroupsForUserRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminSetUserPasswordRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminUpdateUserAttributesRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminUserGlobalSignOutRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthFlowType
@@ -54,12 +57,17 @@ private const val REFRESH_TOKEN_MAX_AGE_SECONDS = 60L * 60 * 24 * 30 // matches 
  * sign-in, which the frontend never talks to Cognito for either: it only
  * ever links to googleStart() below.
  *
- * Registration skips Cognito's email-verification-code flow deliberately
- * (AdminCreateUser + MessageAction=SUPPRESS + AdminSetUserPassword with
- * permanent=true creates an already-usable account immediately) — a
- * pragmatic MVP trade-off, not a security requirement being ignored. Adding
- * real email verification later is a frontend (confirmation-code UI) +
- * backend (ConfirmSignUp call) addition on top of this, not a rework.
+ * Registration still uses AdminCreateUser + MessageAction=SUPPRESS +
+ * AdminSetUserPassword(permanent=true) — Cognito's own ConfirmSignUp/
+ * verification-code flow is never used — but the account is created with
+ * email_verified=false and register() no longer signs the caller in
+ * immediately: EmailVerificationService emails a 6-digit code (app-owned,
+ * see its doc comment), verifyEmail() below flips email_verified to true
+ * once it's entered correctly, and login() refuses to authenticate an
+ * account whose email isn't verified yet (see EmailNotVerifiedException).
+ * The frontend re-uses the password already typed at registration to log
+ * in right after verification succeeds, rather than this endpoint doing it
+ * — see register()'s doc comment.
  *
  * Buyer and seller are deliberately mutually exclusive identities, not two
  * roles one account can hold — register() never grants "buyer" to a
@@ -78,16 +86,21 @@ class AuthController(
     private val currentActor: CurrentActor,
     private val notificationProperties: NotificationProperties,
     private val jwtDecoder: JwtDecoder,
+    private val emailVerificationService: EmailVerificationService,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
     private val restClient = RestClient.create()
 
+    /**
+     * Creates the Cognito user (unverified) and emails a 6-digit code — it
+     * does NOT sign the caller in. The frontend keeps the just-typed
+     * password in memory (never persisted, never sent anywhere else) and
+     * calls login() itself once verifyEmail() below succeeds, so this
+     * endpoint and the DB-backed EmailVerificationCode row never need to
+     * touch the password a second time.
+     */
     @PostMapping("/api/auth/register")
-    fun register(
-        @Valid @RequestBody input: RegisterInput,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ): AuthSessionResponse {
+    fun register(@Valid @RequestBody input: RegisterInput): RegisterResponse {
         require(input.accountType == "buyer" || input.accountType == "seller") {
             "accountType must be \"buyer\" or \"seller\""
         }
@@ -98,7 +111,7 @@ class AuthController(
                     .username(input.email)
                     .userAttributes(
                         AttributeType.builder().name("email").value(input.email).build(),
-                        AttributeType.builder().name("email_verified").value("true").build(),
+                        AttributeType.builder().name("email_verified").value("false").build(),
                         AttributeType.builder().name("name").value(input.name).build(),
                     )
                     .messageAction(MessageActionType.SUPPRESS)
@@ -126,14 +139,36 @@ class AuthController(
             addToGroupWithRetry(input.email, "buyer")
         }
 
-        val authResult = adminInitiateAuth(input.email, input.password)
-        setAuthCookies(response, request.isSecure, authResult)
-        return AuthSessionResponse(
-            signedIn = true,
-            role = if (input.accountType == "buyer") "buyer" else null,
-            email = input.email,
-            name = input.name,
+        emailVerificationService.sendCode(input.email, input.name)
+        return RegisterResponse(email = input.email, name = input.name)
+    }
+
+    /** Confirms a code sent by register()/resendVerificationCode() and flips the Cognito user to email_verified=true. Doesn't sign the caller in — see register()'s doc comment. */
+    @PostMapping("/api/auth/verify-email")
+    fun verifyEmail(@Valid @RequestBody input: VerifyEmailInput): ResponseEntity<Void> {
+        emailVerificationService.verifyCode(input.email, input.code)
+        cognitoClient.adminUpdateUserAttributes(
+            AdminUpdateUserAttributesRequest.builder()
+                .userPoolId(cognitoProperties.userPoolId)
+                .username(input.email)
+                .userAttributes(AttributeType.builder().name("email_verified").value("true").build())
+                .build(),
         )
+        return ResponseEntity.noContent().build()
+    }
+
+    /** Doesn't reveal whether the email has an account at all — pretends success either way, same "don't leak account existence" principle as UnauthenticatedException. */
+    @PostMapping("/api/auth/resend-verification-code")
+    fun resendVerificationCode(@Valid @RequestBody input: ResendVerificationInput): ResponseEntity<Void> {
+        val name = try {
+            cognitoClient.adminGetUser(
+                AdminGetUserRequest.builder().userPoolId(cognitoProperties.userPoolId).username(input.email).build(),
+            ).userAttributes().firstOrNull { it.name() == "name" }?.value() ?: input.email
+        } catch (e: UserNotFoundException) {
+            return ResponseEntity.noContent().build()
+        }
+        emailVerificationService.sendCode(input.email, name)
+        return ResponseEntity.noContent().build()
     }
 
     @PostMapping("/api/auth/login")
@@ -143,14 +178,24 @@ class AuthController(
         response: HttpServletResponse,
     ): AuthSessionResponse {
         val authResult = adminInitiateAuth(input.email, input.password)
-        setAuthCookies(response, request.isSecure, authResult)
 
+        // Fetch attributes (and check email_verified) BEFORE setting any
+        // cookies — an unverified account must never end up with a valid
+        // session, even briefly. Admin-created accounts (create-admin.sh)
+        // are created with email_verified=true already, so this never
+        // blocks admin sign-in.
         val attributes = cognitoClient.adminGetUser(
             AdminGetUserRequest.builder()
                 .userPoolId(cognitoProperties.userPoolId)
                 .username(input.email)
                 .build(),
         ).userAttributes().associate { it.name() to it.value() }
+        if (attributes["email_verified"] != "true") {
+            throw EmailNotVerifiedException("Please verify your email before signing in")
+        }
+
+        setAuthCookies(response, request.isSecure, authResult)
+
         val groups = cognitoClient.adminListGroupsForUser(
             AdminListGroupsForUserRequest.builder()
                 .userPoolId(cognitoProperties.userPoolId)

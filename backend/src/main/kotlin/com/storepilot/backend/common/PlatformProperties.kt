@@ -36,9 +36,11 @@ data class PlatformProperties(
     /** Symbol prefix for backend-generated plain-text (emails) and the frontend's Intl.NumberFormat-driven display. */
     val currencySymbol: String = "$",
     val currencyLocale: String = "en-AU",
-    val platformFeePercent: BigDecimal = BigDecimal("3.5"),
+    val platformFeePercent: BigDecimal = BigDecimal("2.0"),
     /** Cents — $10.00. */
     val flatShippingFee: Int = 1000,
+    /** Cents — $9.90/month. See SellerPlan.kt/SellerBillingService for what Pro actually unlocks. */
+    val proMonthlyPriceCents: Int = 990,
     /**
      * Defaults applied to a newly-onboarded store's StoreSettings — a
      * seller can still change these afterward via store settings, subject

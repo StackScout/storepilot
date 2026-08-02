@@ -2,7 +2,7 @@ package com.storepilot.backend.order
 
 import com.storepilot.backend.common.storage.FileStorageService
 
-/** receiptUrl/courierReceiptUrl are resolved fresh on every call (never cached) — see ReceiptStorageService/FileStorageService.resolveUrl. */
+/** receiptUrl/courierReceiptUrl/productImageUrl are resolved fresh on every call (never cached) — see ReceiptStorageService/FileStorageService.resolveUrl. */
 fun Order.toResponse(receiptStorageService: ReceiptStorageService, fileStorageService: FileStorageService): OrderResponse =
     OrderResponse(
         id = requireNotNull(id),
@@ -14,7 +14,7 @@ fun Order.toResponse(receiptStorageService: ReceiptStorageService, fileStorageSe
             OrderItemResponse(
                 productId = it.productId,
                 productName = it.productName,
-                productImageUrl = it.productImageUrl,
+                productImageUrl = if (it.productImageUrl.isBlank()) "" else fileStorageService.resolveUrl(it.productImageUrl),
                 unitPrice = it.unitPrice,
                 quantity = it.quantity,
             )

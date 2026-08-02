@@ -13,6 +13,7 @@ import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.notification.OrderNotifier
 import com.storepilot.backend.product.ProductService
+import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.stripe.StripeService
@@ -190,6 +191,23 @@ class OrderService(
 
         val now = Instant.now()
         val paymentMethod = wireValueOf<PaymentMethod>(input.paymentMethod)
+        // Defense in depth — StoreService.upsertSettings already refuses to
+        // let a non-Pro seller turn these two on in the first place, but a
+        // seller who downgrades after enabling them (or a stale client
+        // submitting a payment method the settings toggle wouldn't offer)
+        // must still be blocked here, not just hidden in the UI.
+        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO) {
+            throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
+        }
+        // PayHere is Sri Lanka-specific, Stripe is Australia-specific — each
+        // is temporarily disabled outside its home market. UI already hides
+        // both accordingly; this is defense in depth for a stale client.
+        if (paymentMethod == PaymentMethod.PAYHERE && platformConfig.countryCode != "LK") {
+            throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
+        }
+        if (paymentMethod == PaymentMethod.STRIPE && platformConfig.countryCode != "AU") {
+            throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
+        }
         // Both start unpaid: COD flips to paid on delivery (see updateStatus),
         // PayHere flips to paid asynchronously via the notify webhook once the
         // buyer actually completes payment in the popup.

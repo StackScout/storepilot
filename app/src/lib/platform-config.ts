@@ -21,6 +21,8 @@ export interface PlatformConfig {
   currencyLocale: string;
   platformFeePercent: number;
   flatShippingFee: number;
+  /** Cents — see backend SellerPlan.kt. */
+  proMonthlyPriceCents: number;
   defaultCodEnabled: boolean;
   defaultOnlinePaymentEnabled: boolean;
   defaultBankTransferEnabled: boolean;
@@ -45,8 +47,9 @@ const FALLBACK_CONFIG: PlatformConfig = {
   currencyCode: "AUD",
   currencySymbol: "$",
   currencyLocale: "en-AU",
-  platformFeePercent: 3.5,
+  platformFeePercent: 2.0,
   flatShippingFee: 10,
+  proMonthlyPriceCents: 990,
   defaultCodEnabled: true,
   defaultOnlinePaymentEnabled: false,
   defaultBankTransferEnabled: true,

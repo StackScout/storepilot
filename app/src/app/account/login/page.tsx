@@ -15,7 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
+import { EmailVerificationForm } from "@/components/shared/email-verification-form";
 import { authService } from "@/services";
+import { ApiRequestError } from "@/lib/api-client";
+import type { AuthSession } from "@/services/auth.service";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -38,6 +41,7 @@ function BuyerLoginForm() {
   const redirectTo = searchParams.get("redirectTo") || "/account";
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState<{ email: string; password: string } | null>(null);
 
   // AuthController.googleCallback redirects here with this on failure
   // (e.g. the Google popup was cancelled, or the code exchange failed).
@@ -53,27 +57,49 @@ function BuyerLoginForm() {
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
+  const handleSession = (session: AuthSession) => {
+    // authService.login() authenticates against Cognito regardless of
+    // which login page called it — it has no notion of "buyer login" vs
+    // "seller login". Without this check, a seller-only account would
+    // authenticate successfully here, then get silently bounced back to
+    // this page by proxy.ts's role gate on /account/**, with no
+    // indication of what happened.
+    if (session.role !== "buyer") {
+      void authService.logout();
+      toast.error("This account isn't registered as a buyer. Try the seller or admin sign-in instead.");
+      return;
+    }
+    queryClient.clear();
+    router.push(redirectTo);
+    router.refresh();
+  };
+
   const mutation = useMutation({
-    mutationFn: async (values: LoginFormValues) => {
-      const session = await authService.login(values.email, values.password);
-      // authService.login() authenticates against Cognito regardless of
-      // which login page called it — it has no notion of "buyer login" vs
-      // "seller login". Without this check, a seller-only account would
-      // authenticate successfully here, then get silently bounced back to
-      // this page by proxy.ts's role gate on /account/**, with no
-      // indication of what happened.
-      if (session.role !== "buyer") {
-        await authService.logout();
-        throw new Error("This account isn't registered as a buyer. Try the seller or admin sign-in instead.");
+    mutationFn: (values: LoginFormValues) => authService.login(values.email, values.password),
+    onSuccess: handleSession,
+    onError: (error: Error, variables) => {
+      if (error instanceof ApiRequestError && error.code === "EMAIL_NOT_VERIFIED") {
+        setPendingVerification({ email: variables.email, password: variables.password });
       }
-      return session;
-    },
-    onSuccess: () => {
-      queryClient.clear();
-      router.push(redirectTo);
-      router.refresh();
     },
   });
+
+  if (pendingVerification) {
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">
+        <Card>
+          <CardContent>
+            <EmailVerificationForm
+              email={pendingVerification.email}
+              password={pendingVerification.password}
+              autoSend
+              onVerified={handleSession}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">

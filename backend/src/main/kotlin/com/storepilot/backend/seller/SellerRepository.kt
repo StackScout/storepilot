@@ -6,4 +6,5 @@ import java.util.UUID
 interface SellerRepository : JpaRepository<Seller, UUID> {
     fun findByCognitoSub(cognitoSub: String): Seller?
     fun findByEmailIgnoreCase(email: String): Seller?
+    fun findByStripeSubscriptionId(stripeSubscriptionId: String): Seller?
 }

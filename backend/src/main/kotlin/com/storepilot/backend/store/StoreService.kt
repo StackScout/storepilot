@@ -2,6 +2,8 @@ package com.storepilot.backend.store
 
 import com.storepilot.backend.abn.isValidAbnChecksum
 import com.storepilot.backend.admin.AdminNotificationService
+import com.storepilot.backend.admin.AuditAction
+import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -14,6 +16,7 @@ import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.seller.Seller
+import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.seller.SellerRepository
 import org.springframework.web.multipart.MultipartFile
 import org.slf4j.LoggerFactory
@@ -43,6 +46,7 @@ class StoreService(
     private val fileStorageService: FileStorageService,
     private val adminNotificationService: AdminNotificationService,
     private val platformConfigService: PlatformConfigService,
+    private val auditLogService: AuditLogService,
 ) {
     private val log = LoggerFactory.getLogger(StoreService::class.java)
 
@@ -207,15 +211,21 @@ class StoreService(
                     (input.bankAccountName != null && input.bankAccountName != existing.bankAccountName) ||
                     (input.bankAccountNumber != null && input.bankAccountNumber != existing.bankAccountNumber)
 
+            val sellerPlan = existing.store.seller.plan
             input.contactEmail?.let { existing.contactEmail = it }
             input.contactPhone?.let { existing.contactPhone = it }
             input.bankAccountName?.let { existing.bankAccountName = it }
             input.bankAccountNumber?.let { existing.bankAccountNumber = it }
             input.bankName?.let { existing.bankName = it }
             input.transactionFeePercent?.let { existing.transactionFeePercent = it }
-            input.codEnabled?.let { existing.codEnabled = it }
+            // Cash on Delivery and Bank transfer are Pro-only (see
+            // SellerPlan.kt) — force off regardless of what was requested
+            // whenever the seller isn't Pro, rather than rejecting the
+            // whole settings save, so editing an unrelated field never
+            // fails because of a stale/bypassed client-side toggle.
+            input.codEnabled?.let { existing.codEnabled = it && sellerPlan == SellerPlan.PRO }
             input.onlinePaymentEnabled?.let { existing.onlinePaymentEnabled = it }
-            input.bankTransferEnabled?.let { existing.bankTransferEnabled = it }
+            input.bankTransferEnabled?.let { existing.bankTransferEnabled = it && sellerPlan == SellerPlan.PRO }
             input.sellerType?.let { existing.sellerType = wireValueOf(it) }
             input.driverLicenceNumber?.let { existing.driverLicenceNumber = it }
             if (input.abn != null) existing.abn = input.abn
@@ -241,9 +251,12 @@ class StoreService(
 
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         val platformConfig = platformConfigService.current()
-        val codEnabled = input.codEnabled ?: platformConfig.defaultCodEnabled
+        val sellerIsPro = store.seller.plan == SellerPlan.PRO
+        // See the equivalent gate above for why COD/bank-transfer are
+        // forced off rather than rejecting the request outright.
+        val codEnabled = (input.codEnabled ?: platformConfig.defaultCodEnabled) && sellerIsPro
         val onlinePaymentEnabled = input.onlinePaymentEnabled ?: platformConfig.defaultOnlinePaymentEnabled
-        val bankTransferEnabled = input.bankTransferEnabled ?: platformConfig.defaultBankTransferEnabled
+        val bankTransferEnabled = (input.bankTransferEnabled ?: platformConfig.defaultBankTransferEnabled) && sellerIsPro
         requireAtLeastOnePaymentMethod(codEnabled, onlinePaymentEnabled, bankTransferEnabled)
         val created = StoreSettings(
             store = store,
@@ -390,6 +403,18 @@ class StoreService(
 
         if (status == StoreVerificationStatus.REJECTED && input.rejectionReason != null) {
             upsertSettings(storeId, StoreSettingsInput(rejectionReason = input.rejectionReason))
+        }
+
+        // The audit log is the durable history of this decision — unlike
+        // StoreSettings.rejectionReason, which gets overwritten on every
+        // rejection, each row here is a permanent record of who decided
+        // what and why, so a store rejected twice doesn't lose the first
+        // reason.
+        if (status == StoreVerificationStatus.ACTIVE) {
+            auditLogService.record(AuditAction.STORE_APPROVED, "store", storeId.toString(), "Approved store \"${store.name}\"")
+        } else if (status == StoreVerificationStatus.REJECTED) {
+            val reasonSuffix = input.rejectionReason?.let { ": $it" } ?: ""
+            auditLogService.record(AuditAction.STORE_REJECTED, "store", storeId.toString(), "Rejected store \"${store.name}\"$reasonSuffix")
         }
         return store.toResponse()
     }

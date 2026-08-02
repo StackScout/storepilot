@@ -49,7 +49,7 @@ behavior.
   during review. The dashboard shows a persistent banner
   (`PendingVerificationBanner`) while `verificationStatus !== "active"`.
 - **Approval/rejection only happens via `/admin`** (see
-  [Admin (not a real role)](#admin-not-a-real-role)), never by the seller
+  [Admin — resolved, now a real gated role](#admin--resolved-now-a-real-gated-role)), never by the seller
   themselves — approving sets both `verificationStatus: "active"` **and**
   `isVerified: true` (the platform is vouching for the seller at that
   point); rejecting sets `verificationStatus: "rejected"` and stores an
@@ -62,7 +62,7 @@ behavior.
 - Route protection (`src/proxy.ts`, Next 16's `middleware.ts`): unauthenticated
   visitors to `/dashboard/*` are redirected to `/login?redirectTo=<path>`;
   authenticated sellers visiting `/login` are redirected to `/dashboard`.
-  **`/admin` is not in the matcher at all** — see below.
+  `/admin` is gated too, by the `admin` Cognito group — see below.
 - Sign-out deletes the session cookie and redirects to `/login`.
 
 ## Seller-store context (new)
@@ -83,24 +83,31 @@ create a second one. `src/hooks/use-seller-store.tsx` now provides:
 used by `/login` (which has no way to know which store an arbitrary email
 belongs to) and as a defensive fallback in `dashboard/layout.tsx`.
 
-## Admin (not a real role)
+## Admin — RESOLVED, now a real gated role
 
-`/admin` (`src/app/admin/`) is a **minimal, unauthenticated** internal tool,
-not a real platform-operator role:
+This section originally described the pre-Cognito, `localStorage`-mock era
+(`/admin` unauthenticated, not in `proxy.ts`'s matcher). That's no longer
+true. `/admin` is now:
 
-- Not covered by `proxy.ts`'s matcher (`["/dashboard/:path*", "/login"]`) —
-  anyone who knows the URL can reach it, in dev or production. This is a
-  deliberate, explicitly-flagged demo shortcut, not an oversight.
-- Two sections: **pending store applications** (approve/reject, with a
-  reason required to reject) and **payout runs** (create a payout batch per
-  store from its currently-eligible delivered+paid orders; mark a scheduled
-  payout as paid with an optional bank reference).
-- All actions call `storesService`/`payoutsService` functions directly from
-  client-side mutations — no dedicated Server Actions were introduced for
-  admin, since (like the rest of the dashboard) these need to run in the
-  browser to see `localStorage` (see `src/lib/mock-db.ts`).
-- A real backend **must** put this behind a genuine admin role/auth before
-  shipping anything like it to production.
+- Gated identically to `/dashboard` — `proxy.ts` requires the `admin`
+  Cognito group (redirecting to `/admin/login`), and every `/api/admin/**`
+  backend route requires `ROLE_ADMIN` (`SecurityConfig.kt`).
+  Admin accounts are never self-registered: the first is bootstrapped via
+  `infra/scripts/create-admin.sh`; an existing admin can invite further
+  ones in-app from `/admin/admins`.
+- Structured like the seller dashboard — a persistent sidebar
+  (`AdminSidebarContent`) with real sub-routes: `/admin` (overview),
+  `/admin/stores` (pending applications + decision history),
+  `/admin/accounting` (payouts / fee collections / Stripe settlements,
+  with a summary), `/admin/admins` (invite/list admins), `/admin/audit-log`,
+  `/admin/notifications`.
+- Every consequential action (store approved/rejected, admin invited,
+  payout marked paid, fee collection marked collected) is recorded in a
+  durable `audit_logs` table (`AuditLogService.kt`) — actor, target,
+  description, timestamp — viewable and filterable at `/admin/audit-log`.
+- All actions call `storesService`/`payoutsService`/`adminService`
+  functions from client-side TanStack Query mutations against the real
+  backend, not `localStorage`.
 
 ## User stories
 
@@ -122,7 +129,7 @@ not a real platform-operator role:
 |---|---|---|---|
 | `/login` | `src/app/login/page.tsx` | Server | Renders a plain `<form action={signInAsSeller}>` (Server Action, no client JS needed); reads `redirectTo`/`error` from `searchParams` |
 | `/onboarding` | `src/app/onboarding/page.tsx` | Client | react-hook-form + zod; on submit, creates the Store/Settings client-side then establishes the session, via `useMutation` |
-| `/admin` | `src/app/admin/page.tsx` | Client | No auth. Store approval + payout runs — see above |
+| `/admin` | `src/app/admin/page.tsx` | Client | Gated (admin Cognito role). Overview — see above for the full route list |
 
 ## Components
 
@@ -249,8 +256,10 @@ Real endpoints this mock currently stands in for:
   (nothing exercises two sellers editing each other's data), but remains a
   **must-fix for a real backend** — see
   [`api-contracts.md`](../../../docs/api-contracts.md#authorization).
-- `/admin` has **no permission check of any kind**. See
-  [Admin (not a real role)](#admin-not-a-real-role).
+- `/admin` is gated by the `admin` Cognito role (both `proxy.ts` and
+  `SecurityConfig.kt`), but every admin has equal, all-or-nothing access —
+  no finer-grained permission tiers exist. See
+  [Admin — resolved, now a real gated role](#admin--resolved-now-a-real-gated-role).
 
 ## Edge cases
 

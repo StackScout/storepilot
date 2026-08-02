@@ -170,6 +170,7 @@ class DataSeeder(
                 currencyLocale = platformProperties.currencyLocale,
                 platformFeePercent = platformProperties.platformFeePercent,
                 flatShippingFee = platformProperties.flatShippingFee,
+                proMonthlyPriceCents = platformProperties.proMonthlyPriceCents,
                 defaultCodEnabled = platformProperties.defaultCodEnabled,
                 defaultOnlinePaymentEnabled = platformProperties.defaultOnlinePaymentEnabled,
                 defaultBankTransferEnabled = platformProperties.defaultBankTransferEnabled,

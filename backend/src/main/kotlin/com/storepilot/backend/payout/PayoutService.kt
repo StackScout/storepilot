@@ -1,5 +1,7 @@
 package com.storepilot.backend.payout
 
+import com.storepilot.backend.admin.AuditAction
+import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -28,6 +30,7 @@ class PayoutService(
     private val receiptStorageService: ReceiptStorageService,
     private val fileStorageService: FileStorageService,
     private val currentActor: CurrentActor,
+    private val auditLogService: AuditLogService,
 ) {
     fun listByStore(storeId: UUID): List<PayoutResponse> {
         requireSellerOwnsStore(storeId)
@@ -104,7 +107,15 @@ class PayoutService(
         payout.status = PayoutStatus.PAID
         payout.paidAt = Instant.now()
         payout.bankReference = input.bankReference
-        return payoutRepository.save(payout).toResponse()
+        val saved = payoutRepository.save(payout)
+        val referenceSuffix = input.bankReference?.let { " (ref: $it)" } ?: ""
+        auditLogService.record(
+            AuditAction.PAYOUT_MARKED_PAID,
+            "payout",
+            payoutId.toString(),
+            "Marked payout for \"${payout.store.name}\" (net ${payout.net}) as paid$referenceSuffix",
+        )
+        return saved.toResponse()
     }
 
     fun adminList(): List<PayoutResponse> =

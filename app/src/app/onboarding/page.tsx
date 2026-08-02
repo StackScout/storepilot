@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, Store } from "lucide-react";
+import { Loader2, ShieldCheck, Sparkles, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +18,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AbnVerificationBadge } from "@/components/shared/abn-verification-badge";
 import { CATEGORIES } from "@/mock/categories";
+import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
-import { storesService, authService } from "@/services";
+import { storesService, authService, billingService } from "@/services";
 import type { SellerType, StoreCategory } from "@/types";
 
 /**
@@ -81,8 +82,11 @@ type OnboardingFormValues = z.infer<ReturnType<typeof buildOnboardingSchema>>;
 export default function OnboardingPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { name, platformFeePercent, countryCode } = usePlatformConfig();
+  const { name, platformFeePercent, countryCode, proMonthlyPriceCents, currencyCode, currencySymbol, currencyLocale } =
+    usePlatformConfig();
+  const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const isSriLanka = countryCode === "LK";
+  const [sellerPlan, setSellerPlan] = useState<"free" | "pro">("free");
   const onboardingSchema = useMemo(() => buildOnboardingSchema(isSriLanka), [isSriLanka]);
   const {
     register,
@@ -168,12 +172,21 @@ export default function OnboardingPage() {
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Application submitted! Your store is pending review.");
       // React Query cached the pre-onboarding auth-session (role: "buyer"
       // only) — clear it so the dashboard's checks see the fresh "seller"
       // role from the token authService.refresh() just reissued above.
       queryClient.clear();
+      if (sellerPlan === "pro") {
+        try {
+          const { checkoutUrl } = await billingService.startProCheckout();
+          window.location.href = checkoutUrl;
+          return;
+        } catch {
+          toast.error("Your store was created, but starting the Pro checkout failed — you can upgrade anytime from Settings.");
+        }
+      }
       router.push("/dashboard");
       router.refresh();
     },
@@ -469,6 +482,50 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="text-primary size-4.5" />
+              <h2 className="font-semibold">Choose your plan</h2>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              You can switch plans anytime from your dashboard — this isn&apos;t locked in.
+            </p>
+            <RadioGroup value={sellerPlan} onValueChange={(v) => setSellerPlan(v as "free" | "pro")} className="gap-3">
+              <Label
+                htmlFor="plan-free"
+                className="hover:bg-accent/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 has-[[data-state=checked]]:border-primary"
+              >
+                <RadioGroupItem value="free" id="plan-free" className="mt-0.5" />
+                <span>
+                  <span className="block text-sm font-medium">Free</span>
+                  <span className="text-muted-foreground block text-xs">
+                    Sell with online payment{isSriLanka ? " (PayHere)" : " (Stripe, once connected)"} — a{" "}
+                    {platformFeePercent}% transaction fee applies only when you make a sale.
+                  </span>
+                </span>
+              </Label>
+              <Label
+                htmlFor="plan-pro"
+                className="hover:bg-accent/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 has-[[data-state=checked]]:border-primary"
+              >
+                <RadioGroupItem value="pro" id="plan-pro" className="mt-0.5" />
+                <span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Pro</span>
+                    <span className="text-muted-foreground text-xs">
+                      {formatCurrency(proMonthlyPriceCents, currency)}/month
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground block text-xs">
+                    Everything in Free, plus Cash on Delivery and Bank transfer as payment options.
+                  </span>
+                </span>
+              </Label>
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
         <label className="flex items-start gap-3 text-sm">
           <Checkbox
             checked={agreeToTerms}
@@ -484,10 +541,12 @@ export default function OnboardingPage() {
 
         <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
           {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-          Submit application
+          {sellerPlan === "pro" ? "Submit application & continue to payment" : "Submit application"}
         </Button>
         <p className="text-muted-foreground text-center text-xs">
-          A {platformFeePercent}% transaction fee applies only when you make a sale — no monthly costs.
+          {sellerPlan === "pro"
+            ? `Pro is ${formatCurrency(proMonthlyPriceCents, currency)}/month, billed via Stripe — cancel anytime.`
+            : `A ${platformFeePercent}% transaction fee applies only when you make a sale — no monthly costs.`}
         </p>
       </form>
     </div>

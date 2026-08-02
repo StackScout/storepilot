@@ -8,8 +8,10 @@ import jakarta.persistence.Table
 /**
  * JIT-provisioned on first authenticated request from a JWT whose
  * `cognito:groups` includes `admin` — safe because there is no public path
- * into that Cognito group (only granted out-of-band via console/CLI). This
- * row is a profile-data cache only (name/email for audit trails); it is
+ * into that Cognito group (only granted out-of-band via `create-admin.sh`
+ * for the first admin, or by an existing admin via AdminService.invite()
+ * thereafter — never self-service). This row is a profile-data cache only
+ * (name/email for audit trails); it is
  * NEVER the authorization source of truth — `ROLE_ADMIN` always comes from
  * the JWT claim, re-checked every request (see CurrentActor). Removing
  * someone from the Cognito group revokes access immediately regardless of

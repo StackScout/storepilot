@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo } from "react";
 import Image from "next/image";
-import { ImageOff, Upload, X } from "lucide-react";
+import { ImageOff, Star, Upload, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import type { ProductImage } from "@/types";
 
 interface ImageUploaderProps {
@@ -40,14 +41,44 @@ export function ImageUploader({ files, onChange, existingImages = [], error }: I
     onChange(files.filter((_, i) => i !== index));
   }
 
+  /** Moves the picked file to index 0 — see ProductImage.sortOrder's backend doc comment for why upload order is the source of truth for which image is "primary". */
+  function makePrimary(index: number) {
+    if (index === 0) return;
+    const reordered = [...files];
+    const [picked] = reordered.splice(index, 1);
+    reordered.unshift(picked);
+    onChange(reordered);
+  }
+
   return (
     <div className="space-y-2">
       <Label htmlFor="product-images">Product images</Label>
       <div className="flex flex-wrap gap-3">
         {previews.length > 0 ? (
           previews.map((src, i) => (
-            <div key={src + i} className="bg-muted relative size-20 shrink-0 overflow-hidden rounded-md border">
+            <div
+              key={src + i}
+              className={cn(
+                "bg-muted relative size-20 shrink-0 overflow-hidden rounded-md border",
+                i === 0 && "ring-primary ring-2",
+              )}
+            >
               <Image src={src} alt="Product preview" fill sizes="80px" className="object-cover" />
+              {i === 0 ? (
+                <span className="bg-primary text-primary-foreground absolute bottom-0.5 left-0.5 rounded px-1 text-[10px] leading-tight font-medium">
+                  Primary
+                </span>
+              ) : files.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => makePrimary(i)}
+                  className="absolute bottom-0.5 left-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                  aria-label="Set as primary image"
+                  title="Set as primary image"
+                >
+                  <Star className="size-3" />
+                </button>
+              ) : null}
               {files.length > 0 ? (
                 <button
                   type="button"
@@ -66,6 +97,12 @@ export function ImageUploader({ files, onChange, existingImages = [], error }: I
           </div>
         )}
       </div>
+      {previews.length > 1 ? (
+        <p className="text-muted-foreground text-xs">
+          The primary image is shown as the thumbnail everywhere.{" "}
+          {files.length > 0 ? "Click the star on another image to make it primary." : null}
+        </p>
+      ) : null}
       <div>
         <Input
           id="product-images"

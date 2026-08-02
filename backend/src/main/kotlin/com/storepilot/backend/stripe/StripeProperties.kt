@@ -21,4 +21,15 @@ data class StripeProperties(
     /** Buyer lands back here as `{successUrlBase}/{orderId}` / `{cancelUrlBase}/{orderId}` — the order page, same pattern as PayHereProperties.returnUrlBase. */
     val successUrlBase: String = "http://localhost:3000/orders",
     val cancelUrlBase: String = "http://localhost:3000/orders",
+    /**
+     * Seller Pro-plan billing (see SellerBillingService/SellerBillingWebhookService)
+     * — a separate Dashboard webhook endpoint/secret from [webhookSecret]
+     * above, since it listens to "Your account" events, not "Connected
+     * accounts". Both success/cancel land back on the settings page (unlike
+     * the order flow's per-order URL, there's only one place a seller
+     * manages their plan).
+     */
+    val billingWebhookSecret: String = "",
+    val billingSuccessUrlBase: String = "http://localhost:3000/dashboard/settings",
+    val billingCancelUrlBase: String = "http://localhost:3000/dashboard/settings",
 )

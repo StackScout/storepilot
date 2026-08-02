@@ -11,3 +11,6 @@ class ForbiddenException(message: String) : RuntimeException(message)
 
 /** Thrown for a failed login (wrong password, unknown email) → 401. Deliberately the same message either way — don't let this endpoint distinguish "wrong password" from "no such account" for a caller. */
 class UnauthenticatedException(message: String) : RuntimeException(message)
+
+/** Thrown at login when the credentials are correct but the account's email hasn't been verified yet → 403, distinguishable from UnauthenticatedException so the frontend can route to /verify-email instead of just showing an error. */
+class EmailNotVerifiedException(message: String) : RuntimeException(message)

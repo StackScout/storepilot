@@ -2,8 +2,6 @@ package com.storepilot.backend.stripe
 
 import com.stripe.exception.SignatureVerificationException
 import com.stripe.model.Account
-import com.stripe.model.Event
-import com.stripe.model.StripeObject
 import com.stripe.model.checkout.Session
 import com.stripe.net.Webhook
 import org.slf4j.LoggerFactory
@@ -14,7 +12,11 @@ import org.springframework.stereotype.Service
  * all of them Connect-scoped (fired by a *connected account*, since every
  * charge is a direct charge on the seller's own account, not the
  * platform's) — see the Dashboard-configuration note in StripeController.
- * Verifies the signature once, then dispatches by event type.
+ * Verifies the signature once, then dispatches by event type. See
+ * SellerBillingWebhookService for the separate webhook (different Stripe
+ * Dashboard endpoint, different signing secret) for seller Pro-plan
+ * subscription events on the platform's own account — deserializeStripeEvent
+ * (see StripeEventDeserializer.kt) is shared by both.
  */
 @Service
 class StripeWebhookService(
@@ -23,37 +25,6 @@ class StripeWebhookService(
     private val stripeService: StripeService,
 ) {
     private val log = LoggerFactory.getLogger(StripeWebhookService::class.java)
-
-    /**
-     * `event.dataObjectDeserializer.getObject()` only succeeds when the
-     * event's `api_version` matches the `stripe-java` SDK's own pinned API
-     * version — otherwise it silently returns empty, even though the
-     * payload itself is perfectly valid (confirmed live: an `acct_...`'s
-     * default API version drifted ahead of this SDK's, e.g.
-     * `2026-06-24.dahlia`, and every account.updated since then landed here
-     * empty). `deserializeUnsafe()` is Stripe's own documented fallback for
-     * this exact mismatch — it deserializes against the SDK's model classes
-     * regardless of version, which is safe for the stable, long-lived
-     * fields this app actually reads (chargesEnabled, payoutsEnabled, a
-     * checkout Session's id/paymentStatus/metadata, ...). The real fix is
-     * keeping `stripe-java` reasonably current; this is the belt-and-braces
-     * fallback for whenever it inevitably drifts again anyway.
-     */
-    private fun deserializeEventObject(event: Event): StripeObject? {
-        val deserializer = event.dataObjectDeserializer
-        deserializer.getObject().let { if (it.isPresent) return it.get() }
-        return try {
-            deserializer.deserializeUnsafe()
-        } catch (e: Exception) {
-            log.warn(
-                "Stripe webhook: {} (event {}) — payload deserialization failed even with deserializeUnsafe(), ignoring",
-                event.type,
-                event.id,
-                e,
-            )
-            null
-        }
-    }
 
     fun handleWebhookEvent(rawPayload: String, sigHeader: String) {
         val event = try {
@@ -65,7 +36,7 @@ class StripeWebhookService(
 
         when (event.type) {
             "account.updated" -> {
-                val account = deserializeEventObject(event) as? Account
+                val account = deserializeStripeEvent(event) as? Account
                 if (account == null) {
                     log.warn("Stripe webhook: account.updated with no deserializable Account payload, ignoring")
                     return
@@ -73,7 +44,7 @@ class StripeWebhookService(
                 stripeConnectService.syncAccountStatus(account)
             }
             "checkout.session.completed" -> {
-                val session = deserializeEventObject(event) as? Session
+                val session = deserializeStripeEvent(event) as? Session
                 if (session == null) {
                     log.warn("Stripe webhook: checkout.session.completed with no deserializable Session payload, ignoring")
                     return
@@ -81,11 +52,11 @@ class StripeWebhookService(
                 stripeService.handleCheckoutSessionCompleted(session)
             }
             "checkout.session.expired" -> {
-                val session = deserializeEventObject(event) as? Session ?: return
+                val session = deserializeStripeEvent(event) as? Session ?: return
                 stripeService.handleCheckoutSessionFailed(session, "Stripe payment session expired")
             }
             "checkout.session.async_payment_failed" -> {
-                val session = deserializeEventObject(event) as? Session ?: return
+                val session = deserializeStripeEvent(event) as? Session ?: return
                 stripeService.handleCheckoutSessionFailed(session, "Stripe payment failed")
             }
             else -> log.info("Stripe webhook: unhandled event type {} (id={}), ignoring", event.type, event.id)

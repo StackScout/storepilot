@@ -9,6 +9,15 @@ import type {
   StoreVerificationStatus,
 } from "@/types";
 
+/** logoUrl/bannerUrl may be relative (local FileStorageService) or already absolute (S3 presigned), or null if never uploaded — normalize once here. */
+function normalizeStore(store: Store): Store {
+  return {
+    ...store,
+    logoUrl: store.logoUrl ? resolveAssetUrl(store.logoUrl) : store.logoUrl,
+    bannerUrl: store.bannerUrl ? resolveAssetUrl(store.bannerUrl) : store.bannerUrl,
+  };
+}
+
 /** Uploaded document URLs may be relative (local FileStorageService) or already absolute (S3 presigned) — normalize once here. */
 function normalizeStoreSettings(settings: StoreSettings): StoreSettings {
   return {
@@ -45,17 +54,20 @@ export async function listStores(params: StoreQueryParams = {}): Promise<PageRes
     page: params.page ?? 0,
     size: params.size ?? DEFAULT_PAGE_SIZE,
   });
-  return apiClient.get<PageResponse<Store>>(`/api/stores${qs}`);
+  const page = await apiClient.get<PageResponse<Store>>(`/api/stores${qs}`);
+  return { ...page, content: page.content.map(normalizeStore) };
 }
 
 /** GET /stores/:slug — public storefront page: active stores only (backend-enforced). */
 export async function getStoreBySlug(slug: string): Promise<Store | null> {
-  return apiClient.getOrNull<Store>(`/api/stores/${slug}`);
+  const store = await apiClient.getOrNull<Store>(`/api/stores/${slug}`);
+  return store ? normalizeStore(store) : null;
 }
 
 /** GET /stores/id/:id — internal lookup, not gated by verification status. */
 export async function getStoreById(id: string): Promise<Store | null> {
-  return apiClient.getOrNull<Store>(`/api/stores/id/${id}`);
+  const store = await apiClient.getOrNull<Store>(`/api/stores/id/${id}`);
+  return store ? normalizeStore(store) : null;
 }
 
 /** GET /stores/:id/settings */
@@ -75,7 +87,24 @@ export async function updateStoreSettings(
 
 /** PATCH /stores/:id/profile — seller-editable public social links. */
 export async function updateStoreProfile(storeId: string, patch: StoreProfileInput): Promise<Store> {
-  return apiClient.patch<Store>(`/api/stores/${storeId}/profile`, patch);
+  const store = await apiClient.patch<Store>(`/api/stores/${storeId}/profile`, patch);
+  return normalizeStore(store);
+}
+
+/** POST /stores/:id/logo — upload/replace the store logo. */
+export async function uploadStoreLogo(storeId: string, file: File): Promise<Store> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const store = await apiClient.postForm<Store>(`/api/stores/${storeId}/logo`, formData);
+  return normalizeStore(store);
+}
+
+/** POST /stores/:id/banner — upload/replace the store banner. */
+export async function uploadStoreBanner(storeId: string, file: File): Promise<Store> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const store = await apiClient.postForm<Store>(`/api/stores/${storeId}/banner`, formData);
+  return normalizeStore(store);
 }
 
 /** POST /stores/:id/driver-licence-document — upload/replace the seller's driver's licence proof. */
@@ -128,12 +157,14 @@ export async function refreshStripeConnectStatus(storeId: string): Promise<void>
 
 /** POST /stores (seller onboarding) — creates a new store in "pending" verification status. Requires a signed-in account (any Cognito user); this call is what grants the seller role. */
 export async function createStore(input: StoreApplicationInput): Promise<Store> {
-  return apiClient.post<Store>("/api/stores", input);
+  const store = await apiClient.post<Store>("/api/stores", input);
+  return normalizeStore(store);
 }
 
 /** GET /api/me/store — the signed-in seller's own store, or null if they haven't onboarded yet. */
 export async function getMyStore(): Promise<Store | null> {
-  return apiClient.getOrNull<Store>("/api/me/store");
+  const store = await apiClient.getOrNull<Store>("/api/me/store");
+  return store ? normalizeStore(store) : null;
 }
 
 // --- Admin (requires the admin Cognito role) ---
@@ -141,7 +172,14 @@ export async function getMyStore(): Promise<Store | null> {
 /** GET /admin/stores?status= */
 export async function adminListStores(status?: StoreVerificationStatus): Promise<Store[]> {
   const qs = toQueryString({ status });
-  return apiClient.get<Store[]>(`/api/admin/stores${qs}`);
+  const stores = await apiClient.get<Store[]>(`/api/admin/stores${qs}`);
+  return stores.map(normalizeStore);
+}
+
+/** GET /admin/stores/:id/settings — full verification/bank details for any store, regardless of who owns it. */
+export async function adminGetStoreSettings(storeId: string): Promise<StoreSettings | null> {
+  const settings = await apiClient.getOrNull<StoreSettings>(`/api/admin/stores/${storeId}/settings`);
+  return settings ? normalizeStoreSettings(settings) : null;
 }
 
 /** PATCH /admin/stores/:id/verification — approve/reject a store. */
@@ -150,8 +188,9 @@ export async function setStoreVerificationStatus(
   status: StoreVerificationStatus,
   rejectionReason?: string,
 ): Promise<Store> {
-  return apiClient.patch<Store>(`/api/admin/stores/${storeId}/verification`, {
+  const store = await apiClient.patch<Store>(`/api/admin/stores/${storeId}/verification`, {
     status,
     rejectionReason,
   });
+  return normalizeStore(store);
 }

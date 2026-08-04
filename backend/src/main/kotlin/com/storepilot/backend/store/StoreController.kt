@@ -83,12 +83,30 @@ class StoreController(
         @RequestPart file: MultipartFile,
     ): StoreSettingsResponse = storeService.uploadBusinessRegDocument(storeId, file)
 
+    @PostMapping("/api/stores/{storeId}/logo", consumes = ["multipart/form-data"])
+    fun uploadLogo(
+        @PathVariable storeId: UUID,
+        @RequestPart file: MultipartFile,
+    ): StoreResponse = storeService.uploadLogo(storeId, file)
+
+    @PostMapping("/api/stores/{storeId}/banner", consumes = ["multipart/form-data"])
+    fun uploadBanner(
+        @PathVariable storeId: UUID,
+        @RequestPart file: MultipartFile,
+    ): StoreResponse = storeService.uploadBanner(storeId, file)
+
     @PostMapping("/api/stores")
     fun create(@Valid @RequestBody input: StoreApplicationInput): ResponseEntity<StoreResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(storeService.create(input))
 
     @GetMapping("/api/admin/stores")
     fun adminList(@RequestParam status: String?): List<StoreResponse> = storeService.adminList(status)
+
+    @GetMapping("/api/admin/stores/{storeId}/settings")
+    fun adminGetSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {
+        val settings = storeService.adminGetSettings(storeId) ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(settings)
+    }
 
     @PatchMapping("/api/admin/stores/{storeId}/verification")
     fun setVerificationStatus(

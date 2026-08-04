@@ -2,15 +2,16 @@ package com.storepilot.backend.store
 
 import com.storepilot.backend.common.storage.FileStorageService
 
-fun Store.toResponse(): StoreResponse =
+/** logoUrl/bannerUrl are resolved fresh on every call when present (never cached) — see FileStorageService.resolveUrl. Null means the seller hasn't uploaded one yet; the frontend renders a generated fallback in that case. */
+fun Store.toResponse(fileStorageService: FileStorageService): StoreResponse =
     StoreResponse(
         id = requireNotNull(id),
         slug = slug,
         name = name,
         tagline = tagline,
         description = description,
-        logoUrl = logoUrl,
-        bannerUrl = bannerUrl,
+        logoUrl = logoUrl?.let { fileStorageService.resolveUrl(it) },
+        bannerUrl = bannerUrl?.let { fileStorageService.resolveUrl(it) },
         category = category.wireValue,
         address = StoreAddressResponse(address.city, address.state),
         whatsappNumber = whatsappNumber,

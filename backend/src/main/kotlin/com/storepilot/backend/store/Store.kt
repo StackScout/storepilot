@@ -47,10 +47,13 @@ class Store(
     var tagline: String,
     @Column(nullable = false, columnDefinition = "text")
     var description: String,
-    @Column(name = "logo_url", nullable = false)
-    var logoUrl: String,
-    @Column(name = "banner_url", nullable = false)
-    var bannerUrl: String,
+    // Null until the seller uploads one — see StoreService.uploadLogo/uploadBanner.
+    // The frontend renders a generated initials avatar / color block in the
+    // meantime rather than a fixed stock-photo placeholder.
+    @Column(name = "logo_url")
+    var logoUrl: String? = null,
+    @Column(name = "banner_url")
+    var bannerUrl: String? = null,
     @Column(nullable = false)
     var category: StoreCategory,
     @Embedded

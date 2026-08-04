@@ -27,8 +27,9 @@ export interface Store {
   name: string;
   tagline: string;
   description: string;
-  logoUrl: string;
-  bannerUrl: string;
+  /** Null until the seller uploads one — StoreLogoFallback/StoreBannerFallback render a generated placeholder in the meantime. */
+  logoUrl: string | null;
+  bannerUrl: string | null;
   category: StoreCategory;
   address: StoreAddress;
   whatsappNumber: string;

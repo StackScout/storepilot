@@ -3,12 +3,19 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, ClipboardCheck, History, MapPin, X } from "lucide-react";
+import { ClipboardCheck, History, Store as StoreIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -17,19 +24,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AbnVerificationBadge } from "@/components/shared/abn-verification-badge";
+import { StoreDetailCard } from "@/components/admin/store-detail-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { formatDateTime } from "@/lib/format";
-import { getCategoryLabel } from "@/mock/categories";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { storesService, adminService } from "@/services";
-import type { Store, StoreSettings } from "@/types";
+import type { Store, StoreSettings, StoreVerificationStatus } from "@/types";
 
-interface PendingApplication {
+interface StoreWithSettings {
   store: Store;
   settings: StoreSettings | null;
 }
+
+type StatusFilter = StoreVerificationStatus | "all";
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "active", label: "Active" },
+  { value: "rejected", label: "Rejected" },
+];
 
 export default function AdminStoresPage() {
   const queryClient = useQueryClient();
@@ -37,16 +52,32 @@ export default function AdminStoresPage() {
   const isSriLanka = countryCode === "LK";
   const [rejectTarget, setRejectTarget] = useState<Store | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const { data: pendingApplications, isLoading: pendingLoading } = useQuery<PendingApplication[]>({
+  const { data: pendingApplications, isLoading: pendingLoading } = useQuery<StoreWithSettings[]>({
     queryKey: ["admin-pending-stores"],
     queryFn: async () => {
       const stores = await storesService.adminListStores("pending");
       return Promise.all(
-        stores.map(async (store) => ({ store, settings: await storesService.getStoreSettings(store.id) })),
+        stores.map(async (store) => ({ store, settings: await storesService.adminGetStoreSettings(store.id) })),
       );
     },
   });
+
+  const { data: allStores, isLoading: allStoresLoading } = useQuery<StoreWithSettings[]>({
+    queryKey: ["admin-all-stores"],
+    queryFn: async () => {
+      const stores = await storesService.adminListStores();
+      return Promise.all(
+        stores.map(async (store) => ({ store, settings: await storesService.adminGetStoreSettings(store.id) })),
+      );
+    },
+  });
+
+  const filteredStores =
+    statusFilter === "all"
+      ? allStores
+      : allStores?.filter(({ store }) => store.verificationStatus === statusFilter);
 
   const { data: decisionHistory, isLoading: historyLoading } = useQuery({
     queryKey: ["admin-store-decision-history"],
@@ -57,6 +88,7 @@ export default function AdminStoresPage() {
     mutationFn: (storeId: string) => storesService.setStoreVerificationStatus(storeId, "active"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-pending-stores"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-stores"] });
       queryClient.invalidateQueries({ queryKey: ["admin-store-decision-history"] });
       queryClient.invalidateQueries({ queryKey: ["admin-pending-stores-count"] });
       toast.success("Store approved — it's now live on the marketplace");
@@ -69,6 +101,7 @@ export default function AdminStoresPage() {
       storesService.setStoreVerificationStatus(storeId, "rejected", reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-pending-stores"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-stores"] });
       queryClient.invalidateQueries({ queryKey: ["admin-store-decision-history"] });
       queryClient.invalidateQueries({ queryKey: ["admin-pending-stores-count"] });
       toast.success("Application rejected");
@@ -81,13 +114,16 @@ export default function AdminStoresPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Store approvals</h1>
-        <p className="text-muted-foreground text-sm">Review new seller applications and see past decisions.</p>
+        <h1 className="text-2xl font-bold">Stores</h1>
+        <p className="text-muted-foreground text-sm">
+          Review new seller applications, browse every registered store, and see past decisions.
+        </p>
       </div>
 
       <Tabs defaultValue="pending">
         <TabsList>
           <TabsTrigger value="pending">Pending</TabsTrigger>
+          <TabsTrigger value="all">All stores</TabsTrigger>
           <TabsTrigger value="history">Decision history</TabsTrigger>
         </TabsList>
 
@@ -104,101 +140,63 @@ export default function AdminStoresPage() {
               ) : (
                 <div className="space-y-3">
                   {pendingApplications.map(({ store, settings }) => (
-                    <div key={store.id} className="rounded-lg border p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{store.name}</p>
-                            <Badge variant="secondary">{getCategoryLabel(store.category)}</Badge>
-                          </div>
-                          <p className="text-muted-foreground flex items-center gap-1 text-xs">
-                            <MapPin className="size-3" /> {store.address.city}, {store.address.state}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive"
-                            onClick={() => setRejectTarget(store)}
-                          >
-                            <X className="size-3.5" /> Reject
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={approveMutation.isPending}
-                            onClick={() => approveMutation.mutate(store.id)}
-                          >
-                            <Check className="size-3.5" /> Approve
-                          </Button>
-                        </div>
-                      </div>
-                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t pt-3 text-xs sm:grid-cols-4">
-                        <div>
-                          <dt className="text-muted-foreground">Seller type</dt>
-                          <dd className="font-medium capitalize">{settings?.sellerType ?? "—"}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-muted-foreground">
-                            {isSriLanka ? "NIC no." : "Driver's licence no."}
-                          </dt>
-                          <dd className="font-medium">
-                            {(isSriLanka ? settings?.nicNumber : settings?.driverLicenceNumber) ?? "—"}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-muted-foreground">{isSriLanka ? "Business reg. no." : "ABN"}</dt>
-                          <dd className="font-medium">
-                            {(isSriLanka ? settings?.businessRegistrationNumber : settings?.abn) ?? "—"}
-                          </dd>
-                          {!isSriLanka && settings?.abn ? <AbnVerificationBadge abn={settings.abn} /> : null}
-                        </div>
-                        <div>
-                          <dt className="text-muted-foreground">Bank account</dt>
-                          <dd className="font-medium">
-                            {settings ? `${settings.bankName} · ${settings.bankAccountNumber}` : "—"}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-muted-foreground">
-                            {isSriLanka ? "NIC document" : "Driver's licence document"}
-                          </dt>
-                          <dd className="font-medium">
-                            {(isSriLanka ? settings?.nicDocumentUrl : settings?.driverLicenceDocumentUrl) ? (
-                              <a
-                                href={(isSriLanka ? settings?.nicDocumentUrl : settings?.driverLicenceDocumentUrl)!}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary underline-offset-4 hover:underline"
-                              >
-                                View file
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-muted-foreground">
-                            {isSriLanka ? "Business reg. document" : "ABN document"}
-                          </dt>
-                          <dd className="font-medium">
-                            {(isSriLanka ? settings?.businessRegDocumentUrl : settings?.abnDocumentUrl) ? (
-                              <a
-                                href={(isSriLanka ? settings?.businessRegDocumentUrl : settings?.abnDocumentUrl)!}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary underline-offset-4 hover:underline"
-                              >
-                                View file
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
+                    <StoreDetailCard
+                      key={store.id}
+                      store={store}
+                      settings={settings}
+                      isSriLanka={isSriLanka}
+                      showActions
+                      isApproving={approveMutation.isPending}
+                      onApprove={(storeId) => approveMutation.mutate(storeId)}
+                      onReject={(target) => setRejectTarget(target)}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="all">
+          <Card>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-muted-foreground text-sm">
+                  {filteredStores ? `${filteredStores.length} store${filteredStores.length === 1 ? "" : "s"}` : ""}
+                </p>
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_FILTERS.map((filter) => (
+                      <SelectItem key={filter.value} value={filter.value}>
+                        {filter.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {allStoresLoading ? (
+                <div className="space-y-2">
+                  <TableRowSkeleton columns={3} />
+                  <TableRowSkeleton columns={3} />
+                </div>
+              ) : !filteredStores || filteredStores.length === 0 ? (
+                <EmptyState icon={StoreIcon} title="No stores match this filter" />
+              ) : (
+                <div className="space-y-3">
+                  {filteredStores.map(({ store, settings }) => (
+                    <StoreDetailCard
+                      key={store.id}
+                      store={store}
+                      settings={settings}
+                      isSriLanka={isSriLanka}
+                      showActions={store.verificationStatus === "pending"}
+                      isApproving={approveMutation.isPending}
+                      onApprove={(storeId) => approveMutation.mutate(storeId)}
+                      onReject={(target) => setRejectTarget(target)}
+                    />
                   ))}
                 </div>
               )}

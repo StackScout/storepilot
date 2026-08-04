@@ -81,19 +81,19 @@ class StoreService(
 
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE), Sort.by("rating").descending())
         val results = storeRepository.findAll(spec, pageable)
-        return results.toPageResponse { it.toResponse() }
+        return results.toPageResponse { it.toResponse(fileStorageService) }
     }
 
     /** GET /api/stores/{slug} — public storefront: active stores only. */
     fun getBySlug(slug: String): StoreResponse {
         val store = storeRepository.findBySlug(slug)?.takeIf { it.verificationStatus == StoreVerificationStatus.ACTIVE }
             ?: throw NotFoundException("Store $slug not found")
-        return store.toResponse()
+        return store.toResponse(fileStorageService)
     }
 
     /** GET /api/stores/id/{id} — internal lookup, not gated by verification status. */
     fun getById(id: UUID): StoreResponse =
-        storeRepository.findById(id).orElseThrow { NotFoundException("Store $id not found") }.toResponse()
+        storeRepository.findById(id).orElseThrow { NotFoundException("Store $id not found") }.toResponse(fileStorageService)
 
     fun getSettings(storeId: UUID): StoreSettingsResponse? =
         storeSettingsRepository.findById(storeId).orElse(null)?.toResponse(fileStorageService)
@@ -105,7 +105,7 @@ class StoreService(
      */
     fun getMyStore(): StoreResponse? {
         val sellerId = requireNotNull(currentActor.requireSeller().id)
-        return storeRepository.findBySellerId(sellerId)?.toResponse()
+        return storeRepository.findBySellerId(sellerId)?.toResponse(fileStorageService)
     }
 
     /**
@@ -139,10 +139,9 @@ class StoreService(
             name = input.name,
             tagline = input.tagline,
             description = input.description,
-            // Matches the frontend mock's placeholder-image convention —
-            // real upload support doesn't exist yet on either side.
-            logoUrl = "https://picsum.photos/seed/$slug-logo/200/200",
-            bannerUrl = "https://picsum.photos/seed/$slug-banner/1200/400",
+            // logoUrl/bannerUrl start null — the frontend renders a
+            // generated initials avatar / color block until the seller
+            // uploads real images via uploadLogo/uploadBanner below.
             category = wireValueOf(input.category),
             address = StoreAddress(
                 city = input.city,
@@ -151,7 +150,7 @@ class StoreService(
             whatsappNumber = input.whatsappNumber,
             verificationStatus = StoreVerificationStatus.PENDING,
         )
-        return storeRepository.save(store).toResponse()
+        return storeRepository.save(store).toResponse(fileStorageService)
     }
 
     /** Retries once — if this ultimately fails, the exception aborts create()'s whole transaction (rolling back the Store + Seller insert together) rather than leaving a seller with a store but no role. */
@@ -189,7 +188,7 @@ class StoreService(
         if (input.facebookUrl != null) store.facebookUrl = input.facebookUrl.trim().takeIf { it.isNotBlank() }
         if (input.instagramUrl != null) store.instagramUrl = input.instagramUrl.trim().takeIf { it.isNotBlank() }
         if (input.tiktokUrl != null) store.tiktokUrl = input.tiktokUrl.trim().takeIf { it.isNotBlank() }
-        return storeRepository.save(store).toResponse()
+        return storeRepository.save(store).toResponse(fileStorageService)
     }
 
     private fun requireOwnedStore(storeId: UUID): Store {
@@ -375,6 +374,32 @@ class StoreService(
         return storeSettingsRepository.save(settings).toResponse(fileStorageService)
     }
 
+    /** POST /api/stores/{storeId}/logo — seller uploads/replaces their store logo. */
+    @Transactional
+    fun uploadLogo(storeId: UUID, file: MultipartFile): StoreResponse {
+        val store = requireOwnedStore(storeId)
+        store.logoUrl = fileStorageService.store(
+            "store-images",
+            file,
+            FileUploadPolicies.IMAGE_CONTENT_TYPES,
+            FileUploadPolicies.IMAGE_MAX_BYTES,
+        )
+        return storeRepository.save(store).toResponse(fileStorageService)
+    }
+
+    /** POST /api/stores/{storeId}/banner — seller uploads/replaces their store banner. */
+    @Transactional
+    fun uploadBanner(storeId: UUID, file: MultipartFile): StoreResponse {
+        val store = requireOwnedStore(storeId)
+        store.bannerUrl = fileStorageService.store(
+            "store-images",
+            file,
+            FileUploadPolicies.IMAGE_CONTENT_TYPES,
+            FileUploadPolicies.IMAGE_MAX_BYTES,
+        )
+        return storeRepository.save(store).toResponse(fileStorageService)
+    }
+
     /** A store must always accept at least one payment method — otherwise checkout has nothing to offer buyers. */
     private fun requireAtLeastOnePaymentMethod(codEnabled: Boolean, onlinePaymentEnabled: Boolean, bankTransferEnabled: Boolean) {
         if (!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled) {
@@ -390,8 +415,19 @@ class StoreService(
         } else {
             storeRepository.findAll()
         }
-        return results.sortedByDescending { it.createdAt }.map { it.toResponse() }
+        return results.sortedByDescending { it.createdAt }.map { it.toResponse(fileStorageService) }
     }
+
+    /**
+     * GET /api/admin/stores/{storeId}/settings — same shape as the
+     * seller-facing/public getSettings above, but not ownership-gated
+     * (admin can review any store's verification details/bank info
+     * regardless of who owns it). No unauthenticated caller can reach this
+     * — it lives under the admin prefix, which SecurityConfig already
+     * gates to hasRole("ADMIN") as a whole.
+     */
+    fun adminGetSettings(storeId: UUID): StoreSettingsResponse? =
+        storeSettingsRepository.findById(storeId).orElse(null)?.toResponse(fileStorageService)
 
     @Transactional
     fun setVerificationStatus(storeId: UUID, input: VerificationDecisionInput): StoreResponse {
@@ -416,7 +452,7 @@ class StoreService(
             val reasonSuffix = input.rejectionReason?.let { ": $it" } ?: ""
             auditLogService.record(AuditAction.STORE_REJECTED, "store", storeId.toString(), "Rejected store \"${store.name}\"$reasonSuffix")
         }
-        return store.toResponse()
+        return store.toResponse(fileStorageService)
     }
 
     private fun uniqueSlug(name: String): String {

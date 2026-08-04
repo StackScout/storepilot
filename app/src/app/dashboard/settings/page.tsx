@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { cn } from "@/lib/utils";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
@@ -234,10 +236,40 @@ function DashboardSettingsForm() {
     onError: () => toast.error("Couldn't save settings. Please try again."),
   });
 
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingLicence, setIsUploadingLicence] = useState(false);
   const [isUploadingAbn, setIsUploadingAbn] = useState(false);
   const [isUploadingNic, setIsUploadingNic] = useState(false);
   const [isUploadingBusinessReg, setIsUploadingBusinessReg] = useState(false);
+
+  async function handleLogoUpload(file: File | undefined) {
+    if (!file) return;
+    setIsUploadingLogo(true);
+    try {
+      await storesService.uploadStoreLogo(storeId, file);
+      queryClient.invalidateQueries({ queryKey: ["store"] });
+      toast.success("Store logo updated");
+    } catch {
+      toast.error("Couldn't upload the image. Please try again.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }
+
+  async function handleBannerUpload(file: File | undefined) {
+    if (!file) return;
+    setIsUploadingBanner(true);
+    try {
+      await storesService.uploadStoreBanner(storeId, file);
+      queryClient.invalidateQueries({ queryKey: ["store"] });
+      toast.success("Store banner updated");
+    } catch {
+      toast.error("Couldn't upload the image. Please try again.");
+    } finally {
+      setIsUploadingBanner(false);
+    }
+  }
 
   async function handleLicenceUpload(file: File | undefined) {
     if (!file) return;
@@ -367,6 +399,52 @@ function DashboardSettingsForm() {
               {formatCurrency(planInfo?.monthlyPriceCents ?? 0, currency)}/month.
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-4">
+          <h2 className="font-semibold">Store branding</h2>
+          <p className="text-muted-foreground text-xs">
+            Uploads here save immediately, separate from the form below. Until you upload your
+            own, buyers see a generated logo and banner based on your store name.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="logoUpload">Logo</Label>
+            <div className="flex items-center gap-3">
+              <div className="border-background bg-muted relative size-16 shrink-0 overflow-hidden rounded-full border-2">
+                {store?.logoUrl ? (
+                  <Image src={store.logoUrl} alt={store.name} fill sizes="64px" className="object-cover" />
+                ) : store ? (
+                  <StoreLogoFallback name={store.name} className="text-lg" />
+                ) : null}
+              </div>
+              <Input
+                id="logoUpload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={isUploadingLogo}
+                onChange={(e) => handleLogoUpload(e.target.files?.[0])}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bannerUpload">Banner</Label>
+            <div className="bg-muted relative h-24 w-full overflow-hidden rounded-md">
+              {store?.bannerUrl ? (
+                <Image src={store.bannerUrl} alt="" fill sizes="100vw" className="object-cover" />
+              ) : store ? (
+                <StoreBannerFallback name={store.name} />
+              ) : null}
+            </div>
+            <Input
+              id="bannerUpload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={isUploadingBanner}
+              onChange={(e) => handleBannerUpload(e.target.files?.[0])}
+            />
+          </div>
         </CardContent>
       </Card>
 

@@ -104,6 +104,8 @@ class SecurityConfig {
                         "/api/stores/*/abn-document",
                         "/api/stores/*/nic-document",
                         "/api/stores/*/business-reg-document",
+                        "/api/stores/*/logo",
+                        "/api/stores/*/banner",
                     ).hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard", "/api/stores/*/stripe-connect/refresh").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")

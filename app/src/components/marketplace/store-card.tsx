@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { RatingStars } from "@/components/shared/rating-stars";
+import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { getCategoryLabel } from "@/mock/categories";
 import type { Store } from "@/types";
 
@@ -12,17 +13,25 @@ export function StoreCard({ store }: { store: Store }) {
       className="group focus-visible:ring-ring block overflow-hidden rounded-lg border outline-none focus-visible:ring-2"
     >
       <div className="bg-muted relative h-24 w-full overflow-hidden">
-        <Image
-          src={store.bannerUrl}
-          alt=""
-          fill
-          sizes="(max-width: 640px) 100vw, 320px"
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+        {store.bannerUrl ? (
+          <Image
+            src={store.bannerUrl}
+            alt=""
+            fill
+            sizes="(max-width: 640px) 100vw, 320px"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <StoreBannerFallback name={store.name} />
+        )}
       </div>
       <div className="flex items-start gap-3 p-4">
         <div className="border-background bg-muted relative -mt-8 size-12 shrink-0 overflow-hidden rounded-full border-2">
-          <Image src={store.logoUrl} alt={store.name} fill sizes="48px" className="object-cover" />
+          {store.logoUrl ? (
+            <Image src={store.logoUrl} alt={store.name} fill sizes="48px" className="object-cover" />
+          ) : (
+            <StoreLogoFallback name={store.name} className="text-sm" />
+          )}
         </div>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-1">

@@ -193,6 +193,9 @@ Resources:
           STRIPE_WEBHOOK_SECRET=$(get_param $SSM_PREFIX/stripe-webhook-secret)
           STRIPE_SUCCESS_URL_BASE=$SITE_ADDRESS/orders
           STRIPE_CANCEL_URL_BASE=$SITE_ADDRESS/orders
+          STRIPE_BILLING_WEBHOOK_SECRET=$(get_param $SSM_PREFIX/stripe-billing-webhook-secret)
+          STRIPE_BILLING_SUCCESS_URL_BASE=$SITE_ADDRESS/dashboard/settings
+          STRIPE_BILLING_CANCEL_URL_BASE=$SITE_ADDRESS/dashboard/settings
           ABR_GUID=$(get_param $SSM_PREFIX/abr-guid)
           SES_SENDER_EMAIL=$(get_param $SSM_PREFIX/ses-sender-email)
           AWS_REGION=${AWS::Region}

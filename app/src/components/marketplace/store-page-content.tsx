@@ -7,6 +7,7 @@ import { BadgeCheck, ExternalLink, MapPin, MessageCircle, PackageX, Users } from
 import { StoreProductGrid } from "@/components/marketplace/store-product-grid";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { Button } from "@/components/ui/button";
 import { getCategoryLabel } from "@/mock/categories";
 import { productsService, storesService } from "@/services";
@@ -63,14 +64,22 @@ export function StorePageContent({
   return (
     <div>
       <div className="bg-muted relative h-40 w-full sm:h-56">
-        <Image src={store.bannerUrl} alt="" fill priority sizes="100vw" className="object-cover" />
+        {store.bannerUrl ? (
+          <Image src={store.bannerUrl} alt="" fill priority sizes="100vw" className="object-cover" />
+        ) : (
+          <StoreBannerFallback name={store.name} />
+        )}
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="-mt-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-4">
             <div className="border-background bg-muted relative size-24 shrink-0 overflow-hidden rounded-full border-4">
-              <Image src={store.logoUrl} alt={store.name} fill sizes="96px" className="object-cover" />
+              {store.logoUrl ? (
+                <Image src={store.logoUrl} alt={store.name} fill sizes="96px" className="object-cover" />
+              ) : (
+                <StoreLogoFallback name={store.name} className="text-2xl" />
+              )}
             </div>
             <div className="pt-14 sm:pt-16">
               <div className="flex items-center gap-1.5">

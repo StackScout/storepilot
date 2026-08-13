@@ -76,4 +76,27 @@ class AdminNotificationService(
             log.warn("Failed to send admin bank-details-changed email for store {} — not failing the settings save", store.id, e)
         }
     }
+
+    /** Called from StoreVerificationChangeRequestService right after a seller submits a request — same best-effort-email principle as notifyBankDetailsChanged. */
+    @Transactional
+    fun notifyVerificationChangeRequested(store: Store) {
+        val message = "${store.name} requested a change to their verification details — review it in the admin panel"
+        adminNotificationRepository.save(
+            AdminNotification(
+                type = AdminNotificationType.VERIFICATION_CHANGE_REQUESTED,
+                message = message,
+                storeId = store.id,
+            ),
+        )
+        if (notificationProperties.adminNotificationEmail.isBlank()) return
+        try {
+            emailService.send(
+                to = notificationProperties.adminNotificationEmail,
+                subject = "Verification change requested — ${store.name}",
+                body = message,
+            )
+        } catch (e: Exception) {
+            log.warn("Failed to send admin verification-change-requested email for store {} — not failing the request", store.id, e)
+        }
+    }
 }

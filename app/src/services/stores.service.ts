@@ -5,8 +5,12 @@ import type {
   StoreApplicationInput,
   StoreCategory,
   StoreProfileInput,
+  StorePublicSettings,
   StoreSettings,
+  StoreVerificationChangeRequest,
+  StoreVerificationChangeRequestStatus,
   StoreVerificationStatus,
+  VerificationChangeRequestInput,
 } from "@/types";
 
 /** logoUrl/bannerUrl may be relative (local FileStorageService) or already absolute (S3 presigned), or null if never uploaded — normalize once here. */
@@ -70,10 +74,15 @@ export async function getStoreById(id: string): Promise<Store | null> {
   return store ? normalizeStore(store) : null;
 }
 
-/** GET /stores/:id/settings */
+/** GET /stores/:id/settings — owner-only; full details including bank/contact/verification PII. */
 export async function getStoreSettings(storeId: string): Promise<StoreSettings | null> {
   const settings = await apiClient.getOrNull<StoreSettings>(`/api/stores/${storeId}/settings`);
   return settings ? normalizeStoreSettings(settings) : null;
+}
+
+/** GET /stores/:id/public-settings — no auth required; buyer-safe subset for checkout/order pages. */
+export async function getPublicStoreSettings(storeId: string): Promise<StorePublicSettings | null> {
+  return apiClient.getOrNull<StorePublicSettings>(`/api/stores/${storeId}/public-settings`);
 }
 
 /** PATCH /stores/:id/settings — upsert, same as the backend service. */
@@ -193,4 +202,77 @@ export async function setStoreVerificationStatus(
     rejectionReason,
   });
   return normalizeStore(store);
+}
+
+/** Document URLs may be relative (local FileStorageService) or already absolute (S3 presigned) — normalize once here, same as normalizeStoreSettings. */
+function normalizeChangeRequest(request: StoreVerificationChangeRequest): StoreVerificationChangeRequest {
+  return {
+    ...request,
+    driverLicenceDocumentUrl: request.driverLicenceDocumentUrl
+      ? resolveAssetUrl(request.driverLicenceDocumentUrl)
+      : request.driverLicenceDocumentUrl,
+    abnDocumentUrl: request.abnDocumentUrl ? resolveAssetUrl(request.abnDocumentUrl) : request.abnDocumentUrl,
+    nicDocumentUrl: request.nicDocumentUrl ? resolveAssetUrl(request.nicDocumentUrl) : request.nicDocumentUrl,
+    businessRegDocumentUrl: request.businessRegDocumentUrl
+      ? resolveAssetUrl(request.businessRegDocumentUrl)
+      : request.businessRegDocumentUrl,
+  };
+}
+
+/** GET /stores/:id/verification-change-requests/current — the signed-in seller's own open request for this store, or null. */
+export async function getCurrentVerificationChangeRequest(storeId: string): Promise<StoreVerificationChangeRequest | null> {
+  const request = await apiClient.getOrNull<StoreVerificationChangeRequest>(
+    `/api/stores/${storeId}/verification-change-requests/current`,
+  );
+  return request ? normalizeChangeRequest(request) : null;
+}
+
+/**
+ * POST /stores/:id/verification-change-requests — only reachable once the
+ * store is already approved (see StoreVerificationChangeRequestService's
+ * doc comment); files are optional replacement documents for the fields
+ * that changed.
+ */
+export async function submitVerificationChangeRequest(
+  storeId: string,
+  input: VerificationChangeRequestInput,
+  files?: { driverLicenceDocument?: File; abnDocument?: File; nicDocument?: File; businessRegDocument?: File },
+): Promise<StoreVerificationChangeRequest> {
+  const formData = new FormData();
+  formData.append("data", new Blob([JSON.stringify(input)], { type: "application/json" }));
+  if (files?.driverLicenceDocument) formData.append("driverLicenceDocument", files.driverLicenceDocument);
+  if (files?.abnDocument) formData.append("abnDocument", files.abnDocument);
+  if (files?.nicDocument) formData.append("nicDocument", files.nicDocument);
+  if (files?.businessRegDocument) formData.append("businessRegDocument", files.businessRegDocument);
+  const request = await apiClient.postForm<StoreVerificationChangeRequest>(
+    `/api/stores/${storeId}/verification-change-requests`,
+    formData,
+  );
+  return normalizeChangeRequest(request);
+}
+
+/** GET /admin/verification-change-requests?status= — defaults to every request across all stores when status is omitted. */
+export async function adminListVerificationChangeRequests(
+  status?: StoreVerificationChangeRequestStatus,
+): Promise<StoreVerificationChangeRequest[]> {
+  const qs = toQueryString({ status });
+  const requests = await apiClient.get<StoreVerificationChangeRequest[]>(`/api/admin/verification-change-requests${qs}`);
+  return requests.map(normalizeChangeRequest);
+}
+
+/** POST /admin/verification-change-requests/:id/approve — applies every proposed field/document onto the store's live settings. */
+export async function adminApproveVerificationChangeRequest(id: string): Promise<StoreSettings> {
+  const settings = await apiClient.post<StoreSettings>(`/api/admin/verification-change-requests/${id}/approve`);
+  return normalizeStoreSettings(settings);
+}
+
+/** POST /admin/verification-change-requests/:id/reject */
+export async function adminRejectVerificationChangeRequest(
+  id: string,
+  rejectionReason: string,
+): Promise<StoreVerificationChangeRequest> {
+  const request = await apiClient.post<StoreVerificationChangeRequest>(`/api/admin/verification-change-requests/${id}/reject`, {
+    rejectionReason,
+  });
+  return normalizeChangeRequest(request);
 }

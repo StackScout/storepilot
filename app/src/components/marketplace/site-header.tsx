@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { User } from "lucide-react";
+import { User, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/shared/logo";
 import { SearchBar } from "@/components/marketplace/search-bar";
 import { CartDrawer } from "@/components/marketplace/cart-drawer";
 import { MobileNav } from "@/components/marketplace/mobile-nav";
-import { AccountMenu } from "@/components/marketplace/account-menu";
+import { UserAccountMenu } from "@/components/shared/user-account-menu";
 import { useBuyerAccountLink } from "@/hooks/use-buyer-account-link";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 export function SiteHeader() {
-  const { buyerName } = useBuyerAccountLink();
+  const { buyerName, buyerEmail } = useBuyerAccountLink();
   const { name } = usePlatformConfig();
   return (
     <header className="bg-background/95 sticky top-0 z-40 border-b backdrop-blur">
@@ -29,7 +29,13 @@ export function SiteHeader() {
               Sell on {name}
             </Button>
             {buyerName ? (
-              <AccountMenu buyerName={buyerName} />
+              <UserAccountMenu
+                name={buyerName}
+                email={buyerEmail}
+                profileLink={{ href: "/account", label: "Profile", icon: UserRound }}
+                signOutRedirect="/account/login"
+                variant="compact"
+              />
             ) : (
               <Button render={<Link href="/account/login" />} variant="ghost" size="icon" aria-label="Sign in">
                 <User className="size-4.5" />

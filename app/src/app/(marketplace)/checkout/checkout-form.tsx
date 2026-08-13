@@ -98,8 +98,8 @@ export function CheckoutForm() {
   // Settings. Defaults to both enabled while loading so the form doesn't
   // flash empty; the backend guarantees at least one is always true.
   const { data: storeSettings } = useQuery({
-    queryKey: ["store-settings", cart.storeId],
-    queryFn: () => storesService.getStoreSettings(cart.storeId!),
+    queryKey: ["store-public-settings", cart.storeId],
+    queryFn: () => storesService.getPublicStoreSettings(cart.storeId!),
     enabled: !!cart.storeId,
   });
   // Store contact info shown on the pickup card (WhatsApp + city/state) —

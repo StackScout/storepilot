@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Package,
@@ -11,16 +11,13 @@ import {
   Settings,
   Store,
   ExternalLink,
-  LogOut,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
-import { useAuthSession } from "@/hooks/use-auth-session";
-import { storesService, authService, billingService } from "@/services";
+import { storesService, billingService } from "@/services";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -32,10 +29,7 @@ const NAV_ITEMS = [
 
 export function DashboardSidebarContent() {
   const pathname = usePathname();
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
-  const { session } = useAuthSession();
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
     queryFn: () => storesService.getStoreById(storeId),
@@ -46,12 +40,6 @@ export function DashboardSidebarContent() {
     queryFn: () => billingService.getMyPlan(),
   });
   const isPro = planInfo?.plan === "pro";
-
-  async function handleSignOut() {
-    await authService.logout();
-    queryClient.clear();
-    router.push("/login");
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -113,12 +101,6 @@ export function DashboardSidebarContent() {
         ) : (
           <p className="text-muted-foreground text-xs">Storefront hidden until approved</p>
         )}
-        {session.email ? (
-          <p className="text-muted-foreground truncate text-xs">Signed in as {session.email}</p>
-        ) : null}
-        <Button type="button" variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
-          <LogOut className="size-3.5" /> Sign out
-        </Button>
       </div>
     </div>
   );

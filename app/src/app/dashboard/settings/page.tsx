@@ -15,13 +15,29 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { cn } from "@/lib/utils";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { formatCurrency } from "@/lib/currency";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { storesService, billingService } from "@/services";
+import type { SellerType } from "@/types";
 
 const urlOrEmpty = z
   .string()
@@ -55,6 +71,16 @@ const settingsSchema = z
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
 
+const changeRequestSchema = z.object({
+  sellerType: z.enum(["individual", "business"]),
+  driverLicenceNumber: z.string().optional(),
+  abn: z.string().optional(),
+  nicNumber: z.string().optional(),
+  businessRegistrationNumber: z.string().optional(),
+});
+
+type ChangeRequestFormValues = z.infer<typeof changeRequestSchema>;
+
 export default function DashboardSettingsPage() {
   return (
     <Suspense>
@@ -87,6 +113,19 @@ function DashboardSettingsForm() {
   const { data: store, isLoading: isStoreLoading } = useQuery({
     queryKey: ["store", storeId],
     queryFn: () => storesService.getStoreById(storeId),
+  });
+  const isStoreActive = store?.verificationStatus === "active";
+
+  // Once a store is approved, its verification-identity fields (seller
+  // type, ABN/licence number, NIC/business-reg number, and their
+  // documents) can no longer be edited directly — see StoreService
+  // .upsertSettings' doc comment. This query drives the "Verification
+  // details" card below, which is the only remaining way to touch those
+  // fields on an active store.
+  const { data: pendingChangeRequest } = useQuery({
+    queryKey: ["verification-change-request", storeId],
+    queryFn: () => storesService.getCurrentVerificationChangeRequest(storeId),
+    enabled: isStoreActive,
   });
 
   const { data: planInfo, isLoading: isPlanLoading } = useQuery({
@@ -325,6 +364,55 @@ function DashboardSettingsForm() {
     } finally {
       setIsUploadingBusinessReg(false);
     }
+  }
+
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [changeRequestLicenceFile, setChangeRequestLicenceFile] = useState<File | undefined>();
+  const [changeRequestAbnFile, setChangeRequestAbnFile] = useState<File | undefined>();
+  const [changeRequestNicFile, setChangeRequestNicFile] = useState<File | undefined>();
+  const [changeRequestBusinessRegFile, setChangeRequestBusinessRegFile] = useState<File | undefined>();
+
+  const {
+    register: registerChangeRequest,
+    handleSubmit: handleChangeRequestSubmit,
+    watch: watchChangeRequest,
+    setValue: setChangeRequestValue,
+    reset: resetChangeRequestForm,
+  } = useForm<ChangeRequestFormValues>({
+    resolver: zodResolver(changeRequestSchema),
+    defaultValues: { sellerType: "individual" },
+  });
+  const changeRequestSellerType = watchChangeRequest("sellerType");
+
+  const changeRequestMutation = useMutation({
+    mutationFn: (values: ChangeRequestFormValues) =>
+      storesService.submitVerificationChangeRequest(storeId, values, {
+        driverLicenceDocument: changeRequestLicenceFile,
+        abnDocument: changeRequestAbnFile,
+        nicDocument: changeRequestNicFile,
+        businessRegDocument: changeRequestBusinessRegFile,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["verification-change-request", storeId] });
+      toast.success("Change request submitted — an admin will review it shortly");
+      setChangeRequestOpen(false);
+      setChangeRequestLicenceFile(undefined);
+      setChangeRequestAbnFile(undefined);
+      setChangeRequestNicFile(undefined);
+      setChangeRequestBusinessRegFile(undefined);
+    },
+    onError: () => toast.error("Couldn't submit the change request. Please try again."),
+  });
+
+  function openChangeRequestDialog() {
+    resetChangeRequestForm({
+      sellerType: settings?.sellerType ?? "individual",
+      driverLicenceNumber: settings?.driverLicenceNumber ?? "",
+      abn: settings?.abn ?? "",
+      nicNumber: settings?.nicNumber ?? "",
+      businessRegistrationNumber: settings?.businessRegistrationNumber ?? "",
+    });
+    setChangeRequestOpen(true);
   }
 
   if (isLoading) {
@@ -719,6 +807,50 @@ function DashboardSettingsForm() {
         </div>
       </form>
 
+      {isStoreActive ? (
+        <Card>
+          <CardContent className="space-y-4">
+            <h2 className="font-semibold">Verification details</h2>
+            <p className="text-muted-foreground text-xs">
+              This store is already approved — changes to your seller type, ID number and
+              documents now go through admin review instead of saving immediately.
+            </p>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-muted-foreground text-xs">Seller type</dt>
+                <dd className="capitalize">{settings?.sellerType}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs">
+                  {isSriLanka ? "NIC number" : "Driver's licence no."}
+                </dt>
+                <dd>{(isSriLanka ? settings?.nicNumber : settings?.driverLicenceNumber) || "—"}</dd>
+              </div>
+              {settings?.sellerType === "business" ? (
+                <div>
+                  <dt className="text-muted-foreground text-xs">
+                    {isSriLanka ? "Business reg. no." : "ABN"}
+                  </dt>
+                  <dd>{(isSriLanka ? settings?.businessRegistrationNumber : settings?.abn) || "—"}</dd>
+                </div>
+              ) : null}
+            </dl>
+            {pendingChangeRequest ? (
+              <div className="bg-muted space-y-1 rounded-md p-3 text-sm">
+                <p className="font-medium">Change request pending review</p>
+                <p className="text-muted-foreground text-xs">
+                  Submitted {formatDateTime(pendingChangeRequest.submittedAt)} — an admin will review it
+                  shortly. Your current details above stay in effect until then.
+                </p>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={openChangeRequestDialog}>
+                Request a change
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardContent className="space-y-4">
           <h2 className="font-semibold">Verification documents</h2>
@@ -814,6 +946,115 @@ function DashboardSettingsForm() {
           )}
         </CardContent>
       </Card>
+      )}
+
+      <Dialog open={changeRequestOpen} onOpenChange={setChangeRequestOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request a verification change</DialogTitle>
+            <DialogDescription>
+              An admin will review this before it takes effect on your store.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            id="change-request-form"
+            className="space-y-4"
+            onSubmit={handleChangeRequestSubmit((values) => changeRequestMutation.mutate(values))}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="crSellerType">Seller type</Label>
+              <Select
+                value={changeRequestSellerType}
+                onValueChange={(v) => setChangeRequestValue("sellerType", v as SellerType)}
+              >
+                <SelectTrigger id="crSellerType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isSriLanka ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="crNicNumber">NIC number</Label>
+                  <Input id="crNicNumber" {...registerChangeRequest("nicNumber")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="crNicDocument">Replace NIC copy (optional)</Label>
+                  <Input
+                    id="crNicDocument"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => setChangeRequestNicFile(e.target.files?.[0])}
+                  />
+                </div>
+                {changeRequestSellerType === "business" ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="crBusinessRegistrationNumber">Business registration number</Label>
+                      <Input id="crBusinessRegistrationNumber" {...registerChangeRequest("businessRegistrationNumber")} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="crBusinessRegDocument">Replace business registration document (optional)</Label>
+                      <Input
+                        id="crBusinessRegDocument"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={(e) => setChangeRequestBusinessRegFile(e.target.files?.[0])}
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="crDriverLicenceNumber">Driver&apos;s licence number</Label>
+                  <Input id="crDriverLicenceNumber" {...registerChangeRequest("driverLicenceNumber")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="crLicenceDocument">Replace driver&apos;s licence copy (optional)</Label>
+                  <Input
+                    id="crLicenceDocument"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => setChangeRequestLicenceFile(e.target.files?.[0])}
+                  />
+                </div>
+                {changeRequestSellerType === "business" ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="crAbn">ABN</Label>
+                      <Input id="crAbn" {...registerChangeRequest("abn")} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="crAbnDocument">Replace ABN registration document (optional)</Label>
+                      <Input
+                        id="crAbnDocument"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={(e) => setChangeRequestAbnFile(e.target.files?.[0])}
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </>
+            )}
+          </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setChangeRequestOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="change-request-form" disabled={changeRequestMutation.isPending}>
+              {changeRequestMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              Submit for review
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

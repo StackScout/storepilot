@@ -1,14 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell, LogOut, ShieldCheck } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
-import { Button } from "@/components/ui/button";
-import { useAuthSession } from "@/hooks/use-auth-session";
-import { authService } from "@/services";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -21,15 +17,6 @@ const NAV_ITEMS = [
 
 export function AdminSidebarContent() {
   const pathname = usePathname();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const { session } = useAuthSession();
-
-  async function handleSignOut() {
-    await authService.logout();
-    queryClient.clear();
-    router.push("/admin/login");
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -58,20 +45,6 @@ export function AdminSidebarContent() {
         })}
       </nav>
 
-      <div className="space-y-3 border-t p-4">
-        <div className="flex items-center gap-2.5">
-          <span className="bg-muted flex size-8 items-center justify-center rounded-full">
-            <ShieldCheck className="size-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">Platform admin</p>
-            {session.email ? <p className="text-muted-foreground truncate text-xs">{session.email}</p> : null}
-          </div>
-        </div>
-        <Button type="button" variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
-          <LogOut className="size-3.5" /> Sign out
-        </Button>
-      </div>
     </div>
   );
 }

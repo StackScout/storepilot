@@ -16,3 +16,11 @@ interface StoreSettingsRepository : JpaRepository<StoreSettings, UUID> {
     /** Looked up from the Stripe webhook's account.updated event — see StripeConnectService. */
     fun findByStripeAccountId(stripeAccountId: String): StoreSettings?
 }
+
+interface StoreVerificationChangeRequestRepository : JpaRepository<StoreVerificationChangeRequest, UUID> {
+    fun findByStoreIdAndStatus(storeId: UUID, status: StoreVerificationChangeRequestStatus): StoreVerificationChangeRequest?
+
+    fun findByStatusOrderByCreatedAtDesc(status: StoreVerificationChangeRequestStatus): List<StoreVerificationChangeRequest>
+
+    fun findAllByOrderByCreatedAtDesc(): List<StoreVerificationChangeRequest>
+}

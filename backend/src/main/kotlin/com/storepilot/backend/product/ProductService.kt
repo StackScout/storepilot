@@ -1,5 +1,6 @@
 package com.storepilot.backend.product
 
+import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
@@ -131,13 +132,15 @@ class ProductService(
         require(images.isNotEmpty()) { "Upload at least one product image" }
         val store = requireStore(storeId)
         requireOwnership(store)
+        val category = wireValueOf<StoreCategory>(input.category)
+        requireCategoryMatchesStore(store, category)
         val trackStock = effectiveTrackStock(storeId, input.trackStock)
         val product = Product(
             store = store,
             name = input.name,
             slug = uniqueSlug(storeId, input.name),
             description = input.description,
-            category = wireValueOf(input.category),
+            category = category,
             price = input.price,
             compareAtPrice = input.compareAtPrice,
             stockQuantity = input.stockQuantity,
@@ -160,9 +163,11 @@ class ProductService(
     fun update(id: UUID, input: ProductFormInput, images: List<MultipartFile>): ProductResponse {
         val product = productRepository.findById(id).orElseThrow { NotFoundException("Product $id not found") }
         requireOwnership(product.store)
+        val category = wireValueOf<StoreCategory>(input.category)
+        requireCategoryMatchesStore(product.store, category)
         product.name = input.name
         product.description = input.description
-        product.category = wireValueOf(input.category)
+        product.category = category
         product.price = input.price
         product.compareAtPrice = input.compareAtPrice
         product.stockQuantity = input.stockQuantity
@@ -218,6 +223,13 @@ class ProductService(
     private fun requireOwnership(store: Store) {
         val seller = currentActor.requireSeller()
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store ${store.id}")
+    }
+
+    /** A product's category is locked to the store's own approved category — see task item 40's doc comment on Store.kt. */
+    private fun requireCategoryMatchesStore(store: Store, category: StoreCategory) {
+        if (category != store.category) {
+            throw ConflictException("Products must be listed under this store's category (${store.category.wireValue})")
+        }
     }
 
     /** Unlike requireOwnership, never throws — used where a non-owner (or a guest) is a legitimate caller, just with a narrower view. */

@@ -14,9 +14,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUploader } from "@/components/dashboard/image-uploader";
 import { cn } from "@/lib/utils";
-import { CATEGORIES } from "@/mock/categories";
+import { getCategoryLabel } from "@/mock/categories";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import type { Product, ProductFormInput } from "@/types";
+import type { Product, ProductFormInput, StoreCategory } from "@/types";
 
 const productFormSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
@@ -46,6 +46,8 @@ interface ProductFormProps {
   submitLabel?: string;
   /** Store-wide switch (StoreSettings.stockManagementEnabled) — when false, the stock UI is hidden entirely and every product is submitted with trackStock=false. */
   stockManagementEnabled: boolean;
+  /** A product's category is locked to its store's own approved category (backend ProductService enforces this too) — see task item 40's doc comment on Store.kt. */
+  storeCategory: StoreCategory;
 }
 
 export function ProductForm({
@@ -54,6 +56,7 @@ export function ProductForm({
   isSubmitting,
   submitLabel = "Save product",
   stockManagementEnabled,
+  storeCategory,
 }: ProductFormProps) {
   const {
     register,
@@ -66,7 +69,7 @@ export function ProductForm({
     defaultValues: {
       name: initialProduct?.name ?? "",
       description: initialProduct?.description ?? "",
-      category: initialProduct?.category ?? "fashion",
+      category: storeCategory,
       // Product.price/compareAtPrice are cents on the wire — this form
       // collects/displays whole-and-cents dollars, converted back to cents
       // only at submit time (see submit() below).
@@ -79,7 +82,6 @@ export function ProductForm({
     },
   });
 
-  const category = watch("category");
   const status = watch("status");
   const trackStock = watch("trackStock");
   const { currencyCode } = usePlatformConfig();
@@ -145,21 +147,8 @@ export function ProductForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="category">Category</Label>
-              <Select
-                value={category}
-                onValueChange={(v) => setValue("category", v as ProductFormInput["category"])}
-              >
-                <SelectTrigger id="category" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input id="category" value={getCategoryLabel(storeCategory)} disabled />
+              <p className="text-muted-foreground text-xs">Fixed to your store&apos;s approved category.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sku">SKU (optional)</Label>

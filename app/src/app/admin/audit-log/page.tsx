@@ -17,8 +17,13 @@ const ACTIONS = [
   { value: "store_approved", label: "Store approved" },
   { value: "store_rejected", label: "Store rejected" },
   { value: "admin_invited", label: "Admin invited" },
+  { value: "admin_login", label: "Admin login" },
   { value: "payout_marked_paid", label: "Payout marked paid" },
   { value: "fee_collection_marked_collected", label: "Fee collection marked collected" },
+  { value: "store_settings_updated", label: "Store settings updated" },
+  { value: "store_verification_change_requested", label: "Verification change requested" },
+  { value: "store_verification_change_approved", label: "Verification change approved" },
+  { value: "store_verification_change_rejected", label: "Verification change rejected" },
 ];
 
 const ACTION_LABELS = Object.fromEntries(ACTIONS.map((a) => [a.value, a.label]));

@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/shared/logo";
 import { AdminSidebarContent } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
+import { UserAccountMenu } from "@/components/shared/user-account-menu";
+import { useAuthSession } from "@/hooks/use-auth-session";
 
 /**
  * Gated by proxy.ts (requires the admin Cognito role, except /admin/login
@@ -14,6 +16,7 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/admin/login";
+  const { session } = useAuthSession();
 
   if (isLoginPage) {
     return (
@@ -33,9 +36,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="bg-background/95 sticky top-0 z-30 flex items-center gap-3 border-b px-4 py-3 backdrop-blur lg:hidden">
+        <header className="bg-background/95 sticky top-0 z-30 flex items-center gap-3 border-b px-4 py-3 backdrop-blur lg:px-8">
           <AdminMobileNav />
-          <span className="font-semibold">Platform admin</span>
+          <span className="font-semibold lg:hidden">Platform admin</span>
+          {session.signedIn ? (
+            <UserAccountMenu
+              name={session.name ?? "Admin"}
+              email={session.email}
+              signOutRedirect="/admin/login"
+              className="ml-auto"
+            />
+          ) : null}
         </header>
         <main className="flex-1 space-y-4 p-4 lg:p-8">{children}</main>
       </div>

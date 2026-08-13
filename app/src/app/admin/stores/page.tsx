@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ClipboardCheck, History, Store as StoreIcon } from "lucide-react";
+import { ClipboardCheck, FileEdit, History, Store as StoreIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { formatDateTime } from "@/lib/format";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { storesService, adminService } from "@/services";
-import type { Store, StoreSettings, StoreVerificationStatus } from "@/types";
+import type { Store, StoreSettings, StoreVerificationChangeRequest, StoreVerificationStatus } from "@/types";
 
 interface StoreWithSettings {
   store: Store;
@@ -46,6 +46,25 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "rejected", label: "Rejected" },
 ];
 
+/** Every AuditAction whose targetType is "store" — see backend AuditAction.kt — covers what the "Decision history" tab can show. */
+const DECISION_LABELS: Record<string, string> = {
+  store_approved: "Approved",
+  store_rejected: "Rejected",
+  store_settings_updated: "Settings updated",
+  store_verification_change_requested: "Change requested",
+  store_verification_change_approved: "Change approved",
+  store_verification_change_rejected: "Change rejected",
+};
+
+const DECISION_BADGE_CLASSES: Record<string, string> = {
+  store_approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  store_verification_change_approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  store_rejected: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+  store_verification_change_rejected: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+  store_verification_change_requested: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  default: "bg-muted text-muted-foreground",
+};
+
 export default function AdminStoresPage() {
   const queryClient = useQueryClient();
   const { countryCode } = usePlatformConfig();
@@ -53,6 +72,10 @@ export default function AdminStoresPage() {
   const [rejectTarget, setRejectTarget] = useState<Store | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [rejectChangeRequestTarget, setRejectChangeRequestTarget] = useState<StoreVerificationChangeRequest | null>(
+    null,
+  );
+  const [rejectChangeRequestReason, setRejectChangeRequestReason] = useState("");
 
   const { data: pendingApplications, isLoading: pendingLoading } = useQuery<StoreWithSettings[]>({
     queryKey: ["admin-pending-stores"],
@@ -84,6 +107,11 @@ export default function AdminStoresPage() {
     queryFn: () => adminService.listAuditLog({ targetType: "store", size: 50 }),
   });
 
+  const { data: pendingChangeRequests, isLoading: changeRequestsLoading } = useQuery({
+    queryKey: ["admin-pending-verification-change-requests"],
+    queryFn: () => storesService.adminListVerificationChangeRequests("pending"),
+  });
+
   const approveMutation = useMutation({
     mutationFn: (storeId: string) => storesService.setStoreVerificationStatus(storeId, "active"),
     onSuccess: () => {
@@ -111,6 +139,33 @@ export default function AdminStoresPage() {
     onError: () => toast.error("Couldn't reject this application"),
   });
 
+  function invalidateChangeRequestQueries() {
+    queryClient.invalidateQueries({ queryKey: ["admin-pending-verification-change-requests"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-store-decision-history"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-all-stores"] });
+  }
+
+  const approveChangeRequestMutation = useMutation({
+    mutationFn: (id: string) => storesService.adminApproveVerificationChangeRequest(id),
+    onSuccess: () => {
+      invalidateChangeRequestQueries();
+      toast.success("Verification change approved");
+    },
+    onError: () => toast.error("Couldn't approve this change request"),
+  });
+
+  const rejectChangeRequestMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      storesService.adminRejectVerificationChangeRequest(id, reason),
+    onSuccess: () => {
+      invalidateChangeRequestQueries();
+      toast.success("Verification change rejected");
+      setRejectChangeRequestTarget(null);
+      setRejectChangeRequestReason("");
+    },
+    onError: () => toast.error("Couldn't reject this change request"),
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -124,6 +179,12 @@ export default function AdminStoresPage() {
         <TabsList>
           <TabsTrigger value="pending">Pending</TabsTrigger>
           <TabsTrigger value="all">All stores</TabsTrigger>
+          <TabsTrigger value="changes">
+            Verification changes
+            {pendingChangeRequests && pendingChangeRequests.length > 0 ? (
+              <Badge className="ml-1.5 border-0 px-1.5">{pendingChangeRequests.length}</Badge>
+            ) : null}
+          </TabsTrigger>
           <TabsTrigger value="history">Decision history</TabsTrigger>
         </TabsList>
 
@@ -204,6 +265,172 @@ export default function AdminStoresPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="changes">
+          <Card>
+            <CardContent className="space-y-4">
+              {changeRequestsLoading ? (
+                <div className="space-y-2">
+                  <TableRowSkeleton columns={3} />
+                  <TableRowSkeleton columns={3} />
+                </div>
+              ) : !pendingChangeRequests || pendingChangeRequests.length === 0 ? (
+                <EmptyState icon={FileEdit} title="No verification changes pending review" />
+              ) : (
+                <div className="space-y-3">
+                  {pendingChangeRequests.map((request) => (
+                    <div key={request.id} className="space-y-3 rounded-md border p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold">{request.storeName}</p>
+                        <p className="text-muted-foreground text-xs">{formatDateTime(request.submittedAt)}</p>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                        {request.sellerType && request.sellerType !== request.currentSellerType ? (
+                          <div>
+                            <dt className="text-muted-foreground text-xs">Seller type</dt>
+                            <dd>
+                              <span className="text-muted-foreground line-through">{request.currentSellerType}</span>{" "}
+                              → <span className="font-medium">{request.sellerType}</span>
+                            </dd>
+                          </div>
+                        ) : null}
+                        {isSriLanka ? (
+                          <>
+                            {request.nicNumber && request.nicNumber !== request.currentNicNumber ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">NIC number</dt>
+                                <dd>
+                                  <span className="text-muted-foreground line-through">
+                                    {request.currentNicNumber || "—"}
+                                  </span>{" "}
+                                  → <span className="font-medium">{request.nicNumber}</span>
+                                </dd>
+                              </div>
+                            ) : null}
+                            {request.businessRegistrationNumber &&
+                            request.businessRegistrationNumber !== request.currentBusinessRegistrationNumber ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">Business reg. no.</dt>
+                                <dd>
+                                  <span className="text-muted-foreground line-through">
+                                    {request.currentBusinessRegistrationNumber || "—"}
+                                  </span>{" "}
+                                  → <span className="font-medium">{request.businessRegistrationNumber}</span>
+                                </dd>
+                              </div>
+                            ) : null}
+                            {request.nicDocumentUrl ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">NIC document</dt>
+                                <dd>
+                                  <a
+                                    href={request.nicDocumentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline-offset-4 hover:underline"
+                                  >
+                                    View new file
+                                  </a>
+                                </dd>
+                              </div>
+                            ) : null}
+                            {request.businessRegDocumentUrl ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">Business reg. document</dt>
+                                <dd>
+                                  <a
+                                    href={request.businessRegDocumentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline-offset-4 hover:underline"
+                                  >
+                                    View new file
+                                  </a>
+                                </dd>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            {request.driverLicenceNumber &&
+                            request.driverLicenceNumber !== request.currentDriverLicenceNumber ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">Driver&apos;s licence no.</dt>
+                                <dd>
+                                  <span className="text-muted-foreground line-through">
+                                    {request.currentDriverLicenceNumber || "—"}
+                                  </span>{" "}
+                                  → <span className="font-medium">{request.driverLicenceNumber}</span>
+                                </dd>
+                              </div>
+                            ) : null}
+                            {request.abn && request.abn !== request.currentAbn ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">ABN</dt>
+                                <dd>
+                                  <span className="text-muted-foreground line-through">
+                                    {request.currentAbn || "—"}
+                                  </span>{" "}
+                                  → <span className="font-medium">{request.abn}</span>
+                                </dd>
+                              </div>
+                            ) : null}
+                            {request.driverLicenceDocumentUrl ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">Driver&apos;s licence document</dt>
+                                <dd>
+                                  <a
+                                    href={request.driverLicenceDocumentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline-offset-4 hover:underline"
+                                  >
+                                    View new file
+                                  </a>
+                                </dd>
+                              </div>
+                            ) : null}
+                            {request.abnDocumentUrl ? (
+                              <div>
+                                <dt className="text-muted-foreground text-xs">ABN document</dt>
+                                <dd>
+                                  <a
+                                    href={request.abnDocumentUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline-offset-4 hover:underline"
+                                  >
+                                    View new file
+                                  </a>
+                                </dd>
+                              </div>
+                            ) : null}
+                          </>
+                        )}
+                      </dl>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={approveChangeRequestMutation.isPending}
+                          onClick={() => approveChangeRequestMutation.mutate(request.id)}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRejectChangeRequestTarget(request)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="history">
           <Card>
             <CardContent className="p-0">
@@ -220,14 +447,8 @@ export default function AdminStoresPage() {
                     <li key={entry.id} className="flex items-start justify-between gap-4 p-4">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <Badge
-                            className={
-                              entry.action === "store_approved"
-                                ? "border-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                : "border-0 bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
-                            }
-                          >
-                            {entry.action === "store_approved" ? "Approved" : "Rejected"}
+                          <Badge className={`border-0 ${DECISION_BADGE_CLASSES[entry.action] ?? DECISION_BADGE_CLASSES.default}`}>
+                            {DECISION_LABELS[entry.action] ?? entry.action}
                           </Badge>
                           <p className="text-sm">{entry.description}</p>
                         </div>
@@ -274,6 +495,44 @@ export default function AdminStoresPage() {
               }
             >
               Reject application
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!rejectChangeRequestTarget}
+        onOpenChange={(open) => !open && setRejectChangeRequestTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject this verification change?</DialogTitle>
+            <DialogDescription>
+              Give a reason — {rejectChangeRequestTarget?.storeName}&apos;s current details stay unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={3}
+            placeholder="e.g. Document doesn't match the number provided"
+            value={rejectChangeRequestReason}
+            onChange={(e) => setRejectChangeRequestReason(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectChangeRequestTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectChangeRequestReason.trim() || rejectChangeRequestMutation.isPending}
+              onClick={() =>
+                rejectChangeRequestTarget &&
+                rejectChangeRequestMutation.mutate({
+                  id: rejectChangeRequestTarget.id,
+                  reason: rejectChangeRequestReason,
+                })
+              }
+            >
+              Reject change
             </Button>
           </DialogFooter>
         </DialogContent>

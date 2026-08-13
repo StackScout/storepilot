@@ -1,6 +1,5 @@
 package com.storepilot.backend.store
 
-import com.storepilot.backend.abn.isValidAbnChecksum
 import com.storepilot.backend.admin.AdminNotificationService
 import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
@@ -95,8 +94,21 @@ class StoreService(
     fun getById(id: UUID): StoreResponse =
         storeRepository.findById(id).orElseThrow { NotFoundException("Store $id not found") }.toResponse(fileStorageService)
 
-    fun getSettings(storeId: UUID): StoreSettingsResponse? =
-        storeSettingsRepository.findById(storeId).orElse(null)?.toResponse(fileStorageService)
+    /**
+     * GET /api/stores/{storeId}/settings — full verification/bank/contact
+     * details, restricted to the owning seller (SecurityConfig gates the
+     * method to hasRole("SELLER"); requireOwnedStore below enforces it's
+     * *their* store). Buyer-facing checkout/order pages use
+     * getPublicSettings instead, which excludes PII.
+     */
+    fun getSettings(storeId: UUID): StoreSettingsResponse? {
+        requireOwnedStore(storeId)
+        return storeSettingsRepository.findById(storeId).orElse(null)?.toResponse(fileStorageService)
+    }
+
+    /** GET /api/stores/{storeId}/public-settings — buyer-safe subset, no auth required. */
+    fun getPublicSettings(storeId: UUID): StorePublicSettingsResponse? =
+        storeSettingsRepository.findById(storeId).orElse(null)?.toPublicResponse()
 
     /**
      * GET /api/me/store — the authenticated seller's own store, or null if
@@ -201,6 +213,21 @@ class StoreService(
     private fun upsertSettings(storeId: UUID, input: StoreSettingsInput): StoreSettingsResponse {
         val existing = storeSettingsRepository.findById(storeId).orElse(null)
         if (existing != null) {
+            // Once a store is ACTIVE, its identity-verification fields are
+            // frozen against direct edits — a seller changing what
+            // legal/business identity they claim to be, after an admin has
+            // already approved it against that claim, needs re-review (see
+            // task item 40's decision). uploadDriverLicenceDocument etc.
+            // enforce the same freeze for the documents backing these
+            // fields. This never blocks PENDING/REJECTED stores' initial
+            // submission/resubmission, only post-approval edits — those go
+            // through StoreVerificationChangeRequestService instead.
+            if (existing.store.verificationStatus == StoreVerificationStatus.ACTIVE && hasVerificationFieldEdits(input)) {
+                throw ConflictException(
+                    "This store is already approved — submit a verification change request instead of editing these fields directly",
+                )
+            }
+
             // Snapshot before mutating — this is the only way to tell a real
             // change apart from the caller simply resubmitting the same
             // values (the frontend settings form always resubmits the full
@@ -225,6 +252,9 @@ class StoreService(
             input.codEnabled?.let { existing.codEnabled = it && sellerPlan == SellerPlan.PRO }
             input.onlinePaymentEnabled?.let { existing.onlinePaymentEnabled = it }
             input.bankTransferEnabled?.let { existing.bankTransferEnabled = it && sellerPlan == SellerPlan.PRO }
+            // Only reachable below when the store isn't ACTIVE yet (the
+            // guard above already threw otherwise) — i.e. this is still the
+            // initial onboarding submission or a post-rejection resubmission.
             input.sellerType?.let { existing.sellerType = wireValueOf(it) }
             input.driverLicenceNumber?.let { existing.driverLicenceNumber = it }
             if (input.abn != null) existing.abn = input.abn
@@ -244,6 +274,22 @@ class StoreService(
                     saved.bankAccountName,
                     saved.bankAccountNumber,
                 )
+            }
+            // input.rejectionReason != null is the one caller of this method
+            // that isn't a genuine seller-initiated edit — setVerificationStatus
+            // (admin rejecting) reuses upsertSettings to stash the rejection
+            // reason, and that path already gets its own STORE_REJECTED audit
+            // row, so recording a second one here would be a duplicate.
+            if (input.rejectionReason == null) {
+                currentActor.sellerOrNull()?.let { seller ->
+                    auditLogService.recordAsSeller(
+                        seller,
+                        AuditAction.STORE_SETTINGS_UPDATED,
+                        "store",
+                        storeId.toString(),
+                        "Updated settings for \"${saved.store.name}\"",
+                    )
+                }
             }
             return saved.toResponse(fileStorageService)
         }
@@ -281,35 +327,35 @@ class StoreService(
         return storeSettingsRepository.save(created).toResponse(fileStorageService)
     }
 
-    /**
-     * A store's seller-identity verification fields are country-specific
-     * (see StoreSettings' doc comment) — this deployment's
-     * platform_settings.country_code decides which pair is required, never
-     * both. The business-only field (ABN / business registration number) is
-     * only required when sellerType is BUSINESS.
-     */
-    private fun requireCountryVerificationFields(settings: StoreSettings) {
-        val countryCode = platformConfigService.current().countryCode
-        if (countryCode == "LK") {
-            require(!settings.nicNumber.isNullOrBlank()) { "NIC number is required" }
-            if (settings.sellerType == SellerType.BUSINESS) {
-                require(!settings.businessRegistrationNumber.isNullOrBlank()) {
-                    "Business registration number is required for a registered business"
-                }
-            }
-        } else {
-            require(!settings.driverLicenceNumber.isNullOrBlank()) { "Driver's licence number is required" }
-            if (settings.sellerType == SellerType.BUSINESS) {
-                require(!settings.abn.isNullOrBlank()) { "ABN is required for a registered business" }
-                require(isValidAbnChecksum(settings.abn!!)) { "Enter a valid ABN" }
-            }
+    private fun hasVerificationFieldEdits(input: StoreSettingsInput): Boolean =
+        input.sellerType != null || input.driverLicenceNumber != null || input.abn != null ||
+            input.nicNumber != null || input.businessRegistrationNumber != null
+
+    /** Shared by upsertSettings and the 4 document-upload methods below — see upsertSettings' doc comment for why. */
+    private fun requireNotActiveForDirectVerificationEdit(store: Store) {
+        if (store.verificationStatus == StoreVerificationStatus.ACTIVE) {
+            throw ConflictException(
+                "This store is already approved — submit a verification change request instead of replacing this document directly",
+            )
         }
+    }
+
+    /** See the shared requireCountryVerificationFields(...) top-level function's doc comment. */
+    private fun requireCountryVerificationFields(settings: StoreSettings) {
+        requireCountryVerificationFields(
+            platformConfigService.current().countryCode,
+            settings.sellerType,
+            settings.driverLicenceNumber,
+            settings.abn,
+            settings.nicNumber,
+            settings.businessRegistrationNumber,
+        )
     }
 
     /** POST /api/stores/{storeId}/driver-licence-document — seller uploads/replaces their driver's licence proof. */
     @Transactional
     fun uploadDriverLicenceDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
-        requireOwnedStore(storeId)
+        requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
         val reference = fileStorageService.store(
             "seller-documents",
             file,
@@ -326,7 +372,7 @@ class StoreService(
     /** POST /api/stores/{storeId}/abn-document — seller uploads/replaces their ABN registration proof. */
     @Transactional
     fun uploadAbnDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
-        requireOwnedStore(storeId)
+        requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
         val reference = fileStorageService.store(
             "seller-documents",
             file,
@@ -343,7 +389,7 @@ class StoreService(
     /** POST /api/stores/{storeId}/nic-document — seller uploads/replaces their NIC proof (Sri Lanka deployments only). */
     @Transactional
     fun uploadNicDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
-        requireOwnedStore(storeId)
+        requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
         val reference = fileStorageService.store(
             "seller-documents",
             file,
@@ -360,7 +406,7 @@ class StoreService(
     /** POST /api/stores/{storeId}/business-reg-document — seller uploads/replaces their business registration proof (Sri Lanka deployments only). */
     @Transactional
     fun uploadBusinessRegDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
-        requireOwnedStore(storeId)
+        requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
         val reference = fileStorageService.store(
             "seller-documents",
             file,

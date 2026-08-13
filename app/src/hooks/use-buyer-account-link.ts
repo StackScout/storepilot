@@ -13,5 +13,9 @@ import { useAuthSession } from "./use-auth-session";
  */
 export function useBuyerAccountLink() {
   const { session } = useAuthSession();
-  return { buyerName: session.signedIn && session.role === "buyer" ? session.name : undefined };
+  const isBuyer = session.signedIn && session.role === "buyer";
+  return {
+    buyerName: isBuyer ? session.name : undefined,
+    buyerEmail: isBuyer ? session.email : undefined,
+  };
 }

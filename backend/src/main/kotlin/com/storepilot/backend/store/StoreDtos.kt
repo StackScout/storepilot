@@ -69,6 +69,26 @@ data class StoreSettingsResponse(
     val stripeEnabled: Boolean,
 )
 
+/**
+ * Buyer-safe subset of StoreSettingsResponse — only what checkout/order
+ * pages need to render payment options and bank-transfer details.
+ * Deliberately excludes contact info, NIC/ABN/business-registration
+ * numbers, verification documents, and Stripe account internals — see
+ * GET /api/stores/{storeId}/public-settings.
+ */
+data class StorePublicSettingsResponse(
+    val storeId: UUID,
+    val bankAccountName: String,
+    val bankAccountNumber: String,
+    val bankName: String,
+    val codEnabled: Boolean,
+    val onlinePaymentEnabled: Boolean,
+    val bankTransferEnabled: Boolean,
+    val pickupEnabled: Boolean,
+    val stripeEnabled: Boolean,
+    val stripeChargesEnabled: Boolean,
+)
+
 /** Mirrors src/types/store.ts's StoreApplicationInput — POST /api/stores (onboarding). */
 data class StoreApplicationInput(
     @field:NotBlank(message = "Enter your store name")
@@ -133,4 +153,57 @@ data class VerificationDecisionInput(
     @field:NotBlank(message = "Status is required")
     val status: String,
     val rejectionReason: String? = null,
+)
+
+/**
+ * POST /api/stores/{storeId}/verification-change-requests — proposed
+ * updates to a subset of the verification-identity fields, submitted as
+ * the "data" multipart part alongside up to 4 optional replacement
+ * document parts. Every field optional — a submission only needs to
+ * include what's actually changing (merged against the store's current
+ * StoreSettings at validation time, see
+ * StoreVerificationChangeRequestService.submit).
+ */
+data class VerificationChangeRequestInput(
+    val sellerType: String? = null,
+    val driverLicenceNumber: String? = null,
+    val abn: String? = null,
+    val nicNumber: String? = null,
+    val businessRegistrationNumber: String? = null,
+)
+
+/** POST .../verification-change-requests/{id}/reject — rejectionReason is required at the service layer, not annotated here since approve reuses no body at all. */
+data class VerificationChangeRequestReviewInput(
+    val rejectionReason: String? = null,
+)
+
+/**
+ * Carries both the seller's proposed values AND the store's current live
+ * values (current* fields) so the admin review UI can render an old-vs-new
+ * diff without a second request — current* always reflects StoreSettings
+ * at read time, not a value snapshotted when the request was submitted.
+ */
+data class StoreVerificationChangeRequestResponse(
+    val id: UUID,
+    val storeId: UUID,
+    val storeName: String,
+    val status: String,
+    val sellerType: String?,
+    val driverLicenceNumber: String?,
+    val abn: String?,
+    val nicNumber: String?,
+    val businessRegistrationNumber: String?,
+    val driverLicenceDocumentUrl: String?,
+    val abnDocumentUrl: String?,
+    val nicDocumentUrl: String?,
+    val businessRegDocumentUrl: String?,
+    val currentSellerType: String,
+    val currentDriverLicenceNumber: String?,
+    val currentAbn: String?,
+    val currentNicNumber: String?,
+    val currentBusinessRegistrationNumber: String?,
+    val rejectionReason: String?,
+    val submittedAt: Instant,
+    val reviewedAt: Instant?,
+    val reviewedByEmail: String?,
 )

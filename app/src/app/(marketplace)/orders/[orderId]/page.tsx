@@ -20,7 +20,7 @@ import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { useCart } from "@/hooks/use-cart";
 import { ordersService, storesService } from "@/services";
-import type { Order, Store, StoreSettings } from "@/types";
+import type { Order, Store, StorePublicSettings } from "@/types";
 
 export default function OrderTrackingPage({
   params,
@@ -33,7 +33,7 @@ export default function OrderTrackingPage({
   const { clearCart } = useCart();
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [store, setStore] = useState<Store | null>(null);
-  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [storeSettings, setStoreSettings] = useState<StorePublicSettings | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
 
@@ -45,7 +45,7 @@ export default function OrderTrackingPage({
       if (found) {
         const [s, settings] = await Promise.all([
           storesService.getStoreById(found.storeId),
-          found.paymentMethod === "bank-transfer" ? storesService.getStoreSettings(found.storeId) : null,
+          found.paymentMethod === "bank-transfer" ? storesService.getPublicStoreSettings(found.storeId) : null,
         ]);
         if (!cancelled) {
           setStore(s);

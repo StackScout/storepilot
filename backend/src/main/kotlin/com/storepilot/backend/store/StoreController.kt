@@ -41,9 +41,17 @@ class StoreController(
         return ResponseEntity.ok(store)
     }
 
+    /** Owner-only — see StoreService.getSettings's doc comment. */
     @GetMapping("/api/stores/{storeId}/settings")
     fun getSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {
         val settings = storeService.getSettings(storeId) ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(settings)
+    }
+
+    /** Public — see StoreService.getPublicSettings's doc comment. */
+    @GetMapping("/api/stores/{storeId}/public-settings")
+    fun getPublicSettings(@PathVariable storeId: UUID): ResponseEntity<StorePublicSettingsResponse> {
+        val settings = storeService.getPublicSettings(storeId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(settings)
     }
 

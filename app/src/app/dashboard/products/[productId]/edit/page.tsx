@@ -62,6 +62,7 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
         isSubmitting={mutation.isPending}
         submitLabel="Save changes"
         stockManagementEnabled={settings?.stockManagementEnabled ?? true}
+        storeCategory={product.category}
       />
     </div>
   );

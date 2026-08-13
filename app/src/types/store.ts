@@ -105,6 +105,70 @@ export interface StoreSettings {
   stripeEnabled: boolean;
 }
 
+/**
+ * Buyer-safe subset of StoreSettings returned by GET
+ * /api/stores/{storeId}/public-settings — what checkout and order pages
+ * need to render payment options and bank-transfer details, without the
+ * PII the full StoreSettings carries (contact info, NIC/ABN, verification
+ * documents).
+ */
+export type StorePublicSettings = Pick<
+  StoreSettings,
+  | "storeId"
+  | "bankAccountName"
+  | "bankAccountNumber"
+  | "bankName"
+  | "codEnabled"
+  | "onlinePaymentEnabled"
+  | "bankTransferEnabled"
+  | "pickupEnabled"
+  | "stripeEnabled"
+  | "stripeChargesEnabled"
+>;
+
+export type StoreVerificationChangeRequestStatus = "pending" | "approved" | "rejected";
+
+/**
+ * A seller's proposed change to a subset of their (already-approved)
+ * store's verification-identity fields — see backend
+ * StoreVerificationChangeRequest's doc comment. current* fields reflect the
+ * store's live settings at read time, letting the review UI render an
+ * old-vs-new diff without a second request.
+ */
+export interface StoreVerificationChangeRequest {
+  id: string;
+  storeId: string;
+  storeName: string;
+  status: StoreVerificationChangeRequestStatus;
+  sellerType?: SellerType;
+  driverLicenceNumber?: string;
+  abn?: string;
+  nicNumber?: string;
+  businessRegistrationNumber?: string;
+  driverLicenceDocumentUrl?: string;
+  abnDocumentUrl?: string;
+  nicDocumentUrl?: string;
+  businessRegDocumentUrl?: string;
+  currentSellerType: SellerType;
+  currentDriverLicenceNumber?: string;
+  currentAbn?: string;
+  currentNicNumber?: string;
+  currentBusinessRegistrationNumber?: string;
+  rejectionReason?: string;
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedByEmail?: string;
+}
+
+/** POST /api/stores/{storeId}/verification-change-requests — text-field part of the multipart submission; document re-uploads go in separate parts. */
+export interface VerificationChangeRequestInput {
+  sellerType?: SellerType;
+  driverLicenceNumber?: string;
+  abn?: string;
+  nicNumber?: string;
+  businessRegistrationNumber?: string;
+}
+
 /** Input for creating a new Store at seller onboarding time. */
 export interface StoreApplicationInput {
   name: string;

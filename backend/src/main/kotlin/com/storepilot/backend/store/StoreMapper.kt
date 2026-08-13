@@ -57,3 +57,45 @@ fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSetti
         stripePayoutsEnabled = stripePayoutsEnabled,
         stripeEnabled = stripeEnabled,
     )
+
+/** currentSettings is read fresh at map time (see StoreVerificationChangeRequestResponse's doc comment), not stored on the request row — null only if a store somehow has no settings row at all, defensively defaulted to INDIVIDUAL/blank rather than crashing the admin review list over one bad row. */
+fun StoreVerificationChangeRequest.toResponse(currentSettings: StoreSettings?, fileStorageService: FileStorageService): StoreVerificationChangeRequestResponse =
+    StoreVerificationChangeRequestResponse(
+        id = requireNotNull(id),
+        storeId = requireNotNull(store.id),
+        storeName = store.name,
+        status = status.wireValue,
+        sellerType = sellerType?.wireValue,
+        driverLicenceNumber = driverLicenceNumber,
+        abn = abn,
+        nicNumber = nicNumber,
+        businessRegistrationNumber = businessRegistrationNumber,
+        driverLicenceDocumentUrl = driverLicenceDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        abnDocumentUrl = abnDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        nicDocumentUrl = nicDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        businessRegDocumentUrl = businessRegDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        currentSellerType = currentSettings?.sellerType?.wireValue ?: SellerType.INDIVIDUAL.wireValue,
+        currentDriverLicenceNumber = currentSettings?.driverLicenceNumber,
+        currentAbn = currentSettings?.abn,
+        currentNicNumber = currentSettings?.nicNumber,
+        currentBusinessRegistrationNumber = currentSettings?.businessRegistrationNumber,
+        rejectionReason = rejectionReason,
+        submittedAt = requireNotNull(createdAt),
+        reviewedAt = reviewedAt,
+        reviewedByEmail = reviewedByEmail,
+    )
+
+/** Buyer-safe projection — see StorePublicSettingsResponse's doc comment. */
+fun StoreSettings.toPublicResponse(): StorePublicSettingsResponse =
+    StorePublicSettingsResponse(
+        storeId = requireNotNull(store.id),
+        bankAccountName = bankAccountName,
+        bankAccountNumber = bankAccountNumber,
+        bankName = bankName,
+        codEnabled = codEnabled,
+        onlinePaymentEnabled = onlinePaymentEnabled,
+        bankTransferEnabled = bankTransferEnabled,
+        pickupEnabled = pickupEnabled,
+        stripeEnabled = stripeEnabled,
+        stripeChargesEnabled = stripeChargesEnabled,
+    )

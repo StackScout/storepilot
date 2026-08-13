@@ -59,6 +59,7 @@ export default function NewProductPage() {
         isSubmitting={mutation.isPending}
         submitLabel="Create product"
         stockManagementEnabled={settings?.stockManagementEnabled ?? true}
+        storeCategory={store.category}
       />
     </div>
   );

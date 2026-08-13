@@ -57,6 +57,18 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/actuator/**").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
+                    // Full store settings (bank details, NIC/ABN, contact
+                    // info, verification documents) is owner-only — must be
+                    // matched before the broader GET /api/stores/** permitAll
+                    // below, since Spring Security's authorizeHttpRequests is
+                    // first-match-wins. Buyer-facing checkout/order pages use
+                    // GET /api/stores/*/public-settings instead, which stays
+                    // covered by that broader permitAll rule.
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/settings").hasRole("SELLER")
+                    // Same first-match-wins reasoning as /settings above —
+                    // a seller's own pending verification-change-request
+                    // status is not public.
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/verification-change-requests/current").hasRole("SELLER")
                     // Public marketplace browsing.
                     .requestMatchers(HttpMethod.GET, "/api/stores/**", "/api/products/**").permitAll()
                     // DB-backed platform config + address state/province options
@@ -106,6 +118,7 @@ class SecurityConfig {
                         "/api/stores/*/business-reg-document",
                         "/api/stores/*/logo",
                         "/api/stores/*/banner",
+                        "/api/stores/*/verification-change-requests",
                     ).hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard", "/api/stores/*/stripe-connect/refresh").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")

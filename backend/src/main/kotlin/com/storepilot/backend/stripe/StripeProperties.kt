@@ -21,6 +21,9 @@ data class StripeProperties(
     /** Buyer lands back here as `{successUrlBase}/{orderId}` / `{cancelUrlBase}/{orderId}` — the order page, same pattern as PayHereProperties.returnUrlBase. */
     val successUrlBase: String = "http://localhost:3000/orders",
     val cancelUrlBase: String = "http://localhost:3000/orders",
+    /** Same shape as [successUrlBase]/[cancelUrlBase], for a booking checkout instead of an order — see StripeService.createBookingCheckoutSession. */
+    val bookingSuccessUrlBase: String = "http://localhost:3000/bookings",
+    val bookingCancelUrlBase: String = "http://localhost:3000/bookings",
     /**
      * Seller Pro-plan billing (see SellerBillingService/SellerBillingWebhookService)
      * — a separate Dashboard webhook endpoint/secret from [webhookSecret]

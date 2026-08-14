@@ -26,7 +26,7 @@ class Payout(
     @JoinColumn(name = "store_id", nullable = false)
     var store: Store,
     @OneToMany(mappedBy = "payout", cascade = [CascadeType.ALL], orphanRemoval = true)
-    var orders: MutableList<PayoutOrderRef> = mutableListOf(),
+    var sourceRefs: MutableList<PayoutSourceRef> = mutableListOf(),
     /** Cents, like every other money field in this codebase — see Product.price's doc comment. */
     @Column(nullable = false)
     var subtotal: Int,
@@ -44,21 +44,30 @@ class Payout(
 
 /**
  * Mirrors src/types/payout.ts's PayoutOrderRef — a snapshot of each included
- * order's totals at the time the payout batch was created, so a payout's
- * amount stays accurate even if the underlying Order somehow changed later.
- * `orderId` is a plain UUID, not a foreign key, for the same reason as
- * OrderItem.productId.
+ * order's *or booking's* totals at the time the payout batch was created, so
+ * a payout's amount stays accurate even if the underlying Order/Booking
+ * somehow changed later. Polymorphic: exactly one of
+ * (orderId, bookingId) is set per row (DB-enforced, see
+ * V14__polymorphic_ledger_refs.sql) — a payout batch for a store selling
+ * both products and bookable services can mix order-sourced and
+ * booking-sourced rows, giving admin/accounting one unified reconciliation
+ * view. `orderId`/`bookingId` are plain UUIDs, not foreign keys, for the
+ * same reason as OrderItem.productId.
  */
 @Entity
 @Table(name = "payout_order_refs")
-class PayoutOrderRef(
+class PayoutSourceRef(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payout_id", nullable = false)
     var payout: Payout,
-    @Column(name = "order_id", nullable = false)
-    var orderId: UUID,
-    @Column(name = "order_number", nullable = false)
-    var orderNumber: String,
+    @Column(name = "order_id")
+    var orderId: UUID? = null,
+    @Column(name = "order_number")
+    var orderNumber: String? = null,
+    @Column(name = "booking_id")
+    var bookingId: UUID? = null,
+    @Column(name = "booking_number")
+    var bookingNumber: String? = null,
     @Column(nullable = false)
     var subtotal: Int,
     @Column(name = "platform_fee", nullable = false)

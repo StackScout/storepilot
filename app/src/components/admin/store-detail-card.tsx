@@ -1,15 +1,16 @@
 import { Check, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import { AbnVerificationBadge } from "@/components/shared/abn-verification-badge";
 import { formatDate } from "@/lib/format";
 import { getCategoryLabel } from "@/mock/categories";
 import type { Store, StoreSettings, StoreVerificationStatus } from "@/types";
 
-const STATUS_BADGE_CLASSES: Record<StoreVerificationStatus, string> = {
-  pending: "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  active: "border-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-  rejected: "border-0 bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+const STATUS_TONES: Record<StoreVerificationStatus, StatusTone> = {
+  pending: "warning",
+  active: "success",
+  rejected: "danger",
 };
 
 const STATUS_LABEL: Record<StoreVerificationStatus, string> = {
@@ -43,9 +44,9 @@ export function StoreDetailCard({
           <div className="flex items-center gap-2">
             <p className="font-medium">{store.name}</p>
             <Badge variant="secondary">{getCategoryLabel(store.category)}</Badge>
-            <Badge className={STATUS_BADGE_CLASSES[store.verificationStatus]}>
+            <StatusBadge tone={STATUS_TONES[store.verificationStatus]}>
               {STATUS_LABEL[store.verificationStatus]}
-            </Badge>
+            </StatusBadge>
           </div>
           <p className="text-muted-foreground flex items-center gap-1 text-xs">
             <MapPin className="size-3" /> {store.address.city}, {store.address.state}

@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-import type { FeeCollection, Order, Payout } from "@/types";
+import type { Booking, FeeCollection, Order, Payout } from "@/types";
 
 /** GET /stores/:storeId/payouts */
 export async function listPayoutsByStore(storeId: string): Promise<Payout[]> {
@@ -13,6 +13,11 @@ export async function listPayoutsByStore(storeId: string): Promise<Payout[]> {
  */
 export async function getEligibleOrdersForPayout(storeId: string): Promise<Order[]> {
   return apiClient.get<Order[]>(`/api/stores/${storeId}/payouts/eligible-orders`);
+}
+
+/** Same idea as getEligibleOrdersForPayout, for bookings — a payout batch can include both, see PayoutService.createBatch. */
+export async function getEligibleBookingsForPayout(storeId: string): Promise<Booking[]> {
+  return apiClient.get<Booking[]>(`/api/stores/${storeId}/payouts/eligible-bookings`);
 }
 
 /** POST /stores/:storeId/payouts — bundle all currently-eligible orders into one scheduled payout. */
@@ -44,6 +49,11 @@ export async function listFeeCollectionsByStore(storeId: string): Promise<FeeCol
  */
 export async function getEligibleOrdersForFeeCollection(storeId: string): Promise<Order[]> {
   return apiClient.get<Order[]>(`/api/stores/${storeId}/fee-collections/eligible-orders`);
+}
+
+/** Same idea as getEligibleOrdersForFeeCollection, for bookings paid via "Pay at venue"/bank-transfer. */
+export async function getEligibleBookingsForFeeCollection(storeId: string): Promise<Booking[]> {
+  return apiClient.get<Booking[]>(`/api/stores/${storeId}/fee-collections/eligible-bookings`);
 }
 
 /** POST /stores/:storeId/fee-collections — bundle all currently-eligible orders into one pending fee collection. */

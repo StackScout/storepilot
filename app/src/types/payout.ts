@@ -8,9 +8,12 @@
  */
 export type PayoutStatus = "scheduled" | "paid";
 
+/** Polymorphic — exactly one of (orderId, bookingId) is set per row, since a payout batch can mix order- and booking-sourced income for a store selling both. */
 export interface PayoutOrderRef {
-  orderId: string;
-  orderNumber: string;
+  orderId?: string;
+  orderNumber?: string;
+  bookingId?: string;
+  bookingNumber?: string;
   subtotal: number;
   platformFee: number;
   net: number;
@@ -40,9 +43,12 @@ export interface Payout {
  */
 export type FeeCollectionStatus = "pending" | "collected";
 
+/** Polymorphic — same reasoning as PayoutOrderRef. */
 export interface FeeCollectionOrderRef {
-  orderId: string;
-  orderNumber: string;
+  orderId?: string;
+  orderNumber?: string;
+  bookingId?: string;
+  bookingNumber?: string;
   subtotal: number;
   platformFee: number;
 }

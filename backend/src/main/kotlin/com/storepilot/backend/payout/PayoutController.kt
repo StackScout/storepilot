@@ -1,5 +1,6 @@
 package com.storepilot.backend.payout
 
+import com.storepilot.backend.booking.BookingResponse
 import com.storepilot.backend.order.OrderResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -21,6 +22,9 @@ class PayoutController(
 
     @GetMapping("/api/stores/{storeId}/payouts/eligible-orders")
     fun eligibleOrders(@PathVariable storeId: UUID): List<OrderResponse> = payoutService.getEligibleOrders(storeId)
+
+    @GetMapping("/api/stores/{storeId}/payouts/eligible-bookings")
+    fun eligibleBookings(@PathVariable storeId: UUID): List<BookingResponse> = payoutService.getEligibleBookings(storeId)
 
     @PostMapping("/api/admin/stores/{storeId}/payouts")
     fun createBatch(@PathVariable storeId: UUID): ResponseEntity<PayoutResponse> =

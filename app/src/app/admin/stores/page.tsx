@@ -7,6 +7,7 @@ import { ClipboardCheck, FileEdit, History, Store as StoreIcon } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -56,13 +57,12 @@ const DECISION_LABELS: Record<string, string> = {
   store_verification_change_rejected: "Change rejected",
 };
 
-const DECISION_BADGE_CLASSES: Record<string, string> = {
-  store_approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-  store_verification_change_approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-  store_rejected: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  store_verification_change_rejected: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  store_verification_change_requested: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  default: "bg-muted text-muted-foreground",
+const DECISION_TONES: Record<string, StatusTone> = {
+  store_approved: "success",
+  store_verification_change_approved: "success",
+  store_rejected: "danger",
+  store_verification_change_rejected: "danger",
+  store_verification_change_requested: "warning",
 };
 
 export default function AdminStoresPage() {
@@ -447,9 +447,9 @@ export default function AdminStoresPage() {
                     <li key={entry.id} className="flex items-start justify-between gap-4 p-4">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <Badge className={`border-0 ${DECISION_BADGE_CLASSES[entry.action] ?? DECISION_BADGE_CLASSES.default}`}>
+                          <StatusBadge tone={DECISION_TONES[entry.action] ?? "neutral"}>
                             {DECISION_LABELS[entry.action] ?? entry.action}
-                          </Badge>
+                          </StatusBadge>
                           <p className="text-sm">{entry.description}</p>
                         </div>
                         <p className="text-muted-foreground text-xs">

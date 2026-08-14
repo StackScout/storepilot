@@ -8,3 +8,6 @@ export * as adminNotificationsService from "./admin-notifications.service";
 export * as abnService from "./abn.service";
 export * as adminService from "./admin.service";
 export * as billingService from "./billing.service";
+export * as bookableServicesService from "./bookable-services.service";
+export * as availabilityService from "./availability.service";
+export * as bookingsService from "./bookings.service";

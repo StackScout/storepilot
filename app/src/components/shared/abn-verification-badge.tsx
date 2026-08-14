@@ -53,8 +53,8 @@ export function AbnVerificationBadge({ abn }: { abn: string | undefined }) {
       <p
         className={
           isActive
-            ? "flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"
-            : "flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
+            ? "text-success-foreground flex items-center gap-1 text-xs"
+            : "text-warning-foreground flex items-center gap-1 text-xs"
         }
       >
         {isActive ? <CheckCircle2 className="size-3 shrink-0" /> : <TriangleAlert className="size-3 shrink-0" />}
@@ -74,7 +74,7 @@ export function AbnVerificationBadge({ abn }: { abn: string | undefined }) {
 
   if (data.status === "not-found") {
     return (
-      <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+      <p className="text-warning-foreground flex items-center gap-1 text-xs">
         <TriangleAlert className="size-3 shrink-0" /> No matching ABN found in the register — double-check the
         number.
       </p>

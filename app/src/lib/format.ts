@@ -11,6 +11,11 @@ export function paymentMethodLabel(method: PaymentMethod): string {
   return PAYMENT_METHOD_LABELS[method];
 }
 
+/** Same wire values as paymentMethodLabel, but "cod" reads as "Pay at venue" in a booking context — see docs/features/bookings.md. */
+export function bookingPaymentMethodLabel(method: PaymentMethod): string {
+  return method === "cod" ? "Pay at venue" : PAYMENT_METHOD_LABELS[method];
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-LK", {
     day: "numeric",

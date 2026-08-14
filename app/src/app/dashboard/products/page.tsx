@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import {
   Dialog,
   DialogContent,
@@ -116,16 +116,17 @@ export default function DashboardProductsPage() {
                         {product.trackStock ? product.stockQuantity : "—"}
                       </td>
                       <td className="px-6 py-3">
-                        <Badge
-                          variant={product.status === "active" ? "secondary" : "outline"}
-                          className={
-                            product.status === "out-of-stock"
-                              ? "border-red-200 text-red-700 dark:text-red-400"
-                              : ""
+                        <StatusBadge
+                          tone={
+                            product.status === "active"
+                              ? "success"
+                              : product.status === "out-of-stock"
+                                ? "danger"
+                                : "neutral"
                           }
                         >
                           {product.status === "out-of-stock" ? "Out of stock" : product.status}
-                        </Badge>
+                        </StatusBadge>
                       </td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-1">

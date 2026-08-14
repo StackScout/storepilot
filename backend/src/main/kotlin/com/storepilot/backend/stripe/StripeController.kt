@@ -29,6 +29,9 @@ class StripeController(
     @PostMapping("/api/orders/{id}/stripe-checkout")
     fun checkout(@PathVariable id: UUID): StripeCheckoutSessionResponse = stripeService.createCheckoutSession(id)
 
+    @PostMapping("/api/bookings/{id}/stripe-checkout")
+    fun bookingCheckout(@PathVariable id: UUID): StripeCheckoutSessionResponse = stripeService.createBookingCheckoutSession(id)
+
     /**
      * Raw JSON body, not deserialized — Stripe's signature covers the exact
      * bytes it sent, so `@RequestBody String` (not a typed DTO) is required

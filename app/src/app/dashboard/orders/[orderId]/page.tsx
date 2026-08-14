@@ -110,7 +110,7 @@ export default function DashboardOrderDetailPage({
                 <span className="text-muted-foreground">Shipping (buyer paid)</span>
                 <span>{formatCurrency(order.shippingFee, currency)}</span>
               </div>
-              <div className="flex justify-between text-red-600 dark:text-red-400">
+              <div className="text-danger-foreground flex justify-between">
                 <span>Platform fee (3.5%)</span>
                 <span>-{formatCurrency(order.platformFee, currency)}</span>
               </div>

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import type { Product } from "@/types";
 
 export function ProductCard({
@@ -33,9 +34,9 @@ export function ProductCard({
             <Badge variant="secondary">Out of stock</Badge>
           </div>
         ) : isLowStock ? (
-          <Badge className="absolute top-2 left-2 border-0 bg-amber-500 text-white">
+          <StatusBadge tone="warning" className="absolute top-2 left-2">
             Only {product.stockQuantity} left
-          </Badge>
+          </StatusBadge>
         ) : null}
         {!isOutOfStock && product.compareAtPrice ? (
           <Badge className="bg-primary text-primary-foreground absolute top-2 right-2 border-0">

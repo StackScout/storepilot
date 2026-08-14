@@ -57,4 +57,13 @@ data class PlatformProperties(
     val defaultBankTransferEnabled: Boolean = true,
     val supportEmail: String = "hello@storepilot.au",
     val companyLocation: String = "Sydney, Australia",
+    /**
+     * IANA zone id used to convert a resolved weekly-availability window
+     * (LocalTime) into absolute booking-slot Instants — see
+     * AvailabilityService.computeSlots. Deployment-wide, not per-store: this
+     * codebase is already single-deployment-per-country (PayHere=LK-only,
+     * Stripe=AU-only), so a single zone matches every other country-specific
+     * default here rather than adding a per-store timezone field.
+     */
+    val timezone: String = "Australia/Sydney",
 )

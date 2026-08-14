@@ -70,7 +70,7 @@ class SecurityConfig {
                     // status is not public.
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/verification-change-requests/current").hasRole("SELLER")
                     // Public marketplace browsing.
-                    .requestMatchers(HttpMethod.GET, "/api/stores/**", "/api/products/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/stores/**", "/api/products/**", "/api/bookable-services/**").permitAll()
                     // DB-backed platform config + address state/province options
                     // — the frontend fetches these instead of baking country
                     // content into NEXT_PUBLIC_* build args (see PlatformConfigController).
@@ -94,6 +94,11 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/orders").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/orders/lookup", "/api/orders/*").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/receipt", "/api/orders/*/cancel", "/api/orders/*/payhere-checkout", "/api/orders/*/stripe-checkout").permitAll()
+                    // Same "booking ID (+ phone for lookup) is the
+                    // credential" guest model as orders above.
+                    .requestMatchers(HttpMethod.POST, "/api/bookings").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/bookings/lookup", "/api/bookings/*").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/bookings/*/receipt", "/api/bookings/*/cancel", "/api/bookings/*/payhere-checkout", "/api/bookings/*/stripe-checkout").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/payments/payhere/notify").permitAll()
                     // Signature-verified inside StripeWebhookService, not by auth here — see its doc comment.
                     .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
@@ -124,12 +129,25 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/products/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/bookable-services").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.PATCH, "/api/bookable-services/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/bookable-services/*").hasRole("SELLER")
+                    // /availability (weekly template + exceptions + computed
+                    // slots) is covered by the broader GET /api/stores/**
+                    // permitAll rule above for reads; only the seller-facing
+                    // writes below need gating.
+                    .requestMatchers(HttpMethod.PUT, "/api/stores/*/availability/weekly-rules").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/availability/exceptions").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/stores/*/availability/exceptions/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/orders").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/payouts", "/api/stores/*/payouts/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/fee-collections", "/api/stores/*/fee-collections/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/stripe-settlements").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/verify-bank-transfer").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/bookings").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.PATCH, "/api/bookings/*/status").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/bookings/*/verify-bank-transfer").hasRole("SELLER")
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     .anyRequest().authenticated()
             }

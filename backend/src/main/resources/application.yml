@@ -81,6 +81,7 @@ platform:
   default-bank-transfer-enabled: ${PLATFORM_DEFAULT_BANK_TRANSFER_ENABLED:true}
   support-email: ${SUPPORT_EMAIL:hello@storepilot.au}
   company-location: ${COMPANY_LOCATION:Sydney, Australia}
+  timezone: ${PLATFORM_TIMEZONE:Australia/Sydney}
 
 # Shared AWS SDK config — only meaningful under the aws profile (S3/SES clients).
 aws:
@@ -125,6 +126,7 @@ payhere:
   sandbox: ${PAYHERE_SANDBOX:true}
   notify-url: ${PAYHERE_NOTIFY_URL:http://localhost:8080/api/payments/payhere/notify}
   return-url-base: ${PAYHERE_RETURN_URL_BASE:http://localhost:3000/orders}
+  booking-return-url-base: ${PAYHERE_BOOKING_RETURN_URL_BASE:http://localhost:3000/bookings}
 
 # Stripe Connect (Standard accounts, direct charges) — see StripeConnectService
 # and StripeService's doc comments. Empty-string defaults (unlike PayHere's
@@ -136,6 +138,8 @@ stripe:
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
   success-url-base: ${STRIPE_SUCCESS_URL_BASE:http://localhost:3000/orders}
   cancel-url-base: ${STRIPE_CANCEL_URL_BASE:http://localhost:3000/orders}
+  booking-success-url-base: ${STRIPE_BOOKING_SUCCESS_URL_BASE:http://localhost:3000/bookings}
+  booking-cancel-url-base: ${STRIPE_BOOKING_CANCEL_URL_BASE:http://localhost:3000/bookings}
   billing-webhook-secret: ${STRIPE_BILLING_WEBHOOK_SECRET:}
   billing-success-url-base: ${STRIPE_BILLING_SUCCESS_URL_BASE:http://localhost:3000/dashboard/settings}
   billing-cancel-url-base: ${STRIPE_BILLING_CANCEL_URL_BASE:http://localhost:3000/dashboard/settings}

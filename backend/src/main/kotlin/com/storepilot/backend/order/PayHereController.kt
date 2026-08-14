@@ -14,6 +14,9 @@ class PayHereController(
     @PostMapping("/api/orders/{id}/payhere-checkout")
     fun checkout(@PathVariable id: UUID): PayHereCheckoutResponse = payHereService.buildCheckoutPayload(id)
 
+    @PostMapping("/api/bookings/{id}/payhere-checkout")
+    fun bookingCheckout(@PathVariable id: UUID): PayHereCheckoutResponse = payHereService.buildBookingCheckoutPayload(id)
+
     /**
      * PayHere's webhook posts application/x-www-form-urlencoded, not JSON.
      * Must be reachable on a public IP/domain — PayHere will never call

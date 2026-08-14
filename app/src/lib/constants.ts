@@ -16,6 +16,14 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+export const BOOKING_STATUS_LABELS: Record<string, string> = {
+  pending: "Requested",
+  confirmed: "Confirmed",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  "no-show": "No-show",
+};
+
 /**
  * sessionStorage key recording the order a buyer was just redirected to a
  * payment gateway (PayHere/Stripe) for. Set right before the redirect,

@@ -50,4 +50,7 @@ class PlatformSettings(
     var supportEmail: String,
     @Column(name = "company_location", nullable = false)
     var companyLocation: String,
+    /** IANA zone id — see PlatformProperties.timezone's doc comment for why this is deployment-wide, not per-store. */
+    @Column(nullable = false)
+    var timezone: String,
 ) : BaseEntity()

@@ -21,7 +21,7 @@ export function StatCard({ label, value, icon: Icon, trend, trendDirection }: St
             <p
               className={cn(
                 "text-xs font-medium",
-                trendDirection === "down" ? "text-red-600" : "text-emerald-600",
+                trendDirection === "down" ? "text-danger-foreground" : "text-success-foreground",
               )}
             >
               {trend}

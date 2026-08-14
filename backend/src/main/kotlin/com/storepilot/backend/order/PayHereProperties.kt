@@ -20,4 +20,6 @@ data class PayHereProperties(
     val notifyUrl: String = "http://localhost:8080/api/payments/payhere/notify",
     /** Buyer is redirected here (both on success and on cancel) as `{returnUrlBase}/{orderId}` — the order confirmation/tracking page, which reflects live status fetched from the backend. */
     val returnUrlBase: String = "http://localhost:3000/orders",
+    /** Same shape as [returnUrlBase], for a booking checkout instead of an order — see PayHereService.buildBookingCheckoutPayload. */
+    val bookingReturnUrlBase: String = "http://localhost:3000/bookings",
 )

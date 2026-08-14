@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, MapPin, Package, User } from "lucide-react";
+import { CalendarClock, LogOut, MapPin, Package, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
+import { BookingStatusBadge } from "@/components/shared/booking-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { EditAddressDialog } from "@/components/marketplace/edit-address-dialog";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { formatDate } from "@/lib/format";
-import { ordersService, buyersService } from "@/services";
+import { ordersService, buyersService, bookingsService } from "@/services";
 
 export function AccountView() {
   const signOut = useSignOut();
@@ -25,6 +26,11 @@ export function AccountView() {
   const { data: orders, isLoading } = useQuery({
     queryKey: ["orders", "me"],
     queryFn: () => ordersService.listMyOrders(),
+  });
+
+  const { data: bookings, isLoading: isBookingsLoading } = useQuery({
+    queryKey: ["bookings", "me"],
+    queryFn: () => bookingsService.listMyBookings(),
   });
 
   return (
@@ -112,6 +118,49 @@ export function AccountView() {
                   <div className="flex shrink-0 items-center gap-3">
                     <PriceDisplay price={order.total} size="sm" />
                     <OrderStatusBadge status={order.status} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="text-muted-foreground size-4" />
+            <h2 className="font-semibold">Booking history</h2>
+          </div>
+
+          {isBookingsLoading ? (
+            <div className="space-y-2">
+              <TableRowSkeleton columns={1} />
+              <TableRowSkeleton columns={1} />
+            </div>
+          ) : !bookings || bookings.length === 0 ? (
+            <EmptyState
+              icon={CalendarClock}
+              title="No bookings yet"
+              description="Appointments you book while signed in will show up here."
+            />
+          ) : (
+            <div className="divide-y">
+              {bookings.map((booking) => (
+                <Link
+                  key={booking.id}
+                  href={`/bookings/${booking.id}`}
+                  className="hover:bg-accent/50 -mx-4 flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{booking.serviceName}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {booking.storeName} · {formatDate(booking.scheduledStart)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <PriceDisplay price={booking.total} size="sm" />
+                    <BookingStatusBadge status={booking.status} />
                   </div>
                 </Link>
               ))}

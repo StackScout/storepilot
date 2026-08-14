@@ -4,8 +4,10 @@ import java.time.Instant
 import java.util.UUID
 
 data class PayoutOrderRefResponse(
-    val orderId: UUID,
-    val orderNumber: String,
+    val orderId: UUID?,
+    val orderNumber: String?,
+    val bookingId: UUID?,
+    val bookingNumber: String?,
     val subtotal: Int,
     val platformFee: Int,
     val net: Int,

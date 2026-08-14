@@ -15,7 +15,9 @@
       "WebSearch",
       "Bash(git mv *)",
       "Bash(mv src/hooks/use-seller-store.ts src/hooks/use-seller-store.tsx)",
-      "Bash(xargs -I{} echo {})"
+      "Bash(xargs -I{} echo {})",
+      "Bash(xargs -I{} wc -l {})",
+      "Bash(aws cognito-idp *)"
     ]
   }
 }

@@ -28,6 +28,16 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -65,6 +75,21 @@
   --accent: #E3E6E6;
   --accent-foreground: #0F1111;
   --destructive: #CC0C39;
+  /* Semantic status colors — the "soft badge" family (tinted bg + strong
+     text) used for order/store/payout/verification status pills and
+     warning banners throughout the app. Deliberately separate from
+     --destructive (solid, for buttons/strong emphasis) even though danger
+     and destructive share a hue — different visual role. */
+  --success: #D1FAE5;
+  --success-foreground: #065F46;
+  --warning: #FEF3C7;
+  --warning-foreground: #92400E;
+  --danger: #FEE2E2;
+  --danger-foreground: #991B1B;
+  --info: #DBEAFE;
+  --info-foreground: #1E40AF;
+  --highlight: #EDE9FE;
+  --highlight-foreground: #5B21B6;
   --border: #D5D9D9;
   --input: #D5D9D9;
   --ring: #FF9900;
@@ -100,6 +125,16 @@
   --accent: #2A3B4D;
   --accent-foreground: #F5F5F5;
   --destructive: #FF6B6B;
+  --success: #022C22;
+  --success-foreground: #6EE7B7;
+  --warning: #451A03;
+  --warning-foreground: #FCD34D;
+  --danger: #450A0A;
+  --danger-foreground: #FCA5A5;
+  --info: #172554;
+  --info-foreground: #93C5FD;
+  --highlight: #2E1065;
+  --highlight-foreground: #C4B5FD;
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: #FFA41C;

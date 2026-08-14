@@ -10,7 +10,7 @@ import com.storepilot.backend.order.OrderTimelineEntry
 import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.payout.Payout
-import com.storepilot.backend.payout.PayoutOrderRef
+import com.storepilot.backend.payout.PayoutSourceRef
 import com.storepilot.backend.payout.PayoutRepository
 import com.storepilot.backend.payout.PayoutStatus
 import com.storepilot.backend.product.Product
@@ -176,6 +176,7 @@ class DataSeeder(
                 defaultBankTransferEnabled = platformProperties.defaultBankTransferEnabled,
                 supportEmail = platformProperties.supportEmail,
                 companyLocation = platformProperties.companyLocation,
+                timezone = platformProperties.timezone,
             ),
         )
         log.info("Seeded platform_settings from bootstrap PlatformProperties (name={}).", platformProperties.name)
@@ -494,8 +495,8 @@ class DataSeeder(
             paidAt = dt("2026-07-18T14:32:00+10:00"),
             bankReference = "CBA-TRF-88213",
         )
-        payout.orders.add(
-            PayoutOrderRef(
+        payout.sourceRefs.add(
+            PayoutSourceRef(
                 payout = payout,
                 orderId = order1004Id,
                 orderNumber = order1004.orderNumber,

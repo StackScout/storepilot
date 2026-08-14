@@ -66,9 +66,9 @@ export default function DashboardOverviewPage() {
       </div>
 
       {lowStockProducts.length > 0 ? (
-        <Card className="border-amber-300/60 bg-amber-50 dark:bg-amber-950/30">
+        <Card className="border-warning bg-warning/60">
           <CardContent className="flex items-start gap-3">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <TriangleAlert className="text-warning-foreground mt-0.5 size-4 shrink-0" />
             <div className="flex-1 space-y-1">
               <p className="text-sm font-medium">Low stock alert</p>
               <p className="text-muted-foreground text-sm">

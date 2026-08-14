@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { CreditCard, Landmark, ReceiptText, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,11 +58,18 @@ export default function AdminAccountingPage() {
       const stores = await storesService.adminListStores("active");
       const enriched = await Promise.all(
         stores.map(async (store) => {
-          const orders = await payoutsService.getEligibleOrdersForPayout(store.id);
+          // A payout batch bundles every eligible order AND booking for a
+          // store into one run — see PayoutSourceRef's doc comment.
+          const [orders, bookings] = await Promise.all([
+            payoutsService.getEligibleOrdersForPayout(store.id),
+            payoutsService.getEligibleBookingsForPayout(store.id),
+          ]);
           return {
             store,
-            eligibleCount: orders.length,
-            eligibleNet: orders.reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0),
+            eligibleCount: orders.length + bookings.length,
+            eligibleNet:
+              orders.reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0) +
+              bookings.reduce((sum, b) => sum + (b.servicePrice - b.platformFee), 0),
           };
         }),
       );
@@ -81,11 +88,16 @@ export default function AdminAccountingPage() {
       const stores = await storesService.adminListStores("active");
       const enriched = await Promise.all(
         stores.map(async (store) => {
-          const orders = await payoutsService.getEligibleOrdersForFeeCollection(store.id);
+          const [orders, bookings] = await Promise.all([
+            payoutsService.getEligibleOrdersForFeeCollection(store.id),
+            payoutsService.getEligibleBookingsForFeeCollection(store.id),
+          ]);
           return {
             store,
-            eligibleCount: orders.length,
-            eligibleFee: orders.reduce((sum, o) => sum + o.platformFee, 0),
+            eligibleCount: orders.length + bookings.length,
+            eligibleFee:
+              orders.reduce((sum, o) => sum + o.platformFee, 0) +
+              bookings.reduce((sum, b) => sum + b.platformFee, 0),
           };
         }),
       );
@@ -218,7 +230,8 @@ export default function AdminAccountingPage() {
           <Card>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground text-xs">
-                Stores with delivered, paid orders not yet included in a payout batch.
+                Stores with delivered orders or completed bookings, paid via PayHere, not yet included
+                in a payout batch.
               </p>
               {eligibleLoading ? (
                 <TableRowSkeleton columns={3} />
@@ -277,15 +290,9 @@ export default function AdminAccountingPage() {
                             </td>
                             <td className="px-6 py-3">{formatCurrency(payout.net, currency)}</td>
                             <td className="px-6 py-3">
-                              <Badge
-                                className={
-                                  payout.status === "paid"
-                                    ? "border-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                    : "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                }
-                              >
+                              <StatusBadge tone={payout.status === "paid" ? "success" : "warning"}>
                                 {payout.status === "paid" ? "Paid" : "Scheduled"}
-                              </Badge>
+                              </StatusBadge>
                             </td>
                             <td className="px-6 py-3">
                               {payout.status === "scheduled" ? (
@@ -313,8 +320,9 @@ export default function AdminAccountingPage() {
           <Card>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground text-xs">
-                COD/bank-transfer orders pay the seller directly, so these stores owe the platform its
-                transaction fee back — not the other way around, unlike payouts.
+                COD/bank-transfer orders and &quot;pay at venue&quot;/bank-transfer bookings pay the
+                seller directly, so these stores owe the platform its transaction fee back — not the
+                other way around, unlike payouts.
               </p>
               {eligibleFeeLoading ? (
                 <TableRowSkeleton columns={3} />
@@ -373,15 +381,9 @@ export default function AdminAccountingPage() {
                             </td>
                             <td className="px-6 py-3">{formatCurrency(fc.platformFee, currency)}</td>
                             <td className="px-6 py-3">
-                              <Badge
-                                className={
-                                  fc.status === "collected"
-                                    ? "border-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                    : "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                }
-                              >
+                              <StatusBadge tone={fc.status === "collected" ? "success" : "warning"}>
                                 {fc.status === "collected" ? "Collected" : "Pending"}
-                              </Badge>
+                              </StatusBadge>
                             </td>
                             <td className="px-6 py-3">
                               {fc.status === "pending" ? (

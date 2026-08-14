@@ -98,4 +98,7 @@ class StoreSettings(
     /** The seller's own on/off preference for offering Stripe at checkout — independent of onboarding status, so they can pause it without disconnecting. Opt-in/off-by-default, same reasoning as bankTransferEnabled. */
     @Column(name = "stripe_enabled", nullable = false)
     var stripeEnabled: Boolean = false,
+    /** Opt-in and off by default, same reasoning as pickupEnabled — most stores sell products only. Gates whether the store's bookable-services section exists at all; not Pro-gated itself (only the "pay at venue"/bank-transfer booking payment methods are, mirroring codEnabled/bankTransferEnabled — see BookingService). */
+    @Column(name = "bookings_enabled", nullable = false)
+    var bookingsEnabled: Boolean = false,
 ) : BaseEntity()

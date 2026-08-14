@@ -6,7 +6,7 @@
 
 Real Postgres schema, managed by Flyway migrations under
 `backend/src/main/resources/db/migration/` (`V1__init_schema.sql` through
-`V12__store_verification_change_requests.sql`, read in full for this
+`V14__polymorphic_ledger_refs.sql`, read in full for this
 document) and mapped by JPA entity classes under
 `backend/src/main/kotlin/com/storepilot/backend/*/`. `spring.jpa.hibernate.ddl-auto`
 is `validate`, not `update` — the migrations are the actual source of truth;
@@ -84,6 +84,7 @@ directly, no rebuild/redeploy required. Exposed publicly via
 | `pro_monthly_price_cents` | integer | Added in `V10`; live price for the seller Pro-plan subscription — see [seller](#seller) below |
 | `default_cod_enabled`, `default_online_payment_enabled`, `default_bank_transfer_enabled` | boolean | Applied to a newly-onboarded store's `store_settings` row when the seller doesn't explicitly set them |
 | `support_email`, `company_location` | varchar | Display copy |
+| `timezone` | varchar, default `'Australia/Sydney'` (`V13`) | IANA zone id — converts a resolved booking weekly-availability window into absolute slot `Instant`s. Deployment-wide, not per-store — see [`## booking`](#booking-v13) |
 
 **Why one row, no country column**: each country is its own separate
 database/deployment (see `PlatformProperties`' doc comment — infra is
@@ -320,6 +321,7 @@ public store read never risks exposing bank details or identity documents.
 | `stripe_account_id` | varchar, nullable (`V5`) | The seller's own Stripe Connect **Standard** account id (`acct_...`) |
 | `stripe_charges_enabled`, `stripe_payouts_enabled` | boolean, default false (`V5`) | Mirror the connected account's real status, synced only via the `account.updated` webhook or an explicit refresh — never inferred from "an account id exists" |
 | `stripe_enabled` | boolean, default false (`V5`) | The seller's own on/off preference for offering Stripe at checkout, independent of onboarding status — lets them pause it without disconnecting |
+| `bookings_enabled` | boolean, default false (`V13`) | Opt-in, off by default, same reasoning as `pickup_enabled` — gates whether the store's bookable-services section exists at all. Not itself Pro-gated; see [`## booking`](#booking-v13) |
 
 **Why `@MapsId` instead of a separate `id` + unique FK**: `StoreSettings`
 shares `Store`'s primary key exactly (1:1, `store_id` is simultaneously
@@ -476,6 +478,130 @@ edited or removed.
 
 ---
 
+## booking (`V13`)
+
+A second storefront mode alongside products — stores that sell time
+(appointments) instead of goods. `BookableService`/`Booking` are **parallel
+aggregates** to `Product`/`Order`, not extensions of them: a service has no
+stock/SKU/compare-price concept, and a booking has no delivery-method/
+shipping-fee/tracking concept. A store's mode (products-only /
+services-only / both) is entirely **derived** from data — `products.count()
+> 0` and (`store_settings.bookings_enabled AND` an active service exists) —
+there is no separate "store type" column.
+
+### `bookable_services`
+
+| Column | Type | Notes |
+|---|---|---|
+| `store_id` | uuid, FK → `stores`, `on delete cascade`, not null | |
+| `name`, `slug`, `description` | varchar/varchar/text, not null | `slug` unique per `(store_id, slug)`, same shape as `products.slug` |
+| `category` | varchar, not null | Locked to the owning store's own `category` — identical rule to `products.category` |
+| `price` | integer, not null | Cents |
+| `duration_minutes` | integer, not null | Drives slot-chunking — see `weekly_availability_rules`/`availability_exceptions` below |
+| `buffer_minutes` | integer, default `0` | Gap enforced after each booking of this service before the next slot opens |
+| `status` | varchar, not null | `"active" \| "draft"` — no `"out-of-stock"` analog |
+
+**Index**: `store_id`. Deletion is refused (service-layer, not a DB
+constraint) while any non-terminal `bookings` row still references it.
+
+### `bookable_service_images`
+
+Table child of `bookable_services`, identical shape to `product_images`
+(`url`, `alt`, `sort_order`, index 0 is primary).
+
+### `store_availability`
+
+One row per store (`store_id` is both PK and FK, `@MapsId`, same shape as
+`store_settings`) — the lead-time policy shared by every bookable service.
+
+| Column | Type | Notes |
+|---|---|---|
+| `lead_time_minutes` | integer, default `120` | Minimum notice required before a slot can be booked; reused as the buyer-initiated cancellation cutoff (one number, both directions) |
+
+### `weekly_availability_rules`
+
+A store's recurring weekly open-hours template — exactly 7 rows once
+configured, one per weekday.
+
+| Column | Type | Notes |
+|---|---|---|
+| `store_id` | uuid, FK → `stores`, `on delete cascade`, not null | Unique with `day_of_week` |
+| `day_of_week` | integer, not null | 1 (Monday) .. 7 (Sunday) — `java.time.DayOfWeek.getValue()` |
+| `is_open` | boolean, not null | |
+| `open_time`, `close_time` | time, nullable | Required together when `is_open = true` (check constraint) |
+
+**Store-level, not per-service** — all of a store's bookable services share
+one template in v1; see `AvailabilityService.computeSlots` for the
+slot-generation algorithm (computed on read, never materialized as rows).
+
+### `availability_exceptions`
+
+A date-specific override — either a closure (`is_open = false`, e.g. a
+public holiday) or a special one-off opening (`is_open = true`, e.g. a
+normally-closed Sunday opened specially). Unique per `(store_id,
+exception_date)`; wins outright over `weekly_availability_rules` for that
+date. Same `open_time`/`close_time`-required-together check constraint as
+above, plus an optional `note` shown to buyers on the booking page.
+
+### `bookings`
+
+| Column | Type | Notes |
+|---|---|---|
+| `booking_number` | varchar, unique, not null | Format `BK-{countryCode}-YYYYMMDD-####`, same generator style as `order_number` |
+| `store_id` | uuid, FK → `stores`, `on delete cascade`, not null | |
+| `service_id` | uuid, FK → `bookable_services`, not null | **A real foreign key**, unlike `order_items.product_id` — a service can't be allowed to disappear out from under a future appointment (deletion is refused instead, see above) |
+| `service_name`, `service_price`, `service_duration_minutes` | varchar/integer/integer, not null | Immutable snapshot at booking-creation time, same principle as `OrderItem` |
+| `scheduled_start`, `scheduled_end` | timestamptz, not null | `end` stored explicitly (not derived) so the slot-overlap query is a plain range comparison |
+| `platform_fee`, `total` | integer, not null | Cents; `platform_fee` computed identically to `orders.platform_fee` (the store's `transaction_fee_percent`, `HALF_UP` rounded) |
+| `status` | varchar, not null | `"pending" \| "confirmed" \| "completed" \| "cancelled" \| "no-show"` — no `"shipped"` analog. Transitions: `pending → confirmed\|cancelled`; `confirmed → completed\|cancelled\|no-show`; the rest terminal |
+| `payment_method`, `payment_status` | varchar, not null | **Reuses `orders.payment_method`/`payment_status`'s wire values verbatim** — no new enum. `"cod"` reads as "Pay at venue" in the booking UI (frontend copy only) |
+| `receipt_url` | varchar, nullable | Bank-transfer proof, same as `orders.receipt_url` |
+| `stripe_payment_intent_id` | varchar, nullable | Same purpose as `orders.stripe_payment_intent_id` |
+| `buyer_name`, `buyer_phone`, `buyer_email` | varchar, not null | Collected at booking time — a booking has no separate "shipping details" embeddable, these three fields are it |
+| `buyer_id` | uuid, FK → `buyers`, nullable | Same guest-booking-allowed pattern as `orders.buyer_id` |
+| `cancelled_at`, `cancellation_reason` | timestamptz/text, nullable | |
+
+**Indexes**: `store_id`, `service_id`, `buyer_id`, and a **partial index**
+`(service_id, scheduled_start, scheduled_end) WHERE status NOT IN
+('cancelled', 'no-show')` — the slot-overlap query's hot path.
+
+**Booking payment methods mirror order payment methods exactly, including
+Pro-plan gating**: PayHere (LK)/Stripe (AU) available to any plan;
+bank-transfer and "Pay at venue" (`cod`) are Pro-only, enforced with the
+same settings-clamp + write-time-defense-in-depth pattern as
+`codEnabled`/`bankTransferEnabled` on orders (see `store_settings` below).
+
+**Independent per-service capacity** (confirmed product decision, not a
+technical limitation): two different services on the same store can be
+booked for the same time slot — the slot-overlap check only looks at
+existing bookings *of the same service*. A store wanting single-provider
+"only one appointment at a time across all services" behavior isn't
+supported in v1 (no staff/capacity concept exists).
+
+### `booking_timeline_entries`
+
+Table child of `bookings`, identical append-only shape to
+`order_timeline_entries`.
+
+### `store_settings.bookings_enabled` (`V13`)
+
+New column on the existing `store_settings` table (see below) — plain
+`boolean not null default false`, opt-in, identical mechanism to
+`pickup_enabled`. Gates whether the store's Services section exists at all
+on its storefront; **not itself Pro-gated** (only the two payment methods
+above are).
+
+### `platform_settings.timezone` (`V13`)
+
+New column on the existing `platform_settings` table (see below) — an IANA
+zone id (e.g. `"Australia/Sydney"`), used to convert a resolved weekly
+open-hours window into absolute booking-slot `Instant`s. Deployment-wide,
+not per-store — this codebase is already single-deployment-per-country
+(PayHere=LK-only, Stripe=AU-only), so one zone matches every other
+country-specific default already stored here.
+
+---
+
 ## payout
 
 Two parallel, mirror-image ledgers exist because different payment methods
@@ -489,6 +615,9 @@ charges never touch either** — Stripe settles automatically at charge time
 `application_fee_amount` is deducted at the source) — see
 [`api-contracts.md#stripe-connect`](api-contracts.md#stripe-connect-payments-au).
 Both ledgers are admin-only to create/settle; a seller only ever reads them.
+Both are **polymorphic since `V14`**: one payout (or fee-collection) batch
+can bundle both order-sourced and booking-sourced income for the same
+store — see `PayoutOrderRef`/`FeeCollectionOrderRef` below.
 
 ### `payouts`
 
@@ -507,18 +636,23 @@ toward a store's "available for payout" total when `status = 'delivered'`
 AND `payment_status = 'paid'` AND it isn't already part of an existing
 `payouts` batch for that store.
 
-### PayoutOrderRef
+### PayoutOrderRef (`PayoutSourceRef` since `V14`)
 
-Table `payout_order_refs`, child of `payouts`.
+Table `payout_order_refs` (kept as-is — only the Kotlin class was renamed),
+child of `payouts`. **Polymorphic since `V14`**: each row snapshots either
+an order or a booking, never both.
 
 | Column | Type | Notes |
 |---|---|---|
 | `payout_id` | uuid, FK → `payouts`, `on delete cascade`, not null | |
-| `order_id` | uuid, **not a foreign key** | Same snapshot reasoning as `order_items.product_id` |
-| `order_number` | varchar, not null | |
-| `subtotal`, `platform_fee`, `net` | integer, not null | Snapshot of that order's totals **at the time the payout batch was created**, so a payout's amount stays accurate even if the underlying order somehow changed later |
+| `order_id`, `order_number` | uuid/varchar, nullable | `order_id` **not a foreign key**, same snapshot reasoning as `order_items.product_id` |
+| `booking_id`, `booking_number` (`V14`) | uuid/varchar, nullable | Same non-FK reasoning as `order_id` |
+| `subtotal`, `platform_fee`, `net` | integer, not null | Snapshot of that order's/booking's totals **at the time the payout batch was created** — for a booking, `subtotal` is the service price |
 
-**Index**: `payout_id`.
+**Constraint**: `check ((order_id is not null)::int + (booking_id is not
+null)::int = 1)` — exactly one source per row.
+
+**Index**: `payout_id`, plus a partial index on `booking_id` (`V14`).
 
 ### `fee_collections` (`V4`)
 
@@ -536,24 +670,26 @@ intro above.
 
 **Index**: `store_id`.
 
-**Eligibility rule**: a COD or bank-transfer order counts once
-`status = 'delivered'` AND `payment_status = 'paid'` AND not already part
-of an existing `fee_collections` batch for that store.
+**Eligibility rule**: a COD/bank-transfer order or a `cod`/bank-transfer
+booking counts once `status = 'delivered'` (order) or `'completed'`
+(booking) AND `payment_status = 'paid'` AND not already part of an
+existing `fee_collections` batch for that store.
 
-### FeeCollectionOrderRef
+### FeeCollectionOrderRef (`FeeCollectionSourceRef` since `V14`)
 
 Table `fee_collection_order_refs`, child of `fee_collections` — mirrors
-`PayoutOrderRef` exactly, minus the `net` column (there's no "net" concept
-on this side; the whole `platform_fee` is what's owed).
+`PayoutOrderRef`/`PayoutSourceRef` exactly (same `V14` polymorphism,
+constraint, and partial index), minus the `net` column (there's no "net"
+concept on this side; the whole `platform_fee` is what's owed).
 
 | Column | Type | Notes |
 |---|---|---|
 | `fee_collection_id` | uuid, FK → `fee_collections`, `on delete cascade`, not null | |
-| `order_id` | uuid, **not a foreign key** | |
-| `order_number` | varchar, not null | |
+| `order_id`, `order_number` | uuid/varchar, nullable | |
+| `booking_id`, `booking_number` (`V14`) | uuid/varchar, nullable | |
 | `subtotal`, `platform_fee` | integer, not null | Snapshot at batch-creation time |
 
-**Index**: `fee_collection_id`.
+**Index**: `fee_collection_id`, plus a partial index on `booking_id`.
 
 ---
 

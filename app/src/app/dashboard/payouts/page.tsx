@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Clock, CreditCard, Landmark, ReceiptText, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -133,15 +134,9 @@ export default function DashboardPayoutsPage() {
                         <td className="text-muted-foreground px-6 py-3">{payout.orders.length}</td>
                         <td className="px-6 py-3 font-medium">{formatCurrency(payout.net, currency)}</td>
                         <td className="px-6 py-3">
-                          <Badge
-                            className={
-                              payout.status === "paid"
-                                ? "border-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                : "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            }
-                          >
+                          <StatusBadge tone={payout.status === "paid" ? "success" : "warning"}>
                             {payout.status === "paid" ? "Paid" : "Scheduled"}
-                          </Badge>
+                          </StatusBadge>
                         </td>
                         <td className="text-muted-foreground px-6 py-3">
                           {payout.paidAt ? formatDate(payout.paidAt) : "—"}
@@ -205,15 +200,9 @@ export default function DashboardPayoutsPage() {
                         <td className="text-muted-foreground px-6 py-3">{fc.orders.length}</td>
                         <td className="px-6 py-3 font-medium">{formatCurrency(fc.platformFee, currency)}</td>
                         <td className="px-6 py-3">
-                          <Badge
-                            className={
-                              fc.status === "collected"
-                                ? "border-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                : "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            }
-                          >
+                          <StatusBadge tone={fc.status === "collected" ? "success" : "warning"}>
                             {fc.status === "collected" ? "Collected" : "Pending"}
-                          </Badge>
+                          </StatusBadge>
                         </td>
                         <td className="text-muted-foreground px-6 py-3">
                           {fc.collectedAt ? formatDate(fc.collectedAt) : "—"}

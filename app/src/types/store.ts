@@ -103,6 +103,8 @@ export interface StoreSettings {
   stripeChargesEnabled: boolean;
   stripePayoutsEnabled: boolean;
   stripeEnabled: boolean;
+  /** Opt-in, defaults false — gates whether this store's bookable-services section exists at all. Not itself Pro-gated; only the "pay at venue"/bank-transfer booking payment methods are (mirroring codEnabled/bankTransferEnabled) — see docs/features/bookings.md. */
+  bookingsEnabled: boolean;
 }
 
 /**
@@ -124,6 +126,7 @@ export type StorePublicSettings = Pick<
   | "pickupEnabled"
   | "stripeEnabled"
   | "stripeChargesEnabled"
+  | "bookingsEnabled"
 >;
 
 export type StoreVerificationChangeRequestStatus = "pending" | "approved" | "rejected";

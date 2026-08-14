@@ -28,11 +28,11 @@ class FeeCollection(
     @JoinColumn(name = "store_id", nullable = false)
     var store: Store,
     @OneToMany(mappedBy = "feeCollection", cascade = [CascadeType.ALL], orphanRemoval = true)
-    var orders: MutableList<FeeCollectionOrderRef> = mutableListOf(),
-    /** Sum of included orders' subtotal — informational context alongside platformFee, not itself owed. */
+    var sourceRefs: MutableList<FeeCollectionSourceRef> = mutableListOf(),
+    /** Sum of included orders'/bookings' subtotal — informational context alongside platformFee, not itself owed. */
     @Column(nullable = false)
     var subtotal: Int,
-    /** Sum of included orders' platformFee — the actual amount owed to the platform. */
+    /** Sum of included orders'/bookings' platformFee — the actual amount owed to the platform. */
     @Column(name = "platform_fee", nullable = false)
     var platformFee: Int,
     @Column(nullable = false)
@@ -43,17 +43,21 @@ class FeeCollection(
     var reference: String? = null,
 ) : BaseEntity()
 
-/** Mirrors PayoutOrderRef — a snapshot of each included order's totals at batch-creation time. */
+/** Mirrors PayoutSourceRef — a snapshot of each included order's/booking's totals at batch-creation time, polymorphic the same way. */
 @Entity
 @Table(name = "fee_collection_order_refs")
-class FeeCollectionOrderRef(
+class FeeCollectionSourceRef(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "fee_collection_id", nullable = false)
     var feeCollection: FeeCollection,
-    @Column(name = "order_id", nullable = false)
-    var orderId: UUID,
-    @Column(name = "order_number", nullable = false)
-    var orderNumber: String,
+    @Column(name = "order_id")
+    var orderId: UUID? = null,
+    @Column(name = "order_number")
+    var orderNumber: String? = null,
+    @Column(name = "booking_id")
+    var bookingId: UUID? = null,
+    @Column(name = "booking_number")
+    var bookingNumber: String? = null,
     @Column(nullable = false)
     var subtotal: Int,
     @Column(name = "platform_fee", nullable = false)

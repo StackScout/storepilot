@@ -18,9 +18,9 @@ export function PendingVerificationBanner() {
 
   if (store.verificationStatus === "rejected") {
     return (
-      <Card className="border-red-300/60 bg-red-50 dark:bg-red-950/30">
+      <Card className="border-danger bg-danger/60">
         <CardContent className="flex items-start gap-3">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-red-600" />
+          <TriangleAlert className="text-danger-foreground mt-0.5 size-4 shrink-0" />
           <div>
             <p className="text-sm font-medium">Your store application was not approved</p>
             <p className="text-muted-foreground text-sm">
@@ -33,9 +33,9 @@ export function PendingVerificationBanner() {
   }
 
   return (
-    <Card className="border-amber-300/60 bg-amber-50 dark:bg-amber-950/30">
+    <Card className="border-warning bg-warning/60">
       <CardContent className="flex items-start gap-3">
-        <Clock className="mt-0.5 size-4 shrink-0 text-amber-600" />
+        <Clock className="text-warning-foreground mt-0.5 size-4 shrink-0" />
         <div>
           <p className="text-sm font-medium">Your store is pending verification</p>
           <p className="text-muted-foreground text-sm">

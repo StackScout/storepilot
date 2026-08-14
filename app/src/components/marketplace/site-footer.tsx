@@ -19,6 +19,9 @@ export async function SiteFooter() {
           <Link href="/track-order" className="text-muted-foreground hover:text-foreground block">
             Track an order
           </Link>
+          <Link href="/track-booking" className="text-muted-foreground hover:text-foreground block">
+            Track a booking
+          </Link>
         </div>
         <div className="space-y-2 text-sm">
           <p className="font-medium">Sell</p>

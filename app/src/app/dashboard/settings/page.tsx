@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -57,6 +58,7 @@ const settingsSchema = z
     stripeEnabled: z.boolean(),
     stockManagementEnabled: z.boolean(),
     pickupEnabled: z.boolean(),
+    bookingsEnabled: z.boolean(),
     facebookUrl: urlOrEmpty,
     instagramUrl: urlOrEmpty,
     tiktokUrl: urlOrEmpty,
@@ -158,6 +160,7 @@ function DashboardSettingsForm() {
       stripeEnabled: false,
       stockManagementEnabled: true,
       pickupEnabled: false,
+      bookingsEnabled: false,
       facebookUrl: "",
       instagramUrl: "",
       tiktokUrl: "",
@@ -184,6 +187,7 @@ function DashboardSettingsForm() {
         stripeEnabled: settings.stripeEnabled,
         stockManagementEnabled: settings.stockManagementEnabled,
         pickupEnabled: settings.pickupEnabled,
+        bookingsEnabled: settings.bookingsEnabled,
         facebookUrl: store.facebookUrl ?? "",
         instagramUrl: store.instagramUrl ?? "",
         tiktokUrl: store.tiktokUrl ?? "",
@@ -197,6 +201,7 @@ function DashboardSettingsForm() {
   const stripeEnabled = watch("stripeEnabled");
   const stockManagementEnabled = watch("stockManagementEnabled");
   const pickupEnabled = watch("pickupEnabled");
+  const bookingsEnabled = watch("bookingsEnabled");
 
   const stripeOnboardingMutation = useMutation({
     mutationFn: () => storesService.startStripeConnectOnboarding(storeId),
@@ -435,14 +440,7 @@ function DashboardSettingsForm() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <h2 className="font-semibold">Plan</h2>
-              <Badge
-                className={
-                  isPro
-                    ? "border-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                    : "border-0"
-                }
-                variant={isPro ? undefined : "secondary"}
-              >
+              <StatusBadge tone={isPro ? "warning" : "neutral"}>
                 {isPro ? (
                   <>
                     <Sparkles className="size-3" /> Pro
@@ -450,7 +448,7 @@ function DashboardSettingsForm() {
                 ) : (
                   "Free"
                 )}
-              </Badge>
+              </StatusBadge>
             </div>
             {!isPro ? (
               <Button type="button" disabled={checkoutMutation.isPending} onClick={() => checkoutMutation.mutate()}>
@@ -674,7 +672,7 @@ function DashboardSettingsForm() {
               </>
             ) : (
               <div className="flex items-center gap-2 text-sm">
-                <span className="inline-block size-2 rounded-full bg-emerald-500" />
+                <span className="bg-success-foreground inline-block size-2 rounded-full" />
                 <span>Connected — Stripe account ready to accept payments.</span>
               </div>
             )}
@@ -793,6 +791,26 @@ function DashboardSettingsForm() {
                 <span className="text-muted-foreground block text-xs">
                   Buyers can choose to collect their order themselves instead of paying for
                   shipping — you&apos;ll coordinate the pickup time over WhatsApp.
+                </span>
+              </span>
+            </label>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-4">
+            <h2 className="font-semibold">Bookings</h2>
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={bookingsEnabled}
+                onCheckedChange={(checked) => setValue("bookingsEnabled", checked === true)}
+              />
+              <span>
+                <span className="block text-sm font-medium">Offer bookable services</span>
+                <span className="text-muted-foreground block text-xs">
+                  Adds a Services section to your storefront so buyers can book an appointment
+                  instead of (or alongside) buying products. Manage your services and weekly
+                  availability from the Services and Availability pages once this is on.
                 </span>
               </span>
             </label>

@@ -2,6 +2,11 @@ package com.storepilot.backend.payout
 
 import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
+import com.storepilot.backend.booking.Booking
+import com.storepilot.backend.booking.BookingRepository
+import com.storepilot.backend.booking.BookingResponse
+import com.storepilot.backend.booking.BookingStatus
+import com.storepilot.backend.booking.toResponse
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -27,6 +32,7 @@ import java.util.UUID
 class FeeCollectionService(
     private val feeCollectionRepository: FeeCollectionRepository,
     private val orderRepository: OrderRepository,
+    private val bookingRepository: BookingRepository,
     private val storeRepository: StoreRepository,
     private val receiptStorageService: ReceiptStorageService,
     private val fileStorageService: FileStorageService,
@@ -49,6 +55,12 @@ class FeeCollectionService(
         return eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
+    /** Mirrors getEligibleOrders, opposite direction, for bookings paid via "Pay at venue"/bank-transfer. */
+    fun getEligibleBookings(storeId: UUID): List<BookingResponse> {
+        requireSellerOwnsStore(storeId)
+        return eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+    }
+
     private fun requireSellerOwnsStore(storeId: UUID) {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
@@ -57,7 +69,7 @@ class FeeCollectionService(
 
     private fun eligibleOrderEntities(storeId: UUID): List<Order> {
         val alreadyIncluded = feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .flatMap { feeCollection -> feeCollection.orders.map { it.orderId } }
+            .flatMap { feeCollection -> feeCollection.sourceRefs.mapNotNull { it.orderId } }
             .toSet()
         return orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
             .filter {
@@ -68,27 +80,52 @@ class FeeCollectionService(
             }
     }
 
-    /** POST /api/admin/stores/{storeId}/fee-collections — bundle all eligible orders into one batch owed by this seller. */
+    private fun eligibleBookingEntities(storeId: UUID): List<Booking> {
+        val alreadyIncluded = feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
+            .flatMap { feeCollection -> feeCollection.sourceRefs.mapNotNull { it.bookingId } }
+            .toSet()
+        return bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
+            .filter {
+                it.status == BookingStatus.COMPLETED &&
+                    it.paymentStatus == PaymentStatus.PAID &&
+                    (it.paymentMethod == PaymentMethod.COD || it.paymentMethod == PaymentMethod.BANK_TRANSFER) &&
+                    it.id !in alreadyIncluded
+            }
+    }
+
+    /** POST /api/admin/stores/{storeId}/fee-collections — bundles every eligible order AND booking owed by this seller into one batch, same unified-reconciliation reasoning as PayoutService.createBatch. */
     @Transactional
     fun createBatch(storeId: UUID): FeeCollectionResponse {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        val eligible = eligibleOrderEntities(storeId)
-        if (eligible.isEmpty()) throw ConflictException("No eligible orders to collect fees for from this store")
+        val eligibleOrders = eligibleOrderEntities(storeId)
+        val eligibleBookings = eligibleBookingEntities(storeId)
+        if (eligibleOrders.isEmpty() && eligibleBookings.isEmpty()) throw ConflictException("No eligible orders or bookings to collect fees for from this store")
 
         val feeCollection = FeeCollection(
             store = store,
-            subtotal = eligible.sumOf { it.subtotal },
-            platformFee = eligible.sumOf { it.platformFee },
+            subtotal = eligibleOrders.sumOf { it.subtotal } + eligibleBookings.sumOf { it.servicePrice },
+            platformFee = eligibleOrders.sumOf { it.platformFee } + eligibleBookings.sumOf { it.platformFee },
             status = FeeCollectionStatus.PENDING,
         )
-        eligible.forEach { order ->
-            feeCollection.orders.add(
-                FeeCollectionOrderRef(
+        eligibleOrders.forEach { order ->
+            feeCollection.sourceRefs.add(
+                FeeCollectionSourceRef(
                     feeCollection = feeCollection,
                     orderId = requireNotNull(order.id),
                     orderNumber = order.orderNumber,
                     subtotal = order.subtotal,
                     platformFee = order.platformFee,
+                ),
+            )
+        }
+        eligibleBookings.forEach { booking ->
+            feeCollection.sourceRefs.add(
+                FeeCollectionSourceRef(
+                    feeCollection = feeCollection,
+                    bookingId = requireNotNull(booking.id),
+                    bookingNumber = booking.bookingNumber,
+                    subtotal = booking.servicePrice,
+                    platformFee = booking.platformFee,
                 ),
             )
         }

@@ -264,6 +264,7 @@ class StoreService(
             input.stockManagementEnabled?.let { existing.stockManagementEnabled = it }
             input.pickupEnabled?.let { existing.pickupEnabled = it }
             input.stripeEnabled?.let { existing.stripeEnabled = it }
+            input.bookingsEnabled?.let { existing.bookingsEnabled = it }
             requireAtLeastOnePaymentMethod(existing.codEnabled, existing.onlinePaymentEnabled, existing.bankTransferEnabled)
             requireCountryVerificationFields(existing)
             val saved = storeSettingsRepository.save(existing)

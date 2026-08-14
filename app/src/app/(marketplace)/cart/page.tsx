@@ -49,7 +49,7 @@ export default function CartPage() {
         <div className="divide-y rounded-lg border lg:col-span-2">
           {hasUnavailable ? (
             <div className="text-muted-foreground flex items-start gap-2 p-4 text-sm">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning-foreground" />
               <span>
                 Some items are no longer available and won&apos;t be included in your order.
                 Remove them to continue.

@@ -56,6 +56,7 @@ fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSetti
         stripeChargesEnabled = stripeChargesEnabled,
         stripePayoutsEnabled = stripePayoutsEnabled,
         stripeEnabled = stripeEnabled,
+        bookingsEnabled = bookingsEnabled,
     )
 
 /** currentSettings is read fresh at map time (see StoreVerificationChangeRequestResponse's doc comment), not stored on the request row — null only if a store somehow has no settings row at all, defensively defaulted to INDIVIDUAL/blank rather than crashing the admin review list over one bad row. */
@@ -98,4 +99,5 @@ fun StoreSettings.toPublicResponse(): StorePublicSettingsResponse =
         pickupEnabled = pickupEnabled,
         stripeEnabled = stripeEnabled,
         stripeChargesEnabled = stripeChargesEnabled,
+        bookingsEnabled = bookingsEnabled,
     )

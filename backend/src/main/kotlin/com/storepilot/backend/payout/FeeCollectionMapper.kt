@@ -5,10 +5,12 @@ fun FeeCollection.toResponse(): FeeCollectionResponse =
         id = requireNotNull(id),
         storeId = requireNotNull(store.id),
         storeName = store.name,
-        orders = orders.map {
+        orders = sourceRefs.map {
             FeeCollectionOrderRefResponse(
                 orderId = it.orderId,
                 orderNumber = it.orderNumber,
+                bookingId = it.bookingId,
+                bookingNumber = it.bookingNumber,
                 subtotal = it.subtotal,
                 platformFee = it.platformFee,
             )

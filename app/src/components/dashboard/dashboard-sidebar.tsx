@@ -12,10 +12,12 @@ import {
   Store,
   ExternalLink,
   Sparkles,
+  CalendarClock,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { storesService, billingService } from "@/services";
 
@@ -27,6 +29,13 @@ const NAV_ITEMS = [
   { href: "/dashboard/settings", label: "Store settings", icon: Settings },
 ];
 
+/** Only shown once the seller has turned on bookings in store settings — see docs/features/bookings.md's derived 3-mode UI. */
+const BOOKING_NAV_ITEMS = [
+  { href: "/dashboard/services", label: "Services", icon: CalendarClock },
+  { href: "/dashboard/availability", label: "Availability", icon: CalendarDays },
+  { href: "/dashboard/bookings", label: "Bookings", icon: ClipboardList },
+];
+
 export function DashboardSidebarContent() {
   const pathname = usePathname();
   const storeId = useSellerStoreId();
@@ -35,11 +44,19 @@ export function DashboardSidebarContent() {
     queryFn: () => storesService.getStoreById(storeId),
     staleTime: 0,
   });
+  const { data: settings } = useQuery({
+    queryKey: ["store-settings", storeId],
+    queryFn: () => storesService.getStoreSettings(storeId),
+    staleTime: 0,
+  });
   const { data: planInfo } = useQuery({
     queryKey: ["seller-plan"],
     queryFn: () => billingService.getMyPlan(),
   });
   const isPro = planInfo?.plan === "pro";
+  const navItems = settings?.bookingsEnabled
+    ? [...NAV_ITEMS.slice(0, 3), ...BOOKING_NAV_ITEMS, ...NAV_ITEMS.slice(3)]
+    : NAV_ITEMS;
 
   return (
     <div className="flex h-full flex-col">
@@ -48,7 +65,7 @@ export function DashboardSidebarContent() {
       </div>
 
       <nav className="flex-1 space-y-1 px-2">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive =
             item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
           return (
@@ -79,9 +96,9 @@ export function DashboardSidebarContent() {
             <p className="text-muted-foreground text-xs">{store?.address.city ?? ""}</p>
           </div>
           {isPro ? (
-            <Badge className="border-0 bg-amber-100 text-amber-800 shrink-0 dark:bg-amber-950 dark:text-amber-300">
+            <StatusBadge tone="warning" className="shrink-0">
               <Sparkles className="size-3" /> Pro
-            </Badge>
+            </StatusBadge>
           ) : (
             <Link
               href="/dashboard/settings"

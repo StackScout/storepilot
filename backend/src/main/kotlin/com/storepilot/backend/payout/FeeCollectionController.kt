@@ -1,5 +1,6 @@
 package com.storepilot.backend.payout
 
+import com.storepilot.backend.booking.BookingResponse
 import com.storepilot.backend.order.OrderResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -21,6 +22,9 @@ class FeeCollectionController(
 
     @GetMapping("/api/stores/{storeId}/fee-collections/eligible-orders")
     fun eligibleOrders(@PathVariable storeId: UUID): List<OrderResponse> = feeCollectionService.getEligibleOrders(storeId)
+
+    @GetMapping("/api/stores/{storeId}/fee-collections/eligible-bookings")
+    fun eligibleBookings(@PathVariable storeId: UUID): List<BookingResponse> = feeCollectionService.getEligibleBookings(storeId)
 
     @PostMapping("/api/admin/stores/{storeId}/fee-collections")
     fun createBatch(@PathVariable storeId: UUID): ResponseEntity<FeeCollectionResponse> =

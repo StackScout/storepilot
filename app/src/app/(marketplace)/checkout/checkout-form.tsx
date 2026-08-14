@@ -599,8 +599,8 @@ export function CheckoutForm() {
               ))}
             </div>
             {hasUnavailable ? (
-              <div className="text-muted-foreground flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/40">
-                <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
+              <div className="text-muted-foreground border-warning bg-warning/60 flex items-start gap-2 rounded-md border p-3 text-xs">
+                <TriangleAlert className="text-warning-foreground mt-0.5 size-3.5 shrink-0" />
                 <span>
                   Some items in your cart are no longer available.{" "}
                   <Link href="/cart" className="underline">

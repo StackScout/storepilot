@@ -121,17 +121,17 @@ export default function OrderTrackingPage({
         <span
           className={cn(
             "mx-auto flex size-12 items-center justify-center rounded-full",
-            isCancelled && "bg-red-100 dark:bg-red-950",
-            !isCancelled && isPaymentPending && "bg-amber-100 dark:bg-amber-950",
-            !isCancelled && !isPaymentPending && "bg-emerald-100 dark:bg-emerald-950",
+            isCancelled && "bg-danger",
+            !isCancelled && isPaymentPending && "bg-warning",
+            !isCancelled && !isPaymentPending && "bg-success",
           )}
         >
           {isCancelled ? (
-            <XCircle className="size-6 text-red-600" />
+            <XCircle className="text-danger-foreground size-6" />
           ) : isPaymentPending ? (
-            <Clock className="size-6 text-amber-600" />
+            <Clock className="text-warning-foreground size-6" />
           ) : (
-            <CheckCircle2 className="size-6 text-emerald-600" />
+            <CheckCircle2 className="text-success-foreground size-6" />
           )}
         </span>
         <h1 className="pt-2 text-2xl font-bold">
@@ -260,13 +260,13 @@ export default function OrderTrackingPage({
               <div
                 className={cn(
                   "space-y-3 rounded-lg p-3.5",
-                  isReceiptMissing && "border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30",
+                  isReceiptMissing && "border-warning bg-warning/60 border",
                 )}
               >
                 <div className="flex items-center justify-between">
                   <h2 className="font-semibold">Bank transfer</h2>
                   {isReceiptMissing ? (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                    <span className="bg-warning text-warning-foreground rounded-full px-2 py-0.5 text-xs font-medium">
                       Action required
                     </span>
                   ) : null}

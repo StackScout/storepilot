@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, ExternalLink, MapPin, MessageCircle, PackageX, Users } from "lucide-react";
 import { StoreProductGrid } from "@/components/marketplace/store-product-grid";
+import { StoreServiceGrid } from "@/components/marketplace/store-service-grid";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { Button } from "@/components/ui/button";
 import { getCategoryLabel } from "@/mock/categories";
-import { productsService, storesService } from "@/services";
-import type { Product, Store } from "@/types";
+import { bookableServicesService, productsService, storesService } from "@/services";
+import type { BookableService, Product, Store } from "@/types";
 
 /**
  * Same reconciliation pattern as store-product-grid.tsx, but for the store
@@ -24,10 +25,14 @@ export function StorePageContent({
   slug,
   initialStore,
   initialProducts,
+  initialServices,
+  bookingsEnabled,
 }: {
   slug: string;
   initialStore: Store | null;
   initialProducts: Product[];
+  initialServices: BookableService[];
+  bookingsEnabled: boolean;
 }) {
   const { data: store, isLoading } = useQuery({
     queryKey: ["store", "slug", slug],
@@ -40,6 +45,13 @@ export function StorePageContent({
     queryFn: () => (store ? productsService.listProductsByStore(store.id) : Promise.resolve([])),
     initialData: initialProducts,
     enabled: !!store,
+    staleTime: 0,
+  });
+  const { data: services } = useQuery({
+    queryKey: ["bookable-services", "store", store?.id],
+    queryFn: () => (store ? bookableServicesService.listServicesByStore(store.id) : Promise.resolve([])),
+    initialData: initialServices,
+    enabled: !!store && bookingsEnabled,
     staleTime: 0,
   });
 
@@ -130,10 +142,37 @@ export function StorePageContent({
           {store.description}
         </p>
 
-        <div className="space-y-4 pb-16">
-          <h2 className="text-lg font-semibold">Products</h2>
-          <StoreProductGrid storeId={store.id} initialProducts={products} />
-        </div>
+        {(() => {
+          const hasProducts = products.length > 0;
+          const hasServices = (services?.length ?? 0) > 0;
+          // A bookings-enabled store with zero products reads as
+          // services-first — an empty product grid would just be noise, so
+          // the Products section is omitted entirely rather than shown with
+          // an empty state. A products-only store (bookings off) keeps the
+          // existing always-show-with-empty-state behavior. See
+          // docs/features/bookings.md's derived 3-mode UI.
+          const showProducts = !bookingsEnabled || hasProducts;
+          const showServices = bookingsEnabled;
+          const productsSection = showProducts ? (
+            <div key="products" className="space-y-4">
+              <h2 className="text-lg font-semibold">Products</h2>
+              <StoreProductGrid storeId={store.id} initialProducts={products} />
+            </div>
+          ) : null;
+          const servicesSection = showServices ? (
+            <div key="services" className="space-y-4">
+              <h2 className="text-lg font-semibold">Services</h2>
+              <StoreServiceGrid storeId={store.id} initialServices={services ?? []} />
+            </div>
+          ) : null;
+          // Whichever section has content leads; Products leads when both
+          // (or neither) do, matching the storefront's existing "products
+          // first" mental model.
+          const sections = hasServices && !hasProducts
+            ? [servicesSection, productsSection]
+            : [productsSection, servicesSection];
+          return <div className="space-y-10 pb-16">{sections.filter(Boolean)}</div>;
+        })()}
       </div>
     </div>
   );

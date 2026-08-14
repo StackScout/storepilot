@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/", label: "Home" },
   { href: "/search", label: "Browse products" },
   { href: "/track-order", label: "Track an order" },
+  { href: "/track-booking", label: "Track a booking" },
 ];
 
 export function MobileNav() {

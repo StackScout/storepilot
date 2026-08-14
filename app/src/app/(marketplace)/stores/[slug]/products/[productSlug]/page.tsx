@@ -82,7 +82,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           {product.status !== "out-of-stock" && (
             <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
-              <PackageCheck className="size-4 text-emerald-600" />
+              <PackageCheck className="text-success-foreground size-4" />
               {product.trackStock && product.stockQuantity <= 5
                 ? `Only ${product.stockQuantity} left in stock`
                 : "In stock, ready to ship"}

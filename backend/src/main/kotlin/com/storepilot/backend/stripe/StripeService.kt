@@ -1,5 +1,9 @@
 package com.storepilot.backend.stripe
 
+import com.storepilot.backend.booking.Booking
+import com.storepilot.backend.booking.BookingRepository
+import com.storepilot.backend.booking.BookingStatus
+import com.storepilot.backend.booking.BookingTimelineEntry
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
@@ -28,11 +32,15 @@ import java.util.UUID
  * on the platform's account with funds transferred out afterward. This is
  * what makes the charge genuinely belong to the seller, and what makes
  * `application_fee_amount` the platform's entire involvement in the money —
- * no custody, ever. See StripeConnectService for the onboarding side.
+ * no custody, ever. See StripeConnectService for the onboarding side. Order
+ * and Booking checkouts are parallel sibling methods; the webhook handlers
+ * try both by id rather than a shared `Payable` abstraction — see
+ * findCheckoutTargetByClientReferenceId's doc comment.
  */
 @Service
 class StripeService(
     private val orderRepository: OrderRepository,
+    private val bookingRepository: BookingRepository,
     private val storeSettingsRepository: StoreSettingsRepository,
     private val platformConfigService: PlatformConfigService,
     private val stripeProperties: StripeProperties,
@@ -98,41 +106,126 @@ class StripeService(
         return StripeCheckoutSessionResponse(checkoutUrl = session.url)
     }
 
+    /** POST /api/bookings/{id}/stripe-checkout — sibling to createCheckoutSession. */
+    fun createBookingCheckoutSession(bookingId: UUID): StripeCheckoutSessionResponse {
+        val booking = bookingRepository.findById(bookingId).orElseThrow { NotFoundException("Booking $bookingId not found") }
+        if (booking.paymentMethod != PaymentMethod.STRIPE) {
+            throw ConflictException("Booking $bookingId is not a Stripe payment")
+        }
+        if (booking.paymentStatus != PaymentStatus.UNPAID) {
+            throw ConflictException("Booking $bookingId is already ${booking.paymentStatus.wireValue}")
+        }
+        val storeId = requireNotNull(booking.store.id)
+        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
+            NotFoundException("No settings for store $storeId")
+        }
+        val accountId = settings.stripeAccountId
+        if (accountId == null || !settings.stripeChargesEnabled) {
+            throw ConflictException("Store $storeId is not ready to accept Stripe payments")
+        }
+
+        val platformConfig = platformConfigService.current()
+        val requestOptions = RequestOptions.builder().setStripeAccount(accountId).build()
+
+        val params = SessionCreateParams.builder()
+            .setMode(SessionCreateParams.Mode.PAYMENT)
+            .addLineItem(
+                SessionCreateParams.LineItem.builder()
+                    .setQuantity(1L)
+                    .setPriceData(
+                        SessionCreateParams.LineItem.PriceData.builder()
+                            .setCurrency(platformConfig.currencyCode.lowercase())
+                            .setUnitAmount(booking.total.toLong())
+                            .setProductData(
+                                SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                    .setName("${platformConfig.name} booking ${booking.bookingNumber}")
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .setPaymentIntentData(
+                SessionCreateParams.PaymentIntentData.builder()
+                    .setApplicationFeeAmount(booking.platformFee.toLong())
+                    .build(),
+            )
+            .setClientReferenceId(bookingId.toString())
+            .setCustomerEmail(booking.buyerEmail)
+            .setSuccessUrl("${stripeProperties.bookingSuccessUrlBase}/$bookingId")
+            .setCancelUrl("${stripeProperties.bookingCancelUrlBase}/$bookingId")
+            .build()
+
+        val session = Session.create(params, requestOptions)
+        return StripeCheckoutSessionResponse(checkoutUrl = session.url)
+    }
+
     /** Called by StripeWebhookService for `checkout.session.completed`. */
     @Transactional
     fun handleCheckoutSessionCompleted(session: Session) {
-        val order = findOrderByClientReferenceId(session.clientReferenceId) ?: return
-        // Idempotency — Stripe redelivers webhooks; only ever apply this once.
-        if (order.paymentStatus != PaymentStatus.UNPAID) {
-            log.info("Stripe checkout.session.completed: order {} already {}, ignoring redelivery", order.orderNumber, order.paymentStatus.wireValue)
-            return
+        val (order, booking) = findCheckoutTargetByClientReferenceId(session.clientReferenceId)
+        if (order != null) {
+            // Idempotency — Stripe redelivers webhooks; only ever apply this once.
+            if (order.paymentStatus != PaymentStatus.UNPAID) {
+                log.info("Stripe checkout.session.completed: order {} already {}, ignoring redelivery", order.orderNumber, order.paymentStatus.wireValue)
+                return
+            }
+            order.paymentStatus = PaymentStatus.PAID
+            if (order.status == OrderStatus.PENDING) order.status = OrderStatus.CONFIRMED
+            order.stripePaymentIntentId = session.paymentIntent
+            order.timeline.add(
+                OrderTimelineEntry(order = order, status = order.status, label = "Payment confirmed via Stripe", timestamp = Instant.now()),
+            )
+            orderRepository.save(order)
+        } else if (booking != null) {
+            if (booking.paymentStatus != PaymentStatus.UNPAID) {
+                log.info("Stripe checkout.session.completed: booking {} already {}, ignoring redelivery", booking.bookingNumber, booking.paymentStatus.wireValue)
+                return
+            }
+            booking.paymentStatus = PaymentStatus.PAID
+            if (booking.status == BookingStatus.PENDING) booking.status = BookingStatus.CONFIRMED
+            booking.stripePaymentIntentId = session.paymentIntent
+            booking.timeline.add(
+                BookingTimelineEntry(booking = booking, status = booking.status, label = "Payment confirmed via Stripe", timestamp = Instant.now()),
+            )
+            bookingRepository.save(booking)
         }
-        order.paymentStatus = PaymentStatus.PAID
-        if (order.status == OrderStatus.PENDING) order.status = OrderStatus.CONFIRMED
-        order.stripePaymentIntentId = session.paymentIntent
-        order.timeline.add(
-            OrderTimelineEntry(order = order, status = order.status, label = "Payment confirmed via Stripe", timestamp = Instant.now()),
-        )
-        orderRepository.save(order)
     }
 
-    /** Called by StripeWebhookService for `checkout.session.expired` / `checkout.session.async_payment_failed` — order stays unpaid/pending so a fresh session can be created later. */
+    /** Called by StripeWebhookService for `checkout.session.expired` / `checkout.session.async_payment_failed` — stays unpaid/pending so a fresh session can be created later. */
     @Transactional
     fun handleCheckoutSessionFailed(session: Session, label: String) {
-        val order = findOrderByClientReferenceId(session.clientReferenceId) ?: return
-        order.timeline.add(
-            OrderTimelineEntry(order = order, status = order.status, label = label, timestamp = Instant.now()),
-        )
-        orderRepository.save(order)
+        val (order, booking) = findCheckoutTargetByClientReferenceId(session.clientReferenceId)
+        if (order != null) {
+            order.timeline.add(
+                OrderTimelineEntry(order = order, status = order.status, label = label, timestamp = Instant.now()),
+            )
+            orderRepository.save(order)
+        } else if (booking != null) {
+            booking.timeline.add(
+                BookingTimelineEntry(booking = booking, status = booking.status, label = label, timestamp = Instant.now()),
+            )
+            bookingRepository.save(booking)
+        }
     }
 
-    private fun findOrderByClientReferenceId(clientReferenceId: String?): Order? {
-        val orderId = clientReferenceId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-        val order = orderId?.let { orderRepository.findById(it).orElse(null) }
-        if (order == null) {
-            log.warn("Stripe webhook: order {} not found", clientReferenceId)
+    /**
+     * `clientReferenceId` is set to either an Order id or a Booking id at
+     * checkout-session-creation time (see createCheckoutSession /
+     * createBookingCheckoutSession) — try both rather than a shared
+     * `Payable` interface, since that would mean touching the working,
+     * revenue-critical order-payment code for a refactor whose only benefit
+     * is avoiding this one small lookup. UUIDs are independently random
+     * across the two tables, so a collision is a non-issue.
+     */
+    private fun findCheckoutTargetByClientReferenceId(clientReferenceId: String?): Pair<Order?, Booking?> {
+        val id = clientReferenceId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        val order = id?.let { orderRepository.findById(it).orElse(null) }
+        val booking = if (order == null) id?.let { bookingRepository.findById(it).orElse(null) } else null
+        if (order == null && booking == null) {
+            log.warn("Stripe webhook: order/booking {} not found", clientReferenceId)
         }
-        return order
+        return order to booking
     }
 
     /**
@@ -147,6 +240,26 @@ class StripeService(
         val paymentIntentId = order.stripePaymentIntentId
             ?: throw ConflictException("Order ${order.id} has no Stripe payment to refund")
         val storeId = requireNotNull(order.store.id)
+        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
+            NotFoundException("No settings for store $storeId")
+        }
+        val accountId = settings.stripeAccountId
+            ?: throw ConflictException("Store $storeId has no connected Stripe account")
+
+        Refund.create(
+            RefundCreateParams.builder()
+                .setPaymentIntent(paymentIntentId)
+                .setRefundApplicationFee(true)
+                .build(),
+            RequestOptions.builder().setStripeAccount(accountId).build(),
+        )
+    }
+
+    /** Sibling to refundPayment — called from BookingService's cancellation path. */
+    fun refundBookingPayment(booking: Booking) {
+        val paymentIntentId = booking.stripePaymentIntentId
+            ?: throw ConflictException("Booking ${booking.id} has no Stripe payment to refund")
+        val storeId = requireNotNull(booking.store.id)
         val settings = storeSettingsRepository.findById(storeId).orElseThrow {
             NotFoundException("No settings for store $storeId")
         }

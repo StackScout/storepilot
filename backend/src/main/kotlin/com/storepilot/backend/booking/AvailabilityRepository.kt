@@ -19,3 +19,9 @@ interface AvailabilityExceptionRepository : JpaRepository<AvailabilityException,
 
     fun findByStoreIdAndDate(storeId: UUID, date: LocalDate): AvailabilityException?
 }
+
+interface ServiceWeeklyAvailabilityRuleRepository : JpaRepository<ServiceWeeklyAvailabilityRule, UUID> {
+    fun findByServiceIdOrderByDayOfWeekAsc(serviceId: UUID): List<ServiceWeeklyAvailabilityRule>
+
+    fun deleteByServiceId(serviceId: UUID)
+}

@@ -1,9 +1,7 @@
 package com.storepilot.backend.buyer
 
 import com.storepilot.backend.common.BaseEntity
-import com.storepilot.backend.common.ShippingDetails
 import jakarta.persistence.Column
-import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 
@@ -15,7 +13,10 @@ import jakarta.persistence.Table
  * coexist while still preventing two accounts from claiming the same
  * Cognito identity. This row is a profile-data cache — `ROLE_BUYER`
  * authorization always comes from the JWT's `cognito:groups` claim, never
- * from this row's existence (see CurrentActor).
+ * from this row's existence (see CurrentActor). Saved shipping addresses
+ * live in the separate `Address` entity (a real address book, one buyer to
+ * many addresses) — this class no longer embeds a single default address
+ * directly, see V16__buyer_address_book.sql.
  */
 @Entity
 @Table(name = "buyers")
@@ -25,8 +26,6 @@ class Buyer(
     @Column(nullable = false, unique = true)
     var email: String,
     var phone: String? = null,
-    @Embedded
-    var defaultShipping: ShippingDetails? = null,
     @Column(name = "cognito_sub", unique = true)
     var cognitoSub: String? = null,
 ) : BaseEntity()

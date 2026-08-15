@@ -53,10 +53,44 @@ data class ResendVerificationInput(
  * access/refresh tokens themselves are httpOnly, so JS can never read them
  * directly; this response is the only way the client learns its own auth
  * state after login/register/refresh, or via GET /api/auth/session.
+ *
+ * `mfaRequired`/`mfaSession` are only populated when login() hits a
+ * SOFTWARE_TOKEN_MFA challenge instead of completing — `signedIn` stays
+ * false in that case, since no cookies have been set yet. The frontend
+ * must prompt for a TOTP code and POST it (with `mfaSession`) to
+ * /api/auth/mfa/challenge to actually complete sign-in.
  */
 data class AuthSessionResponse(
     val signedIn: Boolean,
     val role: String? = null,
     val email: String? = null,
     val name: String? = null,
+    val mfaRequired: Boolean = false,
+    val mfaSession: String? = null,
+)
+
+/** Completes a login that returned mfaRequired=true — see AuthSessionResponse's doc comment. */
+data class MfaChallengeInput(
+    @field:NotBlank(message = "Email is required")
+    @field:Email(message = "Must be a valid email")
+    val email: String,
+    @field:NotBlank(message = "Session is required")
+    val session: String,
+    @field:NotBlank(message = "Code is required")
+    val code: String,
+)
+
+/** secret is the raw base32 TOTP secret (shown as a manual-entry fallback); otpauthUri is what the frontend renders as a QR code. Neither is persisted server-side — Cognito holds the enrolled secret once verify() succeeds. */
+data class MfaSetupResponse(
+    val secret: String,
+    val otpauthUri: String,
+)
+
+data class MfaVerifyInput(
+    @field:NotBlank(message = "Code is required")
+    val code: String,
+)
+
+data class MfaStatusResponse(
+    val enabled: Boolean,
 )

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarX, Loader2 } from "lucide-react";
 import { ServiceForm } from "@/components/dashboard/service-form";
+import { ServiceAvailabilityOverrideCard } from "@/components/dashboard/service-availability-override-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { bookableServicesService } from "@/services";
 import type { BookableServiceFormInput } from "@/types";
@@ -57,6 +58,7 @@ export default function EditServicePage({ params }: { params: Promise<{ serviceI
         submitLabel="Save changes"
         storeCategory={service.category}
       />
+      <ServiceAvailabilityOverrideCard storeId={service.storeId} serviceId={serviceId} />
     </div>
   );
 }

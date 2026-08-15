@@ -79,3 +79,21 @@ data class VerifyBookingBankTransferInput(
 data class CancelBookingInput(
     val reason: String? = null,
 )
+
+/** POST /api/bookings/lookup/request-code — mirrors order.GuestLookupRequestInput. */
+data class GuestLookupRequestInput(
+    @field:NotBlank(message = "Booking number is required")
+    val bookingNumber: String,
+    @field:NotBlank(message = "Phone number is required")
+    val phone: String,
+)
+
+/** POST /api/bookings/lookup/verify — mirrors order.GuestLookupVerifyInput. */
+data class GuestLookupVerifyInput(
+    @field:NotBlank(message = "Booking number is required")
+    val bookingNumber: String,
+    @field:NotBlank(message = "Phone number is required")
+    val phone: String,
+    @field:NotBlank(message = "Code is required")
+    val code: String,
+)

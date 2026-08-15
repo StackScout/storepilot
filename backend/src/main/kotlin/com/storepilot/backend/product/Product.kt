@@ -18,15 +18,21 @@ import jakarta.persistence.UniqueConstraint
  * Mirrors src/types/product.ts's Product. `storeName`/`storeSlug` are NOT
  * duplicated here (unlike the frontend mock, which denormalizes them for a
  * flat JSON shape) — DTO mappers derive them from the `store` relation
- * instead. Slug is unique per-store (not globally), matching
- * docs/api-contracts.md's documented rule; `sku` is intentionally not
- * unique yet — see docs/roadmap.md's "Duplicate-SKU validation" gap, not
- * enforced here either, by design, until that product decision is made.
+ * instead. Slug and (non-null) SKU are each unique per-store (not
+ * globally), matching docs/api-contracts.md's documented rule — SKU
+ * uniqueness is enforced case-insensitively in ProductService
+ * .requireUniqueSku, with this table's constraint as an exact-case
+ * defense-in-depth backstop (see V15__unique_product_sku_per_store.sql).
+ * SKU stays optional: Postgres treats every NULL as distinct, so any
+ * number of products with no SKU coexist fine.
  */
 @Entity
 @Table(
     name = "products",
-    uniqueConstraints = [UniqueConstraint(columnNames = ["store_id", "slug"])],
+    uniqueConstraints = [
+        UniqueConstraint(columnNames = ["store_id", "slug"]),
+        UniqueConstraint(columnNames = ["store_id", "sku"]),
+    ],
 )
 class Product(
     @ManyToOne(fetch = FetchType.LAZY)

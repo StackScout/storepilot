@@ -78,6 +78,16 @@ export interface StoreAvailability {
   exceptions: AvailabilityException[];
 }
 
+/** A service's own weekly-hours override — see ServiceAvailabilityOverrideResponse's backend doc comment. When hasCustomAvailability is false, the service simply inherits the store's weekly template (weeklyRules is then empty). */
+export interface ServiceAvailabilityOverride {
+  hasCustomAvailability: boolean;
+  weeklyRules: WeeklyAvailabilityRule[];
+}
+
+export interface ServiceAvailabilityOverrideInput {
+  rules: WeeklyAvailabilityRule[];
+}
+
 export interface SlotResponse {
   start: string;
   end: string;

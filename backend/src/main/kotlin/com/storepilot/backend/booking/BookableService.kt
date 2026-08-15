@@ -57,6 +57,16 @@ class BookableService(
     var bufferMinutes: Int = 0,
     @Column(nullable = false)
     var status: ServiceStatus,
+    /**
+     * When false (default), this service's availability is entirely derived
+     * from the store's WeeklyAvailabilityRule template — see
+     * AvailabilityService.computeSlots. When true, ServiceWeeklyAvailabilityRule
+     * rows for this service are used instead. AvailabilityException rows stay
+     * store-wide regardless (a holiday closure applies to every service) —
+     * only the recurring weekly template is overridable per service.
+     */
+    @Column(name = "has_custom_availability", nullable = false)
+    var hasCustomAvailability: Boolean = false,
     @OneToMany(mappedBy = "service", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("sortOrder asc")
     var images: MutableList<BookableServiceImage> = mutableListOf(),

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmailVerificationForm } from "@/components/shared/email-verification-form";
+import { MfaChallengeForm } from "@/components/shared/mfa-challenge-form";
 import { authService } from "@/services";
 import { ApiRequestError } from "@/lib/api-client";
 import type { AuthSession } from "@/services/auth.service";
@@ -41,6 +42,7 @@ function SellerLoginForm() {
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState<{ email: string; password: string } | null>(null);
+  const [pendingMfa, setPendingMfa] = useState<{ email: string; session: string } | null>(null);
 
   const {
     register,
@@ -78,7 +80,13 @@ function SellerLoginForm() {
 
   const mutation = useMutation({
     mutationFn: (values: LoginFormValues) => authService.login(values.email, values.password),
-    onSuccess: handleSession,
+    onSuccess: (session, variables) => {
+      if (session.mfaRequired && session.mfaSession) {
+        setPendingMfa({ email: variables.email, session: session.mfaSession });
+        return;
+      }
+      handleSession(session);
+    },
     onError: (error: Error, variables) => {
       if (error instanceof ApiRequestError && error.code === "EMAIL_NOT_VERIFIED") {
         setPendingVerification({ email: variables.email, password: variables.password });
@@ -99,6 +107,18 @@ function SellerLoginForm() {
               autoSend
               onVerified={handleSession}
             />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (pendingMfa) {
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">
+        <Card>
+          <CardContent>
+            <MfaChallengeForm email={pendingMfa.email} session={pendingMfa.session} onVerified={handleSession} />
           </CardContent>
         </Card>
       </div>

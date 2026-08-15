@@ -26,11 +26,17 @@ class BookingController(
     @GetMapping("/api/me/bookings")
     fun listByCurrentBuyer(): List<BookingResponse> = bookingService.listByCurrentBuyer()
 
-    @GetMapping("/api/bookings/lookup")
-    fun lookup(@RequestParam bookingNumber: String, @RequestParam phone: String): ResponseEntity<BookingResponse> {
-        val booking = bookingService.findByNumberAndPhone(bookingNumber, phone) ?: return ResponseEntity.notFound().build()
-        return ResponseEntity.ok(booking)
+    /** First step of guest lookup — see BookingService.requestLookupCode's doc comment. Always 204. */
+    @PostMapping("/api/bookings/lookup/request-code")
+    fun requestLookupCode(@Valid @RequestBody input: GuestLookupRequestInput): ResponseEntity<Void> {
+        bookingService.requestLookupCode(input.bookingNumber, input.phone)
+        return ResponseEntity.noContent().build()
     }
+
+    /** Second step of guest lookup — replaces the old GET /api/bookings/lookup?bookingNumber=&phone=. */
+    @PostMapping("/api/bookings/lookup/verify")
+    fun verifyLookupCode(@Valid @RequestBody input: GuestLookupVerifyInput): BookingResponse =
+        bookingService.verifyLookupCode(input.bookingNumber, input.phone, input.code)
 
     @GetMapping("/api/bookings/{id}")
     fun getById(@PathVariable id: UUID): BookingResponse = bookingService.getById(id)

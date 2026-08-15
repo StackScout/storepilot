@@ -54,4 +54,23 @@ class AvailabilityController(
         val resolvedTo = to ?: resolvedFrom.plusDays(DEFAULT_WINDOW_DAYS)
         return availabilityService.computeSlots(storeId, serviceId, resolvedFrom, resolvedTo)
     }
+
+    /** [storeId] unused (service ownership is resolved via the service itself) but kept in the path for consistency with every other bookable-services route. */
+    @GetMapping("/api/stores/{storeId}/bookable-services/{serviceId}/availability-override")
+    fun getServiceOverride(@PathVariable storeId: UUID, @PathVariable serviceId: UUID): ServiceAvailabilityOverrideResponse =
+        availabilityService.getServiceOverride(serviceId)
+
+    @PutMapping("/api/stores/{storeId}/bookable-services/{serviceId}/availability-override")
+    fun upsertServiceOverride(
+        @PathVariable storeId: UUID,
+        @PathVariable serviceId: UUID,
+        @Valid @RequestBody input: ServiceAvailabilityOverrideInput,
+    ): ServiceAvailabilityOverrideResponse = availabilityService.upsertServiceOverride(serviceId, input)
+
+    /** Reverts to inheriting the store's default weekly template — see AvailabilityService.disableServiceOverride. */
+    @DeleteMapping("/api/stores/{storeId}/bookable-services/{serviceId}/availability-override")
+    fun disableServiceOverride(@PathVariable storeId: UUID, @PathVariable serviceId: UUID): ResponseEntity<Void> {
+        availabilityService.disableServiceOverride(serviceId)
+        return ResponseEntity.noContent().build()
+    }
 }

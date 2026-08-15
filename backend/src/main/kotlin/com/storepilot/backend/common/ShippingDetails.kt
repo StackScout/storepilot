@@ -4,14 +4,14 @@ import jakarta.persistence.Column
 import jakarta.persistence.Embeddable
 
 /**
- * Mirrors src/types/order.ts's ShippingDetails. Shared between Order.shipping
- * and Buyer.defaultShipping (same as the frontend's `import type {
- * ShippingDetails } from "./order"` in buyer.ts) — lives in `common` rather
- * than the `order` package specifically so `order` and `buyer` don't need a
- * circular package reference. Columns are nullable at the JPA/DB level even
- * though Order always requires a value, because Buyer's usage is optional;
- * "required for an order" is enforced by Bean Validation on the request DTO,
- * not a DB constraint.
+ * Mirrors src/types/order.ts's ShippingDetails. Shared between
+ * `Order.shipping` and `Address.shipping` (see buyer/Address.kt) — lives in
+ * `common` rather than the `order` package specifically so `order` and
+ * `buyer` don't need a circular package reference. Columns are nullable at
+ * the JPA/DB level even though Order always requires a value, because an
+ * Address's usage context varies (a pickup order has none at all);
+ * "required for an order" is enforced by Bean Validation on the request
+ * DTO, not a DB constraint.
  */
 @Embeddable
 class ShippingDetails(

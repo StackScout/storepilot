@@ -27,13 +27,18 @@ either, or neither can be true at once.
   for the full schema.
 - **A service's category is locked to its store's own approved category**
   — identical rule to `Product`.
-- **Availability is store-level, not per-service**, and computed on read
-  (never materialized as slot rows): a weekly open-hours template (7 rows,
-  one per weekday) plus date-specific exceptions (closures or special
-  one-off openings). A given service's bookable slots are the resolved
-  day's open window chunked into `duration + buffer`-sized pieces, minus
-  anything inside the store's lead-time cutoff, minus anything overlapping
-  an existing non-cancelled booking **of that same service**.
+- **Availability is computed on read** (never materialized as slot rows):
+  a weekly open-hours template (7 rows, one per weekday) plus
+  date-specific exceptions (closures or special one-off openings). A
+  given service's bookable slots are the resolved day's open window
+  chunked into `duration + buffer`-sized pieces, minus anything inside
+  the store's lead-time cutoff, minus anything overlapping an existing
+  non-cancelled booking **of that same service**. A service inherits the
+  store's weekly template by default; a seller can opt one service into
+  its own weekly-hours override instead (`BookableService
+  .hasCustomAvailability` + `ServiceWeeklyAvailabilityRule`). Exceptions
+  are always store-wide regardless of any service override — a holiday
+  closure applies to every service.
 - **Independent per-service capacity (confirmed product decision, not a
   gap)**: two different services on the same store can be booked for the
   same time slot — a store selling "Haircut" and "Beard trim" can have both
@@ -76,8 +81,9 @@ either, or neither can be true at once.
 Team roles (Owner/Admin/Member), coupons, Google Calendar sync, in-app
 messaging, time-based "24h before your appointment" reminder emails
 (booking emails only fire at status-change points, mirroring
-`OrderNotifier`), a premium-analytics add-on, per-service (as opposed to
-store-level) availability schedules, recurring/multi-session bookings, a
+`OrderNotifier`), a premium-analytics add-on, per-service lead time
+(lead time/cancellation cutoff stays store-level even when a service has
+its own weekly-hours override), recurring/multi-session bookings, a
 shared store-wide capacity model (see the independent-per-service-capacity
 decision above).
 

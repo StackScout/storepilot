@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, LogOut, MapPin, Package, User } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { CalendarClock, LogOut, MapPin, Package, Star, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -10,17 +11,41 @@ import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { BookingStatusBadge } from "@/components/shared/booking-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
-import { EditAddressDialog } from "@/components/marketplace/edit-address-dialog";
+import { AddressFormDialog } from "@/components/marketplace/address-form-dialog";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { formatDate } from "@/lib/format";
-import { ordersService, buyersService, bookingsService } from "@/services";
+import { ordersService, buyersService, bookingsService, addressesService } from "@/services";
 
 export function AccountView() {
   const signOut = useSignOut();
+  const queryClient = useQueryClient();
 
   const { data: buyer } = useQuery({
     queryKey: ["buyer", "me"],
     queryFn: () => buyersService.getCurrentBuyer(),
+  });
+
+  const { data: addresses, isLoading: isAddressesLoading } = useQuery({
+    queryKey: ["addresses"],
+    queryFn: () => addressesService.listAddresses(),
+  });
+
+  const setDefaultMutation = useMutation({
+    mutationFn: (id: string) => addressesService.setDefaultAddress(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["addresses"] });
+      toast.success("Default address updated");
+    },
+    onError: () => toast.error("Couldn't update your default address. Please try again."),
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: (id: string) => addressesService.deleteAddress(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["addresses"] });
+      toast.success("Address removed");
+    },
+    onError: () => toast.error("Couldn't remove this address. Please try again."),
   });
 
   const { data: orders, isLoading } = useQuery({
@@ -56,24 +81,66 @@ export function AccountView() {
       </Card>
 
       <Card>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <MapPin className="text-muted-foreground size-4" />
-              <h2 className="font-semibold">Saved address</h2>
+              <h2 className="font-semibold">Saved addresses</h2>
             </div>
-            <EditAddressDialog defaultShipping={buyer?.defaultShipping} />
+            <AddressFormDialog />
           </div>
-          {buyer?.defaultShipping ? (
+          {isAddressesLoading ? (
+            <TableRowSkeleton columns={1} />
+          ) : !addresses || addresses.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              {buyer.defaultShipping.addressLine1}, {buyer.defaultShipping.city},{" "}
-              {buyer.defaultShipping.state} {buyer.defaultShipping.postalCode}
+              No saved addresses yet — add one now, or check out once and it&apos;ll be saved for
+              next time.
             </p>
           ) : (
-            <p className="text-muted-foreground text-sm">
-              No saved address yet — it&apos;s saved automatically the first time you check out, or
-              you can add one now.
-            </p>
+            <div className="divide-y">
+              {addresses.map((address) => (
+                <div key={address.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{address.label || address.shipping.fullName}</p>
+                      {address.isDefault ? (
+                        <span className="bg-primary/10 text-primary flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                          <Star className="size-2.5 fill-current" /> Default
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-muted-foreground text-sm">
+                      {address.shipping.addressLine1}, {address.shipping.city}, {address.shipping.state}{" "}
+                      {address.shipping.postalCode}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {!address.isDefault ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={setDefaultMutation.isPending}
+                        onClick={() => setDefaultMutation.mutate(address.id)}
+                      >
+                        Set default
+                      </Button>
+                    ) : null}
+                    <AddressFormDialog address={address} />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive size-8"
+                      disabled={deleteAddressMutation.isPending}
+                      onClick={() => deleteAddressMutation.mutate(address.id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

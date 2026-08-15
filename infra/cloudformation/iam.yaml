@@ -116,6 +116,14 @@ Resources:
                   - cognito-idp:AdminGetUser
                   - cognito-idp:AdminListGroupsForUser
                   - cognito-idp:AdminUserGlobalSignOut
+                  # Completes the SOFTWARE_TOKEN_MFA challenge AdminInitiateAuth
+                  # returns for a user who's enrolled TOTP — see AuthController
+                  # .mfaChallenge(). AssociateSoftwareToken/VerifySoftwareToken/
+                  # SetUserMFAPreference/GetUser (self-service enrollment) are
+                  # NOT here deliberately — those are called with the end
+                  # user's own access token, authorized by Cognito's app
+                  # client, not by this role's IAM identity.
+                  - cognito-idp:AdminRespondToAuthChallenge
                 Resource: !Sub "arn:aws:cognito-idp:${CognitoRegion}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
         - PolicyName: docker-awslogs-driver
           PolicyDocument:

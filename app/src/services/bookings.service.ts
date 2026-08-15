@@ -17,10 +17,14 @@ export async function getBookingById(id: string): Promise<Booking | null> {
   return apiClient.getOrNull<Booking>(`/api/bookings/${id}`);
 }
 
-/** GET /bookings/lookup?bookingNumber=&phone= */
-export async function findBookingByNumberAndPhone(bookingNumber: string, phone: string): Promise<Booking | null> {
-  const qs = toQueryString({ bookingNumber, phone });
-  return apiClient.getOrNull<Booking>(`/api/bookings/lookup${qs}`);
+/** POST /bookings/lookup/request-code — first step of guest lookup, emails a one-time code. Always resolves, regardless of whether bookingNumber/phone matched anything. */
+export async function requestBookingLookupCode(bookingNumber: string, phone: string): Promise<void> {
+  await apiClient.post<void>("/api/bookings/lookup/request-code", { bookingNumber, phone });
+}
+
+/** POST /bookings/lookup/verify — second step of guest lookup. Throws ApiRequestError (404 number/phone mismatch, 400 bad/expired code) on failure — callers should catch and show the error's message. */
+export async function verifyBookingLookupCode(bookingNumber: string, phone: string, code: string): Promise<Booking> {
+  return apiClient.post<Booking>("/api/bookings/lookup/verify", { bookingNumber, phone, code });
 }
 
 /** POST /bookings — booking checkout. */

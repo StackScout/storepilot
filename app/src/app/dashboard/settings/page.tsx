@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
+import { MfaSettingsCard } from "@/components/shared/mfa-settings-card";
 import { cn } from "@/lib/utils";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
@@ -533,6 +534,8 @@ function DashboardSettingsForm() {
           </div>
         </CardContent>
       </Card>
+
+      <MfaSettingsCard />
 
       <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-6">
         <Card>

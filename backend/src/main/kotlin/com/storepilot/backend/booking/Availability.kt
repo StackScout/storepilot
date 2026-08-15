@@ -21,10 +21,11 @@ import java.time.LocalTime
 /**
  * One row per store — the lead-time policy shared by every bookable
  * service, alongside the store's weekly template (WeeklyAvailabilityRule)
- * and date overrides (AvailabilityException). Store-level, not per-service —
- * see docs/features/bookings.md for why per-service schedules are out of
- * scope for v1. Sparse 1:1 child of Store, same @MapsId shape as
- * StoreSettings — not every store has one until it enables bookings.
+ * and date overrides (AvailabilityException). Always store-level, even for
+ * a service with its own weekly-hours override (ServiceWeeklyAvailabilityRule)
+ * — lead time/cancellation cutoff isn't overridable per service in v1.
+ * Sparse 1:1 child of Store, same @MapsId shape as StoreSettings — not
+ * every store has one until it enables bookings.
  */
 @Entity
 @Table(name = "store_availability")
@@ -45,7 +46,9 @@ class StoreAvailability(
 /**
  * A store's recurring weekly open-hours template — one row per weekday,
  * exactly 7 per store once configured. AvailabilityException rows for a
- * specific date take precedence over this when computing slots — see
+ * specific date take precedence over this when computing slots; a service
+ * with hasCustomAvailability = true uses ServiceWeeklyAvailabilityRule
+ * instead of this for its own weekly resolution — see
  * AvailabilityService.computeSlots.
  */
 @Entity
@@ -102,6 +105,35 @@ class AvailabilityException(
     var closeTime: LocalTime? = null,
     /** Shown to buyers on the booking page, e.g. "Closed for Vesak". */
     var note: String? = null,
+) : BaseEntity()
+
+/**
+ * A per-service override of the store's weekly template — only present for
+ * a service whose BookableService.hasCustomAvailability is true, in which
+ * case computeSlots uses these 7 rows instead of the store's
+ * WeeklyAvailabilityRule for that service. AvailabilityException stays
+ * store-only (not mirrored here) — a holiday closure applies to every
+ * service regardless of override, see BookableService.hasCustomAvailability's
+ * doc comment.
+ */
+@Entity
+@Table(
+    name = "service_weekly_availability_rules",
+    uniqueConstraints = [UniqueConstraint(columnNames = ["service_id", "day_of_week"])],
+)
+class ServiceWeeklyAvailabilityRule(
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "service_id", nullable = false)
+    var service: BookableService,
+    @Convert(converter = DayOfWeekIntConverter::class)
+    @Column(name = "day_of_week", nullable = false)
+    var dayOfWeek: DayOfWeek,
+    @Column(name = "is_open", nullable = false)
+    var isOpen: Boolean,
+    @Column(name = "open_time")
+    var openTime: LocalTime? = null,
+    @Column(name = "close_time")
+    var closeTime: LocalTime? = null,
 ) : BaseEntity()
 
 @Converter

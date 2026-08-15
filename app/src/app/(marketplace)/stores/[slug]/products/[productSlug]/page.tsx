@@ -7,6 +7,7 @@ import { RatingStars } from "@/components/shared/rating-stars";
 import { AddToCartControls } from "@/components/marketplace/add-to-cart-controls";
 import { ProductCard } from "@/components/marketplace/product-card";
 import { ProductGallery } from "@/components/marketplace/product-gallery";
+import { ReviewsSection } from "@/components/marketplace/reviews-section";
 import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { productsService, storesService } from "@/services";
 
@@ -109,6 +110,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </dl>
         </div>
+      </div>
+
+      <div className="mt-14 max-w-2xl border-t pt-10">
+        <ReviewsSection kind="product" targetId={product.id} />
       </div>
 
       {relatedProducts.length > 0 ? (

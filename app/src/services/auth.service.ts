@@ -5,6 +5,16 @@ export interface AuthSession {
   role?: "buyer" | "seller" | "admin";
   email?: string;
   name?: string;
+  /** Set (with signedIn: false) when login() hit a TOTP challenge instead of completing — see verifyMfaChallenge below. */
+  mfaRequired?: boolean;
+  mfaSession?: string;
+}
+
+export interface MfaSetup {
+  /** Raw base32 secret — shown as a manual-entry fallback alongside the QR code. */
+  secret: string;
+  /** otpauth:// URI to render as a QR code (see MfaEnrollDialog). */
+  otpauthUri: string;
 }
 
 /**
@@ -54,10 +64,38 @@ export async function resendVerificationCode(email: string): Promise<void> {
 /**
  * POST /api/auth/login — throws ApiRequestError with code
  * "EMAIL_NOT_VERIFIED" (see api-client.ts) if the account exists but hasn't
- * completed email verification yet.
+ * completed email verification yet. If the account has TOTP MFA enrolled,
+ * this returns { signedIn: false, mfaRequired: true, mfaSession } instead
+ * of a completed session — callers must prompt for a code and call
+ * verifyMfaChallenge() with it to actually finish signing in.
  */
 export async function login(email: string, password: string): Promise<AuthSession> {
   return apiClient.post<AuthSession>("/api/auth/login", { email, password });
+}
+
+/** POST /api/auth/mfa/challenge — completes a login that returned mfaRequired: true. */
+export async function verifyMfaChallenge(email: string, session: string, code: string): Promise<AuthSession> {
+  return apiClient.post<AuthSession>("/api/auth/mfa/challenge", { email, session, code });
+}
+
+/** GET /api/auth/mfa/status — whether the signed-in caller currently has TOTP MFA enabled. */
+export async function getMfaStatus(): Promise<{ enabled: boolean }> {
+  return apiClient.get<{ enabled: boolean }>("/api/auth/mfa/status");
+}
+
+/** POST /api/auth/mfa/setup — starts (or restarts) TOTP enrollment for the signed-in caller; nothing is enabled until verifyMfaSetup() below succeeds. */
+export async function setupMfa(): Promise<MfaSetup> {
+  return apiClient.post<MfaSetup>("/api/auth/mfa/setup");
+}
+
+/** POST /api/auth/mfa/verify — confirms the code from an authenticator app matches the secret from setupMfa(), then actually turns TOTP on. */
+export async function verifyMfaSetup(code: string): Promise<void> {
+  await apiClient.post<void>("/api/auth/mfa/verify", { code });
+}
+
+/** POST /api/auth/mfa/disable — turns TOTP back off for the signed-in caller. */
+export async function disableMfa(): Promise<void> {
+  await apiClient.post<void>("/api/auth/mfa/disable");
 }
 
 /**

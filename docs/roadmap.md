@@ -146,8 +146,12 @@ and are now confirmed resolved; others are newly fixed as of this pass.
   `SesEmailService` is `@Profile("aws")` and `docker-compose.prod.yml`
   sets `SPRING_PROFILES_ACTIVE: aws`, so SES (not just the logging stub)
   is genuinely active in production.
-- **Duplicate-SKU validation** within a store — deliberately still not
-  implemented (see `Product.kt`'s doc comment); unchanged from before.
+- ~~**Duplicate-SKU validation** within a store~~ **Resolved** —
+  `ProductService.requireUniqueSku` rejects a create/update whose SKU
+  (case-insensitively) matches another product in the same store; a
+  `(store_id, sku)` unique constraint backstops it at the DB layer.
+  Blank/null SKUs remain exempt (SKU is still optional). See
+  `Product.kt`'s doc comment.
 - ~~**What happens to a cart when its held product is deleted, or its
   price changes?**~~ **Implemented** — `useCartReconciliation()` now
   re-syncs the cart against live product data on every load. See

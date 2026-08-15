@@ -11,4 +11,7 @@ interface ProductRepository : JpaRepository<Product, UUID>, JpaSpecificationExec
     fun findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId: UUID, status: ProductStatus): List<Product>
 
     fun findByStoreIdAndSlug(storeId: UUID, slug: String): Product?
+
+    /** Case-insensitive — see ProductService's duplicate-SKU check. Blank/null SKUs are never passed in, so no products-without-a-SKU false positive. */
+    fun findByStoreIdAndSkuIgnoreCase(storeId: UUID, sku: String): Product?
 }

@@ -134,3 +134,21 @@ data class VerifyBankTransferInput(
     val approved: Boolean,
     val note: String? = null,
 )
+
+/** POST /api/orders/lookup/request-code — see OrderService.requestLookupCode's doc comment. */
+data class GuestLookupRequestInput(
+    @field:NotBlank(message = "Order number is required")
+    val orderNumber: String,
+    @field:NotBlank(message = "Phone number is required")
+    val phone: String,
+)
+
+/** POST /api/orders/lookup/verify — completes a guest lookup started with GuestLookupRequestInput. */
+data class GuestLookupVerifyInput(
+    @field:NotBlank(message = "Order number is required")
+    val orderNumber: String,
+    @field:NotBlank(message = "Phone number is required")
+    val phone: String,
+    @field:NotBlank(message = "Code is required")
+    val code: String,
+)

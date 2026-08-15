@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
 
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/admin/admins", label: "Admins", icon: Users },
   { href: "/admin/audit-log", label: "Audit log", icon: History },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
+  { href: "/admin/settings", label: "Your security", icon: ShieldCheck },
 ];
 
 export function AdminSidebarContent() {

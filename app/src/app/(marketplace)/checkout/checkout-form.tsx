@@ -32,8 +32,8 @@ import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
 import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
-import { ordersService, buyersService, storesService } from "@/services";
-import type { DeliveryMethod, Order, PaymentMethod } from "@/types";
+import { ordersService, buyersService, addressesService, storesService } from "@/services";
+import type { Address, DeliveryMethod, Order, PaymentMethod } from "@/types";
 
 const checkoutSchema = z
   .object({
@@ -94,6 +94,14 @@ export function CheckoutForm() {
     enabled: isSignedInBuyer,
   });
 
+  // Default first (see AddressRepository.findByBuyerIdOrderByIsDefaultDescCreatedAtAsc), so addresses?.[0] is always the one to prefill from.
+  const { data: addresses } = useQuery({
+    queryKey: ["addresses"],
+    queryFn: () => addressesService.listAddresses(),
+    enabled: isSignedInBuyer,
+  });
+  const defaultAddress = addresses?.[0];
+
   // Which payment methods this store accepts — set in the seller's Store
   // Settings. Defaults to both enabled while loading so the form doesn't
   // flash empty; the backend guarantees at least one is always true.
@@ -143,31 +151,42 @@ export function CheckoutForm() {
     defaultValues: { state: "", paymentMethod: "cod", deliveryMethod: "shipping", email: session.email ?? "" },
   });
 
-  // Prefill from the signed-in buyer's saved address once it loads — a
-  // guest, or a buyer with no saved address yet, just sees the empty form.
+  // Prefill from the signed-in buyer's default saved address once it loads
+  // — a guest, or a buyer with no saved addresses yet, just sees the empty
+  // form.
   useEffect(() => {
-    if (!buyer?.defaultShipping) return;
+    if (!defaultAddress || !buyer) return;
     reset({
-      fullName: buyer.defaultShipping.fullName,
+      fullName: defaultAddress.shipping.fullName,
       email: buyer.email,
-      phone: buyer.defaultShipping.phone,
-      addressLine1: buyer.defaultShipping.addressLine1,
-      city: buyer.defaultShipping.city,
-      state: buyer.defaultShipping.state,
-      postalCode: buyer.defaultShipping.postalCode,
+      phone: defaultAddress.shipping.phone,
+      addressLine1: defaultAddress.shipping.addressLine1,
+      city: defaultAddress.shipping.city,
+      state: defaultAddress.shipping.state,
+      postalCode: defaultAddress.shipping.postalCode,
       paymentMethod: "cod",
       deliveryMethod: "shipping",
     });
-  }, [buyer, reset]);
+  }, [defaultAddress, buyer, reset]);
 
   // useAuthSession()'s data arrives asynchronously (a client fetch, unlike
   // the old server-rendered session), so the email default above is only
   // correct once this resolves — cover the case of a signed-in buyer with
-  // no saved address yet (the effect above never fires for them).
+  // no saved addresses yet (the effect above never fires for them).
   useEffect(() => {
-    if (buyer?.defaultShipping || !session.email) return;
+    if (defaultAddress || !session.email) return;
     setValue("email", session.email);
-  }, [session.email, buyer, setValue]);
+  }, [session.email, defaultAddress, setValue]);
+
+  /** Picking a different saved address only overwrites the shipping-related fields — payment/delivery method choices the buyer already made are left alone. */
+  function applyAddress(address: Address) {
+    setValue("fullName", address.shipping.fullName ?? "");
+    setValue("phone", address.shipping.phone ?? "");
+    setValue("addressLine1", address.shipping.addressLine1 ?? "");
+    setValue("city", address.shipping.city ?? "");
+    setValue("state", address.shipping.state ?? "", { shouldValidate: true });
+    setValue("postalCode", address.shipping.postalCode ?? "");
+  }
 
   const state = watch("state");
   const paymentMethod = watch("paymentMethod");
@@ -216,21 +235,22 @@ export function CheckoutForm() {
         deliveryMethod: values.deliveryMethod,
         email: values.email,
       });
-      // Auto-save this address as the buyer's default, but only the first
-      // time (no saved address yet) — once they have one, only an explicit
-      // edit on the account page should change it, not whatever they
-      // happened to type for one particular order (e.g. shipping a gift
-      // elsewhere). Skipped entirely for pickup — there's no real address
-      // to save. Awaited — not fire-and-forget — because the PayHere
-      // path below navigates the browser away immediately afterwards
-      // (submitPayHereCheckout does a real form submit, not client routing),
-      // which would otherwise abort this request mid-flight. Still
-      // best-effort: a failure here must never block order placement, and
-      // the order itself is linked to the signed-in buyer server-side, from
-      // the auth cookie — never a client-supplied id.
-      if (!isPickup && isSignedInBuyer && !buyer?.defaultShipping) {
+      // Auto-save this address as the buyer's first (default) saved
+      // address, but only when their book is empty — once they have any
+      // saved addresses, only an explicit add/edit on the account page
+      // should change the book, not whatever they happened to type for one
+      // particular order (e.g. shipping a gift elsewhere). Skipped
+      // entirely for pickup — there's no real address to save. Awaited —
+      // not fire-and-forget — because the PayHere path below navigates the
+      // browser away immediately afterwards (submitPayHereCheckout does a
+      // real form submit, not client routing), which would otherwise abort
+      // this request mid-flight. Still best-effort: a failure here must
+      // never block order placement, and the order itself is linked to the
+      // signed-in buyer server-side, from the auth cookie — never a
+      // client-supplied id.
+      if (!isPickup && isSignedInBuyer && addresses && addresses.length === 0) {
         try {
-          await buyersService.updateDefaultShipping(shipping);
+          await addressesService.createAddress({ shipping, isDefault: true });
         } catch {
           // ignore — see comment above
         }
@@ -330,10 +350,27 @@ export function CheckoutForm() {
           <Card>
             <CardContent className="space-y-4">
               <h2 className="font-semibold">Delivery details</h2>
-              {buyer?.defaultShipping && deliveryMethod === "shipping" ? (
+              {defaultAddress && deliveryMethod === "shipping" ? (
                 <div className="bg-primary/5 text-primary flex items-center gap-2 rounded-md p-2.5 text-xs">
                   <UserCheck className="size-3.5 shrink-0" />
                   Prefilled from your saved address — feel free to edit it below.
+                </div>
+              ) : null}
+              {addresses && addresses.length > 1 && deliveryMethod === "shipping" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="saved-address">Use a different saved address</Label>
+                  <Select onValueChange={(id) => applyAddress(addresses.find((a) => a.id === id)!)}>
+                    <SelectTrigger id="saved-address" className="w-full">
+                      <SelectValue placeholder="Choose a saved address" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addresses.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.label || a.shipping.fullName} — {a.shipping.addressLine1}, {a.shipping.city}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ) : null}
 

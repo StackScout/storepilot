@@ -18,7 +18,7 @@ import { useAuthSession } from "@/hooks/use-auth-session";
 import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
-import { availabilityService, bookingsService, buyersService, storesService } from "@/services";
+import { availabilityService, bookingsService, buyersService, addressesService, storesService } from "@/services";
 import type { Booking, BookableService, PaymentMethod, SlotResponse, Store } from "@/types";
 
 const bookingSchema = z.object({
@@ -59,6 +59,13 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
     queryFn: () => buyersService.getCurrentBuyer(),
     enabled: isSignedInBuyer,
   });
+
+  const { data: addresses } = useQuery({
+    queryKey: ["addresses"],
+    queryFn: () => addressesService.listAddresses(),
+    enabled: isSignedInBuyer,
+  });
+  const defaultAddress = addresses?.[0];
 
   const { data: storeSettings } = useQuery({
     queryKey: ["store-public-settings", store.id],
@@ -110,12 +117,12 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
   useEffect(() => {
     if (!buyer) return;
     reset({
-      buyerName: buyer.defaultShipping?.fullName ?? "",
+      buyerName: defaultAddress?.shipping.fullName ?? "",
       buyerEmail: buyer.email,
-      buyerPhone: buyer.defaultShipping?.phone ?? "",
+      buyerPhone: defaultAddress?.shipping.phone ?? "",
       paymentMethod: "cod",
     });
-  }, [buyer, reset]);
+  }, [buyer, defaultAddress, reset]);
 
   const paymentMethod = watch("paymentMethod");
 

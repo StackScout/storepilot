@@ -67,3 +67,16 @@ data class AvailabilityResponse(
     val weeklyRules: List<WeeklyAvailabilityRuleResponse>,
     val exceptions: List<AvailabilityExceptionResponse>,
 )
+
+/** GET/PUT /api/stores/{storeId}/bookable-services/{serviceId}/availability-override. */
+data class ServiceAvailabilityOverrideResponse(
+    val hasCustomAvailability: Boolean,
+    val weeklyRules: List<WeeklyAvailabilityRuleResponse>,
+)
+
+/** PUT /api/stores/{storeId}/bookable-services/{serviceId}/availability-override — same full-replace-all-7-rows shape as WeeklyAvailabilityInput, minus leadTimeMinutes (lead time stays store-level, see StoreAvailability's doc comment). Enables the override as a side effect. */
+data class ServiceAvailabilityOverrideInput(
+    @field:Size(min = 7, max = 7, message = "Exactly 7 rules required (one per weekday)")
+    @field:Valid
+    val rules: List<WeeklyAvailabilityRuleInput>,
+)

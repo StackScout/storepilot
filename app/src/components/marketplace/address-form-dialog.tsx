@@ -10,6 +10,7 @@ import { Loader2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -21,10 +22,11 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStates } from "@/hooks/use-platform-config";
-import { buyersService } from "@/services";
-import type { ShippingDetails } from "@/types";
+import { addressesService } from "@/services";
+import type { Address } from "@/types";
 
 const addressSchema = z.object({
+  label: z.string().optional(),
   fullName: z.string().min(2, "Enter the recipient's full name"),
   phone: z
     .string()
@@ -34,23 +36,40 @@ const addressSchema = z.object({
   city: z.string().min(2, "Enter a city/town"),
   state: z.string().min(1, "Select a state/province"),
   postalCode: z.string().min(4, "Enter a postal code"),
+  isDefault: z.boolean(),
 });
 
 type AddressFormValues = z.infer<typeof addressSchema>;
 
 const EMPTY_VALUES: AddressFormValues = {
+  label: "",
   fullName: "",
   phone: "",
   addressLine1: "",
   city: "",
   state: "",
   postalCode: "",
+  isDefault: false,
 };
 
-/** Lets a buyer explicitly set/edit their saved default shipping address from the account page — the only other way it's set is automatically, on their first checkout (see checkout-form.tsx). */
-export function EditAddressDialog({ defaultShipping }: { defaultShipping?: ShippingDetails }) {
+function toFormValues(address: Address): AddressFormValues {
+  return {
+    label: address.label ?? "",
+    fullName: address.shipping.fullName ?? "",
+    phone: address.shipping.phone ?? "",
+    addressLine1: address.shipping.addressLine1 ?? "",
+    city: address.shipping.city ?? "",
+    state: address.shipping.state ?? "",
+    postalCode: address.shipping.postalCode ?? "",
+    isDefault: address.isDefault,
+  };
+}
+
+/** Create or edit one entry in a buyer's saved address book (see /account's "Saved addresses" card) — [address] present means edit, absent means create. */
+export function AddressFormDialog({ address }: { address?: Address }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const initialValues = address ? toFormValues(address) : EMPTY_VALUES;
 
   const {
     register,
@@ -61,20 +80,25 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
     formState: { errors },
   } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
-    defaultValues: defaultShipping ?? EMPTY_VALUES,
+    defaultValues: initialValues,
   });
 
   const state = watch("state");
+  const isDefault = watch("isDefault");
   const { data: states } = useStates();
 
   const mutation = useMutation({
-    mutationFn: (values: AddressFormValues) => buyersService.updateDefaultShipping(values),
+    mutationFn: (values: AddressFormValues) => {
+      const { label, isDefault, ...shipping } = values;
+      const input = { label: label || undefined, shipping, isDefault };
+      return address ? addressesService.updateAddress(address.id, input) : addressesService.createAddress(input);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["buyer", "me"] });
-      toast.success("Address updated");
+      queryClient.invalidateQueries({ queryKey: ["addresses"] });
+      toast.success(address ? "Address updated" : "Address added");
       setOpen(false);
     },
-    onError: () => toast.error("Couldn't update your address. Please try again."),
+    onError: () => toast.error("Couldn't save this address. Please try again."),
   });
 
   return (
@@ -82,11 +106,11 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) reset(defaultShipping ?? EMPTY_VALUES);
+        if (next) reset(initialValues);
       }}
     >
       <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
-        {defaultShipping ? (
+        {address ? (
           <>
             <Pencil className="size-3.5" /> Edit
           </>
@@ -98,47 +122,51 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{defaultShipping ? "Edit saved address" : "Add a saved address"}</DialogTitle>
+          <DialogTitle>{address ? "Edit address" : "Add a saved address"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit((values) => mutation.mutate(values))} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="edit-fullName">Full name</Label>
-            <Input id="edit-fullName" {...register("fullName")} />
+            <Label htmlFor="addr-label">Label (optional)</Label>
+            <Input id="addr-label" placeholder="e.g. Home, Work" {...register("label")} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="addr-fullName">Full name</Label>
+            <Input id="addr-fullName" {...register("fullName")} />
             {errors.fullName ? <p className="text-destructive text-xs">{errors.fullName.message}</p> : null}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="edit-phone">Phone number</Label>
-            <Input id="edit-phone" placeholder="04XX XXX XXX" {...register("phone")} />
+            <Label htmlFor="addr-phone">Phone number</Label>
+            <Input id="addr-phone" placeholder="04XX XXX XXX" {...register("phone")} />
             {errors.phone ? <p className="text-destructive text-xs">{errors.phone.message}</p> : null}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="edit-addressLine1">Address</Label>
-            <Input id="edit-addressLine1" placeholder="House no, street, area" {...register("addressLine1")} />
+            <Label htmlFor="addr-addressLine1">Address</Label>
+            <Input id="addr-addressLine1" placeholder="House no, street, area" {...register("addressLine1")} />
             {errors.addressLine1 ? (
               <p className="text-destructive text-xs">{errors.addressLine1.message}</p>
             ) : null}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="edit-city">City</Label>
-              <Input id="edit-city" placeholder="e.g. Parramatta" {...register("city")} />
+              <Label htmlFor="addr-city">City</Label>
+              <Input id="addr-city" placeholder="e.g. Parramatta" {...register("city")} />
               {errors.city ? <p className="text-destructive text-xs">{errors.city.message}</p> : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-postalCode">Postal code</Label>
-              <Input id="edit-postalCode" placeholder="e.g. 2150" {...register("postalCode")} />
+              <Label htmlFor="addr-postalCode">Postal code</Label>
+              <Input id="addr-postalCode" placeholder="e.g. 2150" {...register("postalCode")} />
               {errors.postalCode ? (
                 <p className="text-destructive text-xs">{errors.postalCode.message}</p>
               ) : null}
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="edit-state">State/Province</Label>
+            <Label htmlFor="addr-state">State/Province</Label>
             <Select
               value={state}
               onValueChange={(v) => setValue("state", v as string, { shouldValidate: true })}
             >
-              <SelectTrigger id="edit-state" className="w-full">
+              <SelectTrigger id="addr-state" className="w-full">
                 <SelectValue placeholder="Select a state/province" />
               </SelectTrigger>
               <SelectContent>
@@ -151,6 +179,15 @@ export function EditAddressDialog({ defaultShipping }: { defaultShipping?: Shipp
             </Select>
             {errors.state ? <p className="text-destructive text-xs">{errors.state.message}</p> : null}
           </div>
+          {!address?.isDefault ? (
+            <label className="flex items-center gap-2.5">
+              <Checkbox
+                checked={isDefault}
+                onCheckedChange={(checked) => setValue("isDefault", checked === true)}
+              />
+              <span className="text-sm">Set as default address</span>
+            </label>
+          ) : null}
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
             <Button type="submit" disabled={mutation.isPending}>

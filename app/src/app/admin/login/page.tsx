@@ -13,7 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { MfaChallengeForm } from "@/components/shared/mfa-challenge-form";
 import { authService } from "@/services";
+import type { AuthSession } from "@/services/auth.service";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -37,6 +39,7 @@ function AdminLoginForm() {
   const redirectTo = searchParams.get("redirectTo") || "/admin";
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingMfa, setPendingMfa] = useState<{ email: string; session: string } | null>(null);
 
   const {
     register,
@@ -44,25 +47,43 @@ function AdminLoginForm() {
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
 
+  const completeSession = (session: AuthSession) => {
+    // See the equivalent check in account/login/page.tsx — authService.login()
+    // is role-agnostic, so a non-admin account would otherwise authenticate
+    // here and then get silently bounced back by proxy.ts's /admin gate.
+    if (session.role !== "admin") {
+      void authService.logout();
+      toast.error("This account isn't registered as an admin.");
+      return;
+    }
+    queryClient.clear();
+    router.push(redirectTo);
+    router.refresh();
+  };
+
   const mutation = useMutation({
-    mutationFn: async (values: LoginFormValues) => {
-      const session = await authService.login(values.email, values.password);
-      // See the equivalent check in account/login/page.tsx — authService.login()
-      // is role-agnostic, so a non-admin account would otherwise authenticate
-      // here and then get silently bounced back by proxy.ts's /admin gate.
-      if (session.role !== "admin") {
-        await authService.logout();
-        throw new Error("This account isn't registered as an admin.");
+    mutationFn: (values: LoginFormValues) => authService.login(values.email, values.password),
+    onSuccess: (session, variables) => {
+      if (session.mfaRequired && session.mfaSession) {
+        setPendingMfa({ email: variables.email, session: session.mfaSession });
+        return;
       }
-      return session;
-    },
-    onSuccess: () => {
-      queryClient.clear();
-      router.push(redirectTo);
-      router.refresh();
+      completeSession(session);
     },
     onError: (error: Error) => toast.error(error.message || "Invalid email or password"),
   });
+
+  if (pendingMfa) {
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">
+        <Card>
+          <CardContent>
+            <MfaChallengeForm email={pendingMfa.email} session={pendingMfa.session} onVerified={completeSession} />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16 sm:px-6">

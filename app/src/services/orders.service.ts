@@ -28,14 +28,14 @@ export async function getOrderById(id: string): Promise<Order | null> {
   return order ? normalizeOrder(order) : null;
 }
 
-/** GET /orders/lookup?orderNumber=&phone= */
-export async function findOrderByNumberAndPhone(
-  orderNumber: string,
-  phone: string,
-): Promise<Order | null> {
-  const qs = toQueryString({ orderNumber, phone });
-  const order = await apiClient.getOrNull<Order>(`/api/orders/lookup${qs}`);
-  return order ? normalizeOrder(order) : null;
+/** POST /orders/lookup/request-code — first step of guest lookup, emails a one-time code. Always resolves, regardless of whether orderNumber/phone matched anything. */
+export async function requestOrderLookupCode(orderNumber: string, phone: string): Promise<void> {
+  await apiClient.post<void>("/api/orders/lookup/request-code", { orderNumber, phone });
+}
+
+/** POST /orders/lookup/verify — second step of guest lookup. Throws ApiRequestError (404 number/phone mismatch, 400 bad/expired code) on failure — callers should catch and show the error's message. */
+export async function verifyOrderLookupCode(orderNumber: string, phone: string, code: string): Promise<Order> {
+  return normalizeOrder(await apiClient.post<Order>("/api/orders/lookup/verify", { orderNumber, phone, code }));
 }
 
 /**

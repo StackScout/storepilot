@@ -16,9 +16,11 @@ import java.util.UUID
 
 /**
  * Weekly-template-plus-exceptions availability, computed on read — no
- * slot-materialization job, no staleness. See docs/features/bookings.md for
- * the full design and the deliberate v1 scope decisions referenced below
- * (store-level not per-service schedules, independent per-service capacity).
+ * slot-materialization job, no staleness. A service inherits the store's
+ * weekly template by default; opting into ServiceWeeklyAvailabilityRule via
+ * upsertServiceOverride overrides just that per service (exceptions stay
+ * store-wide always). See docs/features/bookings.md for the full design and
+ * the independent-per-service-capacity decision.
  */
 @Service
 @Transactional(readOnly = true)
@@ -26,6 +28,7 @@ class AvailabilityService(
     private val storeAvailabilityRepository: StoreAvailabilityRepository,
     private val weeklyAvailabilityRuleRepository: WeeklyAvailabilityRuleRepository,
     private val availabilityExceptionRepository: AvailabilityExceptionRepository,
+    private val serviceWeeklyAvailabilityRuleRepository: ServiceWeeklyAvailabilityRuleRepository,
     private val bookableServiceRepository: BookableServiceRepository,
     private val bookingRepository: BookingRepository,
     private val storeRepository: StoreRepository,
@@ -102,6 +105,55 @@ class AvailabilityService(
         availabilityExceptionRepository.delete(exception)
     }
 
+    fun getServiceOverride(serviceId: UUID): ServiceAvailabilityOverrideResponse {
+        val service = requireService(serviceId)
+        return ServiceAvailabilityOverrideResponse(
+            hasCustomAvailability = service.hasCustomAvailability,
+            weeklyRules = serviceWeeklyAvailabilityRuleRepository.findByServiceIdOrderByDayOfWeekAsc(serviceId).map { it.toResponse() },
+        )
+    }
+
+    /** Replaces all 7 of this service's override rows and turns hasCustomAvailability on — see BookableService.hasCustomAvailability's doc comment. */
+    @Transactional
+    fun upsertServiceOverride(serviceId: UUID, input: ServiceAvailabilityOverrideInput): ServiceAvailabilityOverrideResponse {
+        val service = requireService(serviceId)
+        requireOwnership(service.store)
+        val dayNumbers = input.rules.map { it.dayOfWeek }.toSet()
+        require(dayNumbers == (1..7).toSet()) { "Rules must cover each weekday exactly once (1=Monday..7=Sunday)" }
+        input.rules.forEach {
+            require(!it.isOpen || (it.openTime != null && it.closeTime != null && it.openTime < it.closeTime)) {
+                "An open day needs a valid openTime before closeTime"
+            }
+        }
+
+        serviceWeeklyAvailabilityRuleRepository.deleteByServiceId(serviceId)
+        serviceWeeklyAvailabilityRuleRepository.saveAll(
+            input.rules.map {
+                ServiceWeeklyAvailabilityRule(
+                    service = service,
+                    dayOfWeek = java.time.DayOfWeek.of(it.dayOfWeek),
+                    isOpen = it.isOpen,
+                    openTime = it.openTime,
+                    closeTime = it.closeTime,
+                )
+            },
+        )
+        service.hasCustomAvailability = true
+        bookableServiceRepository.save(service)
+
+        return getServiceOverride(serviceId)
+    }
+
+    /** Reverts a service to inheriting the store's default weekly template — deletes its override rows rather than leaving them dormant, so re-enabling later starts from a clean slate. */
+    @Transactional
+    fun disableServiceOverride(serviceId: UUID) {
+        val service = requireService(serviceId)
+        requireOwnership(service.store)
+        service.hasCustomAvailability = false
+        bookableServiceRepository.save(service)
+        serviceWeeklyAvailabilityRuleRepository.deleteByServiceId(serviceId)
+    }
+
     /**
      * Chunks the resolved open window for each date in [from, to] into
      * `duration + buffer`-sized candidate slots, drops anything inside the
@@ -117,8 +169,17 @@ class AvailabilityService(
 
         val leadTimeMinutes = storeAvailabilityRepository.findById(storeId).map { it.leadTimeMinutes }.orElse(120)
         val earliestStart = Instant.now().plusSeconds(leadTimeMinutes * 60L)
-        val weeklyRulesByDay = weeklyAvailabilityRuleRepository.findByStoreIdOrderByDayOfWeekAsc(storeId)
-            .associateBy { it.dayOfWeek }
+        // A service with its own override uses ServiceWeeklyAvailabilityRule
+        // instead of the store's template — AvailabilityException stays
+        // store-only regardless, see BookableService.hasCustomAvailability's
+        // doc comment.
+        val weeklyRulesByDay: Map<java.time.DayOfWeek, WeeklyRuleLike> = if (service.hasCustomAvailability) {
+            serviceWeeklyAvailabilityRuleRepository.findByServiceIdOrderByDayOfWeekAsc(serviceId)
+                .associateBy({ it.dayOfWeek }, { WeeklyRuleLike(it.isOpen, it.openTime, it.closeTime) })
+        } else {
+            weeklyAvailabilityRuleRepository.findByStoreIdOrderByDayOfWeekAsc(storeId)
+                .associateBy({ it.dayOfWeek }, { WeeklyRuleLike(it.isOpen, it.openTime, it.closeTime) })
+        }
         val exceptionsByDate = availabilityExceptionRepository.findByStoreIdAndDateBetween(storeId, from, to)
             .associateBy { it.date }
         val excludedStatuses = setOf(BookingStatus.CANCELLED, BookingStatus.NO_SHOW)
@@ -165,11 +226,17 @@ class AvailabilityService(
     private fun requireStore(storeId: UUID): Store =
         storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
 
+    private fun requireService(serviceId: UUID): BookableService =
+        bookableServiceRepository.findById(serviceId).orElseThrow { NotFoundException("Service $serviceId not found") }
+
     private fun requireOwnership(store: Store) {
         val seller = currentActor.requireSeller()
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store ${store.id}")
     }
 }
+
+/** Shared shape for resolving a day's window from either the store's or a service's weekly rule row. */
+private data class WeeklyRuleLike(val isOpen: Boolean, val openTime: LocalTime?, val closeTime: LocalTime?)
 
 private fun WeeklyAvailabilityRule.toResponse() = WeeklyAvailabilityRuleResponse(
     dayOfWeek = dayOfWeek.value,
@@ -185,4 +252,11 @@ private fun AvailabilityException.toResponse() = AvailabilityExceptionResponse(
     openTime = openTime,
     closeTime = closeTime,
     note = note,
+)
+
+private fun ServiceWeeklyAvailabilityRule.toResponse() = WeeklyAvailabilityRuleResponse(
+    dayOfWeek = dayOfWeek.value,
+    isOpen = isOpen,
+    openTime = openTime,
+    closeTime = closeTime,
 )

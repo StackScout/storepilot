@@ -37,14 +37,17 @@ class OrderController(
     @GetMapping("/api/admin/stripe-settlements")
     fun adminStripeSettlements(): List<OrderResponse> = orderService.adminListStripeSettlements()
 
-    @GetMapping("/api/orders/lookup")
-    fun lookup(
-        @RequestParam orderNumber: String,
-        @RequestParam phone: String,
-    ): ResponseEntity<OrderResponse> {
-        val order = orderService.findByNumberAndPhone(orderNumber, phone) ?: return ResponseEntity.notFound().build()
-        return ResponseEntity.ok(order)
+    /** First step of guest lookup — see OrderService.requestLookupCode's doc comment. Always 204, regardless of whether orderNumber/phone matched anything. */
+    @PostMapping("/api/orders/lookup/request-code")
+    fun requestLookupCode(@Valid @RequestBody input: GuestLookupRequestInput): ResponseEntity<Void> {
+        orderService.requestLookupCode(input.orderNumber, input.phone)
+        return ResponseEntity.noContent().build()
     }
+
+    /** Second step of guest lookup — replaces the old GET /api/orders/lookup?orderNumber=&phone= (phone alone was too weak, see docs/roadmap.md). */
+    @PostMapping("/api/orders/lookup/verify")
+    fun verifyLookupCode(@Valid @RequestBody input: GuestLookupVerifyInput): OrderResponse =
+        orderService.verifyLookupCode(input.orderNumber, input.phone, input.code)
 
     @GetMapping("/api/orders/{id}")
     fun getById(@PathVariable id: UUID): OrderResponse = orderService.getById(id)

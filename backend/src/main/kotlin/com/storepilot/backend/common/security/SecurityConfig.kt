@@ -92,12 +92,17 @@ class SecurityConfig {
                     // always derived server-side from CurrentActor, never a
                     // client-supplied field (see OrderDtos.kt).
                     .requestMatchers(HttpMethod.POST, "/api/orders").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/orders/lookup", "/api/orders/*").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/orders/*").permitAll()
+                    // Guest lookup is now a two-step, code-verified flow —
+                    // see OrderService.requestLookupCode's doc comment —
+                    // rather than a single GET keyed on phone alone.
+                    .requestMatchers(HttpMethod.POST, "/api/orders/lookup/request-code", "/api/orders/lookup/verify").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/receipt", "/api/orders/*/cancel", "/api/orders/*/payhere-checkout", "/api/orders/*/stripe-checkout").permitAll()
                     // Same "booking ID (+ phone for lookup) is the
                     // credential" guest model as orders above.
                     .requestMatchers(HttpMethod.POST, "/api/bookings").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/bookings/lookup", "/api/bookings/*").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/bookings/*").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/bookings/lookup/request-code", "/api/bookings/lookup/verify").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/bookings/*/receipt", "/api/bookings/*/cancel", "/api/bookings/*/payhere-checkout", "/api/bookings/*/stripe-checkout").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/payments/payhere/notify").permitAll()
                     // Signature-verified inside StripeWebhookService, not by auth here — see its doc comment.
@@ -110,6 +115,11 @@ class SecurityConfig {
                     .requestMatchers("/api/me/seller/**").hasRole("SELLER")
                     // Buyer's own profile/orders.
                     .requestMatchers("/api/me/**").hasRole("BUYER")
+                    // Submitting a review requires a buyer account (see
+                    // ReviewService's verified-purchase gate); reading
+                    // reviews stays public under the broader GET
+                    // /api/products/**, /api/stores/** permitAll above.
+                    .requestMatchers(HttpMethod.POST, "/api/products/*/reviews", "/api/stores/*/reviews").hasRole("BUYER")
                     // Seller onboarding — any authenticated Cognito user;
                     // this call is what grants ROLE_SELLER (see
                     // StoreService.create / task "Seller onboarding").
@@ -139,6 +149,8 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.PUT, "/api/stores/*/availability/weekly-rules").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/availability/exceptions").hasRole("SELLER")
                     .requestMatchers(HttpMethod.DELETE, "/api/stores/*/availability/exceptions/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.PUT, "/api/stores/*/bookable-services/*/availability-override").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/stores/*/bookable-services/*/availability-override").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/orders").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/payouts", "/api/stores/*/payouts/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/fee-collections", "/api/stores/*/fee-collections/*").hasRole("SELLER")

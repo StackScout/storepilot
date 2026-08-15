@@ -9,6 +9,9 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
 
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Booking>
 
+    /** Verified-purchase gate for a store review — see ReviewService.createStoreReview. */
+    fun existsByBuyerIdAndStoreIdAndStatus(buyerId: UUID, storeId: UUID, status: BookingStatus): Boolean
+
     /** GET /api/bookings/lookup — mirrors OrderRepository.findByOrderNumberIgnoreCase, suffix-matched against buyerPhone in BookingService. */
     fun findByBookingNumberIgnoreCase(bookingNumber: String): Booking?
 

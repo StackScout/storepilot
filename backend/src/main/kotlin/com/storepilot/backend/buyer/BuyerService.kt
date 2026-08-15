@@ -1,8 +1,6 @@
 package com.storepilot.backend.buyer
 
-import com.storepilot.backend.common.ShippingDetails
 import com.storepilot.backend.common.security.CurrentActor
-import com.storepilot.backend.order.ShippingDetailsInput
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -12,12 +10,11 @@ import org.springframework.transaction.annotation.Transactional
  * itself is JIT-provisioned by CurrentActor on first authenticated request,
  * so every method here operates on "the current caller's own buyer row",
  * never a caller-supplied id/email (that was the by-email PII leak this
- * replaced).
+ * replaced). Saved-address management lives in AddressService, not here.
  */
 @Service
 @Transactional(readOnly = true)
 class BuyerService(
-    private val buyerRepository: BuyerRepository,
     private val currentActor: CurrentActor,
 ) {
     /**
@@ -30,19 +27,4 @@ class BuyerService(
      */
     @Transactional
     fun getCurrent(): BuyerResponse = currentActor.requireBuyer().toResponse()
-
-    /** PATCH /api/me/default-shipping */
-    @Transactional
-    fun updateDefaultShipping(input: ShippingDetailsInput): BuyerResponse {
-        val buyer = currentActor.requireBuyer()
-        buyer.defaultShipping = ShippingDetails(
-            fullName = input.fullName,
-            phone = input.phone,
-            addressLine1 = input.addressLine1,
-            city = input.city,
-            state = input.state,
-            postalCode = input.postalCode,
-        )
-        return buyerRepository.save(buyer).toResponse()
-    }
 }

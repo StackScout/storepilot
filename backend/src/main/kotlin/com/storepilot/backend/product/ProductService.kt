@@ -135,6 +135,8 @@ class ProductService(
         val category = wireValueOf<StoreCategory>(input.category)
         requireCategoryMatchesStore(store, category)
         val trackStock = effectiveTrackStock(storeId, input.trackStock)
+        val sku = input.sku?.trim()?.takeIf { it.isNotBlank() }
+        requireUniqueSku(storeId, sku)
         val product = Product(
             store = store,
             name = input.name,
@@ -146,7 +148,7 @@ class ProductService(
             stockQuantity = input.stockQuantity,
             trackStock = trackStock,
             status = resolveStatus(input, trackStock),
-            sku = input.sku?.trim()?.takeIf { it.isNotBlank() },
+            sku = sku,
         )
         storeImages(product, images)
         return productRepository.save(product).toResponse(fileStorageService)
@@ -174,7 +176,9 @@ class ProductService(
         val trackStock = effectiveTrackStock(requireNotNull(product.store.id), input.trackStock)
         product.trackStock = trackStock
         product.status = resolveStatus(input, trackStock)
-        product.sku = input.sku?.trim()?.takeIf { it.isNotBlank() }
+        val sku = input.sku?.trim()?.takeIf { it.isNotBlank() }
+        requireUniqueSku(requireNotNull(product.store.id), sku, excludingProductId = product.id)
+        product.sku = sku
         // Slug is NOT regenerated on rename — matches docs/features/product-management.md (URL stays stable).
         if (images.isNotEmpty()) {
             product.images.clear()
@@ -210,6 +214,15 @@ class ProductService(
 
     private fun resolveStatus(input: ProductFormInput, trackStock: Boolean): ProductStatus =
         if (trackStock && input.stockQuantity == 0) ProductStatus.OUT_OF_STOCK else wireValueOf(input.status)
+
+    /** No-op for a blank/null SKU — SKU is optional, and only products that actually set one need to be unique against each other. [excludingProductId] lets update() ignore the product's own current row. */
+    private fun requireUniqueSku(storeId: UUID, sku: String?, excludingProductId: UUID? = null) {
+        if (sku == null) return
+        val existing = productRepository.findByStoreIdAndSkuIgnoreCase(storeId, sku) ?: return
+        if (existing.id != excludingProductId) {
+            throw ConflictException("A product with SKU \"$sku\" already exists in this store")
+        }
+    }
 
     /** The store-wide switch always wins: stock tracking is off for every product once a seller disables it at the store level, regardless of what the product itself requests. */
     private fun effectiveTrackStock(storeId: UUID, requestedTrackStock: Boolean): Boolean {

@@ -2,6 +2,7 @@ package com.storepilot.backend.order
 
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
+import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
@@ -73,6 +74,7 @@ class OrderService(
     private val currentActor: CurrentActor,
     private val platformConfigService: PlatformConfigService,
     private val stripeService: StripeService,
+    private val guestLookupOtpService: GuestLookupOtpService,
 ) {
     /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
     fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
@@ -127,13 +129,43 @@ class OrderService(
     fun getById(id: UUID): OrderResponse =
         orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }.toResponse(receiptStorageService, fileStorageService)
 
-    /** GET /api/orders/lookup — order number (exact, case-insensitive) + last 9 digits of phone. */
-    fun findByNumberAndPhone(orderNumber: String, phone: String): OrderResponse? {
+    /** Order number (exact, case-insensitive) + last 9 digits of phone — the first factor of guest lookup, shared by both steps below. */
+    private fun resolveByNumberAndPhone(orderNumber: String, phone: String): Order? {
         val normalizedInput = phone.replace(Regex("\\s+"), "")
         val suffix = normalizedInput.takeLast(9)
         val order = orderRepository.findByOrderNumberIgnoreCase(orderNumber.trim()) ?: return null
         val storedPhone = order.shipping.phone?.replace(Regex("\\s+"), "") ?: return null
-        return if (storedPhone.endsWith(suffix)) order.toResponse(receiptStorageService, fileStorageService) else null
+        return if (storedPhone.endsWith(suffix)) order else null
+    }
+
+    /**
+     * POST /api/orders/lookup/request-code — first step of guest lookup.
+     * Order number + phone alone is guessable at scale (see
+     * docs/roadmap.md's "Order lookup credential strength" gap); this
+     * emails a one-time code to the order's own buyer email as a second
+     * factor before verifyLookupCode below reveals anything. Silently a
+     * no-op when the number/phone don't match — same "don't leak whether
+     * it matched" principle as EmailVerificationService.resendVerificationCode,
+     * so an attacker fishing for valid order numbers learns nothing from
+     * the response either way.
+     */
+    @Transactional
+    fun requestLookupCode(orderNumber: String, phone: String) {
+        val order = resolveByNumberAndPhone(orderNumber, phone) ?: return
+        guestLookupOtpService.requestCode(
+            targetType = "order",
+            targetId = requireNotNull(order.id),
+            email = order.buyerEmail,
+            recipientName = order.shipping.fullName ?: "there",
+        )
+    }
+
+    /** POST /api/orders/lookup/verify — second step, completes the lookup. Throws NotFoundException (number/phone mismatch) or IllegalArgumentException (bad/expired code — see GuestLookupOtpService.verifyCode). */
+    @Transactional
+    fun verifyLookupCode(orderNumber: String, phone: String, code: String): OrderResponse {
+        val order = resolveByNumberAndPhone(orderNumber, phone) ?: throw NotFoundException("Order not found")
+        guestLookupOtpService.verifyCode("order", requireNotNull(order.id), code)
+        return order.toResponse(receiptStorageService, fileStorageService)
     }
 
     /** POST /api/orders — checkout. */

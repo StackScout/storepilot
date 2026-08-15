@@ -1,5 +1,7 @@
 package com.storepilot.backend.common
 
+import com.storepilot.backend.buyer.Address
+import com.storepilot.backend.buyer.AddressRepository
 import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.buyer.BuyerRepository
 import com.storepilot.backend.order.Order
@@ -115,6 +117,7 @@ class DataSeeder(
     private val storeSettingsRepository: StoreSettingsRepository,
     private val productRepository: ProductRepository,
     private val buyerRepository: BuyerRepository,
+    private val addressRepository: AddressRepository,
     private val orderRepository: OrderRepository,
     private val payoutRepository: PayoutRepository,
     private val sellerRepository: SellerRepository,
@@ -338,7 +341,15 @@ class DataSeeder(
             name = "Jack Thompson",
             email = "jack.thompson@example.com",
             phone = "+61 412 890 123",
-            defaultShipping = ShippingDetails(
+        )
+        val saved = buyerRepository.saveAndFlush(buyer)
+        val id = requireNotNull(saved.id)
+        backdate("buyers", id, dt("2026-06-01T09:00:00+10:00"), dt("2026-06-01T09:00:00+10:00"))
+
+        val address = Address(
+            buyer = saved,
+            label = "Home",
+            shipping = ShippingDetails(
                 fullName = "Jack Thompson",
                 phone = "+61 412 890 123",
                 addressLine1 = "45 Harbour Street",
@@ -346,10 +357,10 @@ class DataSeeder(
                 state = "New South Wales",
                 postalCode = "2000",
             ),
+            isDefault = true,
         )
-        val saved = buyerRepository.saveAndFlush(buyer)
-        val id = requireNotNull(saved.id)
-        backdate("buyers", id, dt("2026-06-01T09:00:00+10:00"), dt("2026-06-01T09:00:00+10:00"))
+        val savedAddress = addressRepository.saveAndFlush(address)
+        backdate("addresses", requireNotNull(savedAddress.id), dt("2026-06-01T09:00:00+10:00"), dt("2026-06-01T09:00:00+10:00"))
         return id
     }
 

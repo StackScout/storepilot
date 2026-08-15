@@ -29,19 +29,31 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUse
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminCreateUserRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminInitiateAuthResponse
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminListGroupsForUserRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminRespondToAuthChallengeRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminSetUserPasswordRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminUpdateUserAttributesRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminUserGlobalSignOutRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AssociateSoftwareTokenRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthFlowType
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ChallengeNameType
+import software.amazon.awssdk.services.cognitoidentityprovider.model.CodeMismatchException
 import software.amazon.awssdk.services.cognitoidentityprovider.model.CognitoIdentityProviderException
+import software.amazon.awssdk.services.cognitoidentityprovider.model.EnableSoftwareTokenMfaException
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ExpiredCodeException
+import software.amazon.awssdk.services.cognitoidentityprovider.model.GetUserRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.InvalidPasswordException
 import software.amazon.awssdk.services.cognitoidentityprovider.model.MessageActionType
 import software.amazon.awssdk.services.cognitoidentityprovider.model.NotAuthorizedException
+import software.amazon.awssdk.services.cognitoidentityprovider.model.SetUserMfaPreferenceRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.SoftwareTokenMfaSettingsType
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UsernameExistsException
+import software.amazon.awssdk.services.cognitoidentityprovider.model.VerifySoftwareTokenRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.VerifySoftwareTokenResponseType
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Base64
@@ -173,14 +185,61 @@ class AuthController(
         return ResponseEntity.noContent().build()
     }
 
+    /**
+     * When the account has TOTP MFA enrolled (see mfaVerify()), Cognito
+     * returns a SOFTWARE_TOKEN_MFA challenge here instead of a completed
+     * auth result — no cookies are set in that case, since the caller
+     * hasn't actually authenticated yet. The frontend must then prompt for
+     * a 6-digit code and POST it (with the returned `mfaSession`) to
+     * mfaChallenge() below to actually complete sign-in.
+     */
     @PostMapping("/api/auth/login")
     fun login(
         @Valid @RequestBody input: LoginInput,
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): AuthSessionResponse {
-        val authResult = adminInitiateAuth(input.email, input.password)
+        val authResponse = adminInitiateAuth(input.email, input.password)
+        if (authResponse.challengeName() == ChallengeNameType.SOFTWARE_TOKEN_MFA) {
+            return AuthSessionResponse(signedIn = false, mfaRequired = true, mfaSession = authResponse.session())
+        }
+        return completeLogin(input.email, authResponse.authenticationResult(), request, response)
+    }
 
+    /** Completes a login that returned mfaRequired=true — see AuthSessionResponse's doc comment. */
+    @PostMapping("/api/auth/mfa/challenge")
+    fun mfaChallenge(
+        @Valid @RequestBody input: MfaChallengeInput,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): AuthSessionResponse {
+        val authResult = try {
+            cognitoClient.adminRespondToAuthChallenge(
+                AdminRespondToAuthChallengeRequest.builder()
+                    .userPoolId(cognitoProperties.userPoolId)
+                    .clientId(cognitoProperties.clientId)
+                    .challengeName(ChallengeNameType.SOFTWARE_TOKEN_MFA)
+                    .session(input.session)
+                    .challengeResponses(mapOf("USERNAME" to input.email, "SOFTWARE_TOKEN_MFA_CODE" to input.code))
+                    .build(),
+            ).authenticationResult()
+        } catch (e: CodeMismatchException) {
+            throw UnauthenticatedException("Invalid verification code")
+        } catch (e: ExpiredCodeException) {
+            throw UnauthenticatedException("This code has expired — please sign in again")
+        } catch (e: NotAuthorizedException) {
+            throw UnauthenticatedException("Your sign-in session has expired — please sign in again")
+        }
+        return completeLogin(input.email, authResult, request, response)
+    }
+
+    /** Shared tail of login() and mfaChallenge() — both end up with a completed Cognito AuthenticationResultType to turn into cookies + a session response. */
+    private fun completeLogin(
+        email: String,
+        authResult: AuthenticationResultType,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): AuthSessionResponse {
         // Fetch attributes (and check email_verified) BEFORE setting any
         // cookies — an unverified account must never end up with a valid
         // session, even briefly. Admin-created accounts (create-admin.sh)
@@ -189,7 +248,7 @@ class AuthController(
         val attributes = cognitoClient.adminGetUser(
             AdminGetUserRequest.builder()
                 .userPoolId(cognitoProperties.userPoolId)
-                .username(input.email)
+                .username(email)
                 .build(),
         ).userAttributes().associate { it.name() to it.value() }
         if (attributes["email_verified"] != "true") {
@@ -201,21 +260,92 @@ class AuthController(
         val groups = cognitoClient.adminListGroupsForUser(
             AdminListGroupsForUserRequest.builder()
                 .userPoolId(cognitoProperties.userPoolId)
-                .username(input.email)
+                .username(email)
                 .build(),
         ).groups().map { it.groupName() }
 
         val role = groups.firstOrNull()
         if (role == "admin") {
-            auditLogService.recordAdminLogin(attributes["email"] ?: input.email)
+            auditLogService.recordAdminLogin(attributes["email"] ?: email)
         }
 
         return AuthSessionResponse(
             signedIn = true,
             role = role,
-            email = attributes["email"] ?: input.email,
+            email = attributes["email"] ?: email,
             name = attributes["name"],
         )
+    }
+
+    /**
+     * Self-service TOTP enrollment, mirroring account settings' "enable MFA"
+     * action — uses the caller's own access token (not an Admin* API), the
+     * same Cognito APIs a first-party mobile/web client would call directly.
+     * Returns a fresh secret every call; nothing is enrolled until
+     * mfaVerify() below succeeds — calling this repeatedly before verifying
+     * just invalidates the previous unconfirmed secret, which is fine.
+     */
+    @PostMapping("/api/auth/mfa/setup")
+    fun mfaSetup(): MfaSetupResponse {
+        val accessToken = currentAccessToken()
+        val secret = cognitoClient.associateSoftwareToken(
+            AssociateSoftwareTokenRequest.builder().accessToken(accessToken).build(),
+        ).secretCode()
+        val email = cognitoClient.getUser(GetUserRequest.builder().accessToken(accessToken).build())
+            .userAttributes().firstOrNull { it.name() == "email" }?.value() ?: "account"
+        val label = URLEncoder.encode("StorePilot:$email", StandardCharsets.UTF_8)
+        val issuer = URLEncoder.encode("StorePilot", StandardCharsets.UTF_8)
+        return MfaSetupResponse(secret = secret, otpauthUri = "otpauth://totp/$label?secret=$secret&issuer=$issuer")
+    }
+
+    /** Confirms the caller enrolled the secret from mfaSetup() correctly, then actually turns TOTP on as their MFA method — VerifySoftwareToken alone only proves possession, it doesn't enable it. */
+    @PostMapping("/api/auth/mfa/verify")
+    fun mfaVerify(@Valid @RequestBody input: MfaVerifyInput): ResponseEntity<Void> {
+        val accessToken = currentAccessToken()
+        val status = try {
+            cognitoClient.verifySoftwareToken(
+                VerifySoftwareTokenRequest.builder().accessToken(accessToken).userCode(input.code).build(),
+            ).status()
+        } catch (e: CodeMismatchException) {
+            throw IllegalArgumentException("Invalid verification code")
+        } catch (e: EnableSoftwareTokenMfaException) {
+            throw IllegalArgumentException("Invalid verification code")
+        }
+        if (status != VerifySoftwareTokenResponseType.SUCCESS) {
+            throw IllegalArgumentException("Invalid verification code")
+        }
+        cognitoClient.setUserMFAPreference(
+            SetUserMfaPreferenceRequest.builder()
+                .accessToken(accessToken)
+                .softwareTokenMfaSettings(SoftwareTokenMfaSettingsType.builder().enabled(true).preferredMfa(true).build())
+                .build(),
+        )
+        return ResponseEntity.noContent().build()
+    }
+
+    /** Turns TOTP back off for the caller's own account — self-service, no re-authentication required (matches Cognito's own SetUserMFAPreference semantics for a valid access token). */
+    @PostMapping("/api/auth/mfa/disable")
+    fun mfaDisable(): ResponseEntity<Void> {
+        cognitoClient.setUserMFAPreference(
+            SetUserMfaPreferenceRequest.builder()
+                .accessToken(currentAccessToken())
+                .softwareTokenMfaSettings(SoftwareTokenMfaSettingsType.builder().enabled(false).preferredMfa(false).build())
+                .build(),
+        )
+        return ResponseEntity.noContent().build()
+    }
+
+    @GetMapping("/api/auth/mfa/status")
+    fun mfaStatus(): MfaStatusResponse {
+        val user = cognitoClient.getUser(GetUserRequest.builder().accessToken(currentAccessToken()).build())
+        return MfaStatusResponse(enabled = user.userMFASettingList().contains("SOFTWARE_TOKEN_MFA"))
+    }
+
+    /** Every endpoint in this controller is permitAll (see SecurityConfig's doc comment) but still populates SecurityContext from a valid cookie — this just makes "no cookie/expired cookie" fail the same explicit way login()'s other guards do, instead of a raw NPE passing a null access token to Cognito. */
+    private fun currentAccessToken(): String {
+        val auth = SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
+            ?: throw UnauthenticatedException("Not signed in")
+        return auth.token.tokenValue
     }
 
     @PostMapping("/api/auth/refresh")
@@ -397,7 +527,7 @@ class AuthController(
         )
     }
 
-    private fun adminInitiateAuth(email: String, password: String): AuthenticationResultType {
+    private fun adminInitiateAuth(email: String, password: String): AdminInitiateAuthResponse {
         try {
             return cognitoClient.adminInitiateAuth(
                 AdminInitiateAuthRequest.builder()
@@ -406,7 +536,7 @@ class AuthController(
                     .authFlow(AuthFlowType.ADMIN_USER_PASSWORD_AUTH)
                     .authParameters(mapOf("USERNAME" to email, "PASSWORD" to password))
                     .build(),
-            ).authenticationResult()
+            )
         } catch (e: NotAuthorizedException) {
             throw UnauthenticatedException("Invalid email or password")
         } catch (e: UserNotFoundException) {

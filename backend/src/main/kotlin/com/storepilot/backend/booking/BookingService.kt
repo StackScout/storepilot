@@ -2,6 +2,7 @@ package com.storepilot.backend.booking
 
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
+import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
@@ -63,6 +64,7 @@ class BookingService(
     private val currentActor: CurrentActor,
     private val platformConfigService: PlatformConfigService,
     private val stripeService: StripeService,
+    private val guestLookupOtpService: GuestLookupOtpService,
 ) {
     fun listByStore(storeId: UUID, status: String?): List<BookingResponse> {
         val seller = currentActor.requireSeller()
@@ -87,13 +89,33 @@ class BookingService(
     /** For internal cross-service use (PayHere/Stripe webhook fallback lookup) — returns the entity, not a DTO. */
     fun findEntity(id: UUID): Booking? = bookingRepository.findById(id).orElse(null)
 
-    /** GET /api/bookings/lookup — booking number (exact, case-insensitive) + last 9 digits of phone, mirrors OrderService.findByNumberAndPhone. */
-    fun findByNumberAndPhone(bookingNumber: String, phone: String): BookingResponse? {
+    /** Booking number (exact, case-insensitive) + last 9 digits of phone — the first factor of guest lookup, mirrors OrderService.resolveByNumberAndPhone. */
+    private fun resolveByNumberAndPhone(bookingNumber: String, phone: String): Booking? {
         val normalizedInput = phone.replace(Regex("\\s+"), "")
         val suffix = normalizedInput.takeLast(9)
         val booking = bookingRepository.findByBookingNumberIgnoreCase(bookingNumber.trim()) ?: return null
         val storedPhone = booking.buyerPhone.replace(Regex("\\s+"), "")
-        return if (storedPhone.endsWith(suffix)) booking.toResponse(receiptStorageService) else null
+        return if (storedPhone.endsWith(suffix)) booking else null
+    }
+
+    /** First step of guest lookup — mirrors OrderService.requestLookupCode's doc comment exactly. */
+    @Transactional
+    fun requestLookupCode(bookingNumber: String, phone: String) {
+        val booking = resolveByNumberAndPhone(bookingNumber, phone) ?: return
+        guestLookupOtpService.requestCode(
+            targetType = "booking",
+            targetId = requireNotNull(booking.id),
+            email = booking.buyerEmail,
+            recipientName = booking.buyerName,
+        )
+    }
+
+    /** Second step of guest lookup — replaces the old GET /api/bookings/lookup?bookingNumber=&phone=. */
+    @Transactional
+    fun verifyLookupCode(bookingNumber: String, phone: String, code: String): BookingResponse {
+        val booking = resolveByNumberAndPhone(bookingNumber, phone) ?: throw NotFoundException("Booking not found")
+        guestLookupOtpService.verifyCode("booking", requireNotNull(booking.id), code)
+        return booking.toResponse(receiptStorageService)
     }
 
     /** POST /api/bookings — booking checkout. */

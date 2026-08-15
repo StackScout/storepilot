@@ -1,6 +1,7 @@
 package com.storepilot.backend.booking
 
 import com.storepilot.backend.common.ConflictException
+import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
@@ -40,6 +41,7 @@ class BookingServiceTest {
     private val currentActor = mockk<CurrentActor>()
     private val platformConfigService = mockk<PlatformConfigService>()
     private val stripeService = mockk<StripeService>(relaxed = true)
+    private val guestLookupOtpService = mockk<GuestLookupOtpService>(relaxed = true)
 
     private val service = BookingService(
         bookingRepository,
@@ -52,6 +54,7 @@ class BookingServiceTest {
         currentActor,
         platformConfigService,
         stripeService,
+        guestLookupOtpService,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID(); createdAt = Instant.now() }

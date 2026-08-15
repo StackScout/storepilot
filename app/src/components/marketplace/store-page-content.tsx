@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, ExternalLink, MapPin, MessageCircle, PackageX, Users } from "lucide-react";
 import { StoreProductGrid } from "@/components/marketplace/store-product-grid";
 import { StoreServiceGrid } from "@/components/marketplace/store-service-grid";
+import { ReviewsSection } from "@/components/marketplace/reviews-section";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
@@ -168,9 +169,14 @@ export function StorePageContent({
           // Whichever section has content leads; Products leads when both
           // (or neither) do, matching the storefront's existing "products
           // first" mental model.
+          const reviewsSection = (
+            <div key="reviews" className="max-w-2xl">
+              <ReviewsSection kind="store" targetId={store.id} />
+            </div>
+          );
           const sections = hasServices && !hasProducts
-            ? [servicesSection, productsSection]
-            : [productsSection, servicesSection];
+            ? [servicesSection, productsSection, reviewsSection]
+            : [productsSection, servicesSection, reviewsSection];
           return <div className="space-y-10 pb-16">{sections.filter(Boolean)}</div>;
         })()}
       </div>

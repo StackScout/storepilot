@@ -3,6 +3,8 @@ import type {
   AvailabilityException,
   AvailabilityExceptionInput,
   DayAvailability,
+  ServiceAvailabilityOverride,
+  ServiceAvailabilityOverrideInput,
   StoreAvailability,
   WeeklyAvailabilityInput,
 } from "@/types";
@@ -36,4 +38,23 @@ export async function deleteException(storeId: string, exceptionId: string): Pro
 export async function getSlots(storeId: string, serviceId: string, from?: string, to?: string): Promise<DayAvailability[]> {
   const qs = toQueryString({ from, to });
   return apiClient.get<DayAvailability[]>(`/api/stores/${storeId}/bookable-services/${serviceId}/availability${qs}`);
+}
+
+/** GET /stores/:storeId/bookable-services/:serviceId/availability-override — public. */
+export async function getServiceAvailabilityOverride(storeId: string, serviceId: string): Promise<ServiceAvailabilityOverride> {
+  return apiClient.get<ServiceAvailabilityOverride>(`/api/stores/${storeId}/bookable-services/${serviceId}/availability-override`);
+}
+
+/** PUT /stores/:storeId/bookable-services/:serviceId/availability-override — replaces all 7 rows and enables the override. */
+export async function upsertServiceAvailabilityOverride(
+  storeId: string,
+  serviceId: string,
+  input: ServiceAvailabilityOverrideInput,
+): Promise<ServiceAvailabilityOverride> {
+  return apiClient.put<ServiceAvailabilityOverride>(`/api/stores/${storeId}/bookable-services/${serviceId}/availability-override`, input);
+}
+
+/** DELETE /stores/:storeId/bookable-services/:serviceId/availability-override — reverts to inheriting the store's default weekly template. */
+export async function disableServiceAvailabilityOverride(storeId: string, serviceId: string): Promise<void> {
+  await apiClient.delete<void>(`/api/stores/${storeId}/bookable-services/${serviceId}/availability-override`);
 }

@@ -18,4 +18,8 @@ data class NotificationProperties(
     val sesSenderEmail: String = "",
     /** Where admin-facing alerts (e.g. a seller changing payout bank details) are emailed — must be SES-verified too, same sandbox constraint as sesSenderEmail. */
     val adminNotificationEmail: String = "",
+    /** A booking gets one reminder email this many hours before its scheduledStart — see BookingReminderJob. */
+    val bookingReminderBeforeHours: Long = 24,
+    /** A product gets one low-stock alert email once trackStock stock drops to/below this quantity (but above zero — out-of-stock already has its own visible status) — see LowStockAlertJob. */
+    val lowStockThreshold: Int = 5,
 )

@@ -13,6 +13,7 @@ import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
+import java.time.Instant
 
 /**
  * Mirrors src/types/product.ts's Product. `storeName`/`storeSlug` are NOT
@@ -63,6 +64,9 @@ class Product(
     var rating: Double = 0.0,
     @Column(name = "review_count", nullable = false)
     var reviewCount: Int = 0,
+    /** Null means not currently alerted. Set by LowStockAlertJob, reset back to null on any restock (see ProductService.update) so the alert can re-fire the next time stock drops low again. */
+    @Column(name = "last_low_stock_alert_sent_at")
+    var lastLowStockAlertSentAt: Instant? = null,
     @OneToMany(mappedBy = "product", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("sortOrder asc")
     var images: MutableList<ProductImage> = mutableListOf(),

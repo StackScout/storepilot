@@ -12,7 +12,8 @@
 > one. Cross-reference [`app/docs/feature-index.md`](../app/docs/feature-index.md)
 > for exact file paths per feature.
 >
-> Generated 2026-08-14. Re-verify against source before treating any line
+> Generated 2026-08-14, updated 2026-08-15 after the Nice-to-have backlog
+> round (Epic 11). Re-verify against source before treating any line
 > here as current after significant future changes — this is a snapshot,
 > not a live view.
 
@@ -188,6 +189,41 @@ identical Pro-plan gating) are in
   via S3 + SSM `RunShellScript` rather than SSH — usable even when the
   operator's own IP isn't in the SSH security-group allowlist)
 
+### Epic 11: Engagement, Growth & Communication
+Cross-cutting features layered on top of the marketplace, booking, and
+dashboard surfaces (Epics 1–4, 6) to drive buyer retention, give sellers
+more revenue/insight tools, and reduce "did anything change?" friction.
+
+- Dark mode toggle (Light/Dark/System, backed by `next-themes`,
+  persisted, defaults to the OS preference) — available from the
+  marketplace header and both the seller dashboard and admin sidebars
+- Buyer "Follow store" action with a live follower count
+- Buyer wishlists and saved searches
+- Order/booking status-change notes: sellers can attach a note to any
+  status transition, shown to the buyer in the timeline (the data model
+  already supported this; this round added the UI)
+- Real-time order/booking status push — Server-Sent Events for the
+  public order/booking pages (no auth needed, the id is proof enough);
+  in-app messages use polling instead, since that channel is private and
+  the existing SSE hook doesn't send credentials cross-origin
+- Time-based reminder notifications (e.g. upcoming-appointment
+  reminders) fired on a schedule, not only at status-change points
+- In-app buyer↔seller messaging — one conversation thread per
+  store+buyer pair, reachable from a store's public page and both the
+  buyer account area and seller dashboard
+- Coupons/discount codes — platform-wide or per-store, usable on orders
+  and/or bookings, with scope/expiry/max-use/minimum-subtotal rules; the
+  platform fee is computed on the post-discount amount, so a coupon
+  reduces the seller's payout proportionally along with the buyer's price
+- Recurring/multi-session bookings — a buyer can check out a single
+  weekly-repeating series (up to 12 occurrences) in one flow; a coupon
+  applied to the series is only counted as one use
+- Premium booking analytics add-on (Pro-plan gated) — revenue, no-show
+  rate, top services by revenue, repeat-buyer rate, computed in-memory
+  per store (small-business scale; revisit if profiling ever shows this
+  as a hot path)
+- Dashboard stat-card trend/period comparison
+
 ---
 
 ## Part 2 — Pending / Backlog
@@ -206,26 +242,14 @@ there turned out to already be resolved and are omitted here).
   decision that picked this list up.
 
 ### Nice-to-have
-- **Dark mode toggle** — `next-themes` is installed, dark CSS tokens
-  exist, nothing turns it on.
-- **"Follow store" action** — `followerCount` displays everywhere with
-  no way for a buyer to actually follow/unfollow.
-- **Real-time order/booking status push** (WebSocket or similar)
-  instead of requiring a page reload to see a status change.
-- **Order/booking timeline notes in the UI** — the data model already
-  supports a status-change note; no UI surface for it.
+Everything else from this list (dark mode, follow store, real-time
+status push, timeline notes, trend comparison, wishlists/saved searches,
+coupons, in-app messaging, time-based reminders, recurring bookings,
+premium booking analytics) shipped and now lives in
+[Epic 11](#epic-11-engagement-growth--communication). Two items remain:
+
 - **Localization** (Sinhala/Tamil, given the Sri Lanka market).
-- **Trend/period comparison on dashboard stat cards** (`trend` props
-  exist, unused).
-- **Wishlists / saved searches.**
-- **Coupons/discount codes (booking-specific and platform-wide).**
 - **Google Calendar sync for bookings (booking-specific).**
-- **In-app buyer↔seller messaging (booking-specific and platform-wide).**
-- **Time-based reminder notifications** (e.g. "your appointment is
-  tomorrow," low-stock alerts) — current emails only fire at
-  status-change points; nothing fires on a schedule.
-- **Recurring/multi-session bookings (booking-specific).**
-- **Premium booking analytics add-on (booking-specific).**
 
 ### Technical debt
 - **No frontend automated tests** — backend has MockK unit-test coverage

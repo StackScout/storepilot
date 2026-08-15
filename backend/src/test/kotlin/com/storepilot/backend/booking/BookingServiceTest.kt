@@ -1,10 +1,12 @@
 package com.storepilot.backend.booking
 
 import com.storepilot.backend.common.ConflictException
+import com.storepilot.backend.coupon.CouponService
 import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.sse.SseHub
 import com.storepilot.backend.notification.BookingNotifier
 import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
@@ -42,6 +44,8 @@ class BookingServiceTest {
     private val platformConfigService = mockk<PlatformConfigService>()
     private val stripeService = mockk<StripeService>(relaxed = true)
     private val guestLookupOtpService = mockk<GuestLookupOtpService>(relaxed = true)
+    private val sseHub = mockk<SseHub>(relaxed = true)
+    private val couponService = mockk<CouponService>()
 
     private val service = BookingService(
         bookingRepository,
@@ -55,6 +59,8 @@ class BookingServiceTest {
         platformConfigService,
         stripeService,
         guestLookupOtpService,
+        sseHub,
+        couponService,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
@@ -111,9 +117,18 @@ class BookingServiceTest {
                 updatedAt = Instant.now()
             }
         }
+        every { bookingRepository.saveAll(any<List<Booking>>()) } answers {
+            firstArg<List<Booking>>().map {
+                it.apply {
+                    if (id == null) id = UUID.randomUUID()
+                    if (createdAt == null) createdAt = Instant.now()
+                    updatedAt = Instant.now()
+                }
+            }
+        }
     }
 
-    private fun checkoutInput(scheduledStart: Instant, paymentMethod: String = "stripe") = CheckoutBookingInput(
+    private fun checkoutInput(scheduledStart: Instant, paymentMethod: String = "stripe", occurrenceCount: Int? = null) = CheckoutBookingInput(
         storeId = storeId,
         serviceId = requireNotNull(bookableService.id),
         scheduledStart = scheduledStart,
@@ -121,6 +136,7 @@ class BookingServiceTest {
         buyerName = "Jane Doe",
         buyerPhone = "+61400000002",
         buyerEmail = "jane@example.com",
+        occurrenceCount = occurrenceCount,
     )
 
     @Test
@@ -170,6 +186,50 @@ class BookingServiceTest {
         assertThrows(ConflictException::class.java) {
             service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "payhere"))
         }
+    }
+
+    @Test
+    fun `createBooking rejects a recurring series for an online payment method`() {
+        assertThrows(ConflictException::class.java) {
+            service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "stripe", occurrenceCount = 4))
+        }
+    }
+
+    @Test
+    fun `createBooking rejects a recurring series above the max occurrence count`() {
+        assertThrows(ConflictException::class.java) {
+            service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "cod", occurrenceCount = 13))
+        }
+    }
+
+    @Test
+    fun `createBooking creates one weekly-spaced occurrence per count, sharing a recurrenceGroupId`() {
+        var created: List<Booking> = emptyList()
+        every { bookingRepository.saveAll(any<List<Booking>>()) } answers {
+            firstArg<List<Booking>>().map {
+                it.apply {
+                    if (id == null) id = UUID.randomUUID()
+                    if (createdAt == null) createdAt = Instant.now()
+                    updatedAt = Instant.now()
+                }
+            }.also { created = it }
+        }
+
+        val start = Instant.now().plusSeconds(3 * 60 * 60)
+        val response = service.createBooking(checkoutInput(start, paymentMethod = "cod", occurrenceCount = 3))
+
+        assertEquals(3, created.size)
+        assertEquals(1, created.map { it.recurrenceGroupId }.toSet().size)
+        assertEquals(created[0].recurrenceGroupId, response.recurrenceGroupId)
+        assertEquals(start, created[0].scheduledStart)
+        assertEquals(start.plusSeconds(7 * 24 * 60 * 60), created[1].scheduledStart)
+        assertEquals(start.plusSeconds(14 * 24 * 60 * 60), created[2].scheduledStart)
+    }
+
+    @Test
+    fun `createBooking leaves recurrenceGroupId null for a one-off booking`() {
+        val response = service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60)))
+        assertEquals(null, response.recurrenceGroupId)
     }
 
     @Test

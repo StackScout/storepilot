@@ -6,7 +6,10 @@ import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.sse.SseHub
 import com.storepilot.backend.common.wireValueOf
+import com.storepilot.backend.coupon.CouponKind
+import com.storepilot.backend.coupon.CouponService
 import com.storepilot.backend.notification.BookingNotifier
 import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
@@ -26,6 +29,9 @@ import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.util.UUID
 import kotlin.random.Random
+
+/** Cap on how many weekly occurrences a single recurring-series checkout can create — see BookingService.createBooking. */
+private const val MAX_RECURRING_OCCURRENCES = 12
 
 private val BOOKING_NUMBER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatterBuilder()
     .appendValue(ChronoField.YEAR, 4)
@@ -65,7 +71,16 @@ class BookingService(
     private val platformConfigService: PlatformConfigService,
     private val stripeService: StripeService,
     private val guestLookupOtpService: GuestLookupOtpService,
+    private val sseHub: SseHub,
+    private val couponService: CouponService,
 ) {
+    /** Fan-out to any subscribers on GET /api/bookings/{id}/events — mirrors OrderService.publishOrderEvent. */
+    private fun publishBookingEvent(booking: Booking): BookingResponse {
+        val response = booking.toResponse(receiptStorageService)
+        sseHub.publish("booking:${booking.id}", "status", response)
+        return response
+    }
+
     fun listByStore(storeId: UUID, status: String?): List<BookingResponse> {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
@@ -131,27 +146,18 @@ class BookingService(
 
         val platformConfig = platformConfigService.current()
         val leadTimeMinutes = store.id?.let { storeAvailabilityRepository.findById(it).orElse(null)?.leadTimeMinutes } ?: 120
-        val scheduledEnd = input.scheduledStart.plusSeconds(service.durationMinutes * 60L)
 
-        // Re-validate the slot is still free inside this transaction — the
-        // client only saw a snapshot of availability when it rendered the
-        // slot picker; another booking may have taken it since. Same
-        // same-service-only overlap rule as AvailabilityService.computeSlots
-        // (independent per-service capacity, see docs/features/bookings.md).
-        if (input.scheduledStart < Instant.now().plusSeconds(leadTimeMinutes * 60L)) {
-            throw ConflictException("This time slot is no longer available")
-        }
-        val excludedStatuses = setOf(BookingStatus.CANCELLED, BookingStatus.NO_SHOW)
-        val overlapping = bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(
-            requireNotNull(service.id),
-            excludedStatuses,
-            scheduledEnd,
-            input.scheduledStart,
-        )
-        if (overlapping.isNotEmpty()) throw ConflictException("This time slot is no longer available")
+        // Resolved before fee/total math — discounts every occurrence's price
+        // identically, but is only recorded as one use of the coupon (below),
+        // treating the whole series as a single checkout. See
+        // OrderService.createOrder for the equivalent order-side comment.
+        val couponResolution = input.couponCode?.takeIf { it.isNotBlank() }
+            ?.let { couponService.resolve(it, requireNotNull(store.id), CouponKind.BOOKING, service.price) }
+        val discountAmount = couponResolution?.discountAmount ?: 0
+        val discountedPrice = service.price - discountAmount
 
         val feePercent = storeSettings.transactionFeePercent
-        val platformFee = (BigDecimal(service.price) * feePercent)
+        val platformFee = (BigDecimal(discountedPrice) * feePercent)
             .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
             .toInt()
 
@@ -169,35 +175,86 @@ class BookingService(
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
 
+        val occurrenceCount = input.occurrenceCount ?: 1
+        if (occurrenceCount > 1) {
+            // A single online-gateway checkout can't cleanly cover N separate
+            // charges — recurring series are only offered for the two
+            // payment methods that don't involve an upfront gateway redirect.
+            if (paymentMethod != PaymentMethod.COD && paymentMethod != PaymentMethod.BANK_TRANSFER) {
+                throw ConflictException("Recurring bookings are only available for pay-at-venue or bank-transfer payment")
+            }
+            if (occurrenceCount > MAX_RECURRING_OCCURRENCES) {
+                throw ConflictException("A recurring series can have at most $MAX_RECURRING_OCCURRENCES sessions")
+            }
+        }
+
+        // Weekly cadence, same weekday/time each occurrence.
+        val scheduledStarts = (0 until occurrenceCount).map { input.scheduledStart.plusSeconds(it * 7L * 24 * 60 * 60) }
+
+        // Re-validate every slot is still free inside this transaction — the
+        // client only saw a snapshot of availability when it rendered the
+        // slot picker; another booking may have taken it since. Same
+        // same-service-only overlap rule as AvailabilityService.computeSlots
+        // (independent per-service capacity, see docs/features/bookings.md).
+        // Checked up front for every occurrence so a series is all-or-nothing —
+        // never partially created.
+        if (scheduledStarts.first() < Instant.now().plusSeconds(leadTimeMinutes * 60L)) {
+            throw ConflictException("This time slot is no longer available")
+        }
+        val excludedStatuses = setOf(BookingStatus.CANCELLED, BookingStatus.NO_SHOW)
+        scheduledStarts.forEach { start ->
+            val end = start.plusSeconds(service.durationMinutes * 60L)
+            val overlapping = bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(
+                requireNotNull(service.id),
+                excludedStatuses,
+                end,
+                start,
+            )
+            if (overlapping.isNotEmpty()) throw ConflictException("This time slot is no longer available")
+        }
+
         val now = Instant.now()
         val buyer = currentActor.buyerOrNull()
-        val booking = Booking(
-            bookingNumber = generateBookingNumber(now, platformConfig.countryCode),
-            store = store,
-            service = service,
-            serviceName = service.name,
-            servicePrice = service.price,
-            serviceDurationMinutes = service.durationMinutes,
-            scheduledStart = input.scheduledStart,
-            scheduledEnd = scheduledEnd,
-            platformFee = platformFee,
-            total = service.price,
-            status = BookingStatus.PENDING,
-            paymentMethod = paymentMethod,
-            paymentStatus = PaymentStatus.UNPAID,
-            buyerName = input.buyerName,
-            buyerPhone = input.buyerPhone,
-            buyerEmail = input.buyerEmail,
-            buyer = buyer,
-        )
-        booking.timeline.add(
-            BookingTimelineEntry(booking = booking, status = BookingStatus.PENDING, label = STATUS_LABELS.getValue(BookingStatus.PENDING), timestamp = now),
-        )
+        val recurrenceGroupId = if (occurrenceCount > 1) UUID.randomUUID() else null
+        val bookings = scheduledStarts.map { start ->
+            val booking = Booking(
+                bookingNumber = generateBookingNumber(now, platformConfig.countryCode),
+                store = store,
+                service = service,
+                serviceName = service.name,
+                servicePrice = service.price,
+                serviceDurationMinutes = service.durationMinutes,
+                scheduledStart = start,
+                scheduledEnd = start.plusSeconds(service.durationMinutes * 60L),
+                platformFee = platformFee,
+                total = discountedPrice,
+                couponCode = couponResolution?.code,
+                discountAmount = discountAmount,
+                status = BookingStatus.PENDING,
+                paymentMethod = paymentMethod,
+                paymentStatus = PaymentStatus.UNPAID,
+                buyerName = input.buyerName,
+                buyerPhone = input.buyerPhone,
+                buyerEmail = input.buyerEmail,
+                buyer = buyer,
+                recurrenceGroupId = recurrenceGroupId,
+            )
+            booking.timeline.add(
+                BookingTimelineEntry(booking = booking, status = BookingStatus.PENDING, label = STATUS_LABELS.getValue(BookingStatus.PENDING), timestamp = now),
+            )
+            booking
+        }
 
-        val saved = bookingRepository.save(booking)
-        bookingNotifier.bookingCreated(saved)
-        return saved.toResponse(receiptStorageService)
+        val saved = bookingRepository.saveAll(bookings)
+        couponResolution?.let { couponService.recordUse(it.couponId) }
+        saved.forEach { bookingNotifier.bookingCreated(it) }
+        saved.forEach { publishBookingEvent(it) }
+        return saved.first().toResponse(receiptStorageService)
     }
+
+    /** GET /api/bookings/recurrence/{groupId} — every occurrence of a recurring series, same "ID is proof enough" public model as GET /api/bookings/{id}. */
+    fun listByRecurrenceGroup(groupId: UUID): List<BookingResponse> =
+        bookingRepository.findByRecurrenceGroupIdOrderByScheduledStartAsc(groupId).map { it.toResponse(receiptStorageService) }
 
     /** PATCH /api/bookings/{id}/status — seller-driven transitions. */
     @Transactional
@@ -224,7 +281,7 @@ class BookingService(
         val saved = bookingRepository.save(booking)
         if (status == BookingStatus.CONFIRMED) bookingNotifier.bookingConfirmed(saved)
         if (status == BookingStatus.CANCELLED) bookingNotifier.bookingCancelled(saved)
-        return saved.toResponse(receiptStorageService)
+        return publishBookingEvent(saved)
     }
 
     /** POST /api/bookings/{id}/receipt — buyer uploads proof of a bank transfer, mirrors OrderService.uploadReceipt. */
@@ -241,7 +298,7 @@ class BookingService(
         booking.timeline.add(
             BookingTimelineEntry(booking = booking, status = booking.status, label = "Payment receipt uploaded", timestamp = Instant.now(), note = "Awaiting seller verification"),
         )
-        return bookingRepository.save(booking).toResponse(receiptStorageService)
+        return publishBookingEvent(bookingRepository.save(booking))
     }
 
     /** POST /api/bookings/{id}/verify-bank-transfer — mirrors OrderService.verifyBankTransfer. */
@@ -270,7 +327,7 @@ class BookingService(
         }
         val saved = bookingRepository.save(booking)
         if (input.approved) bookingNotifier.bookingConfirmed(saved)
-        return saved.toResponse(receiptStorageService)
+        return publishBookingEvent(saved)
     }
 
     /**
@@ -299,7 +356,7 @@ class BookingService(
         )
         val saved = bookingRepository.save(booking)
         bookingNotifier.bookingCancelled(saved)
-        return saved.toResponse(receiptStorageService)
+        return publishBookingEvent(saved)
     }
 
     /** Shared by updateStatus and cancelBooking's CANCELLED transition — mirrors OrderService.updateStatus's refund branch. */

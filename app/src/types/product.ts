@@ -31,6 +31,11 @@ export interface Product {
   updatedAt: string;
 }
 
+/** GET /api/products/{id}/wishlist */
+export interface WishlistStatus {
+  wishlisted: boolean;
+}
+
 export interface ProductFormInput {
   name: string;
   description: string;

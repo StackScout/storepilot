@@ -33,6 +33,29 @@ interface OrderRepository : JpaRepository<Order, UUID> {
 
     fun findByOrderNumberIgnoreCase(orderNumber: String): Order?
 
+    /** Seller dashboard trend cards — see StoreService.getStats. Sums 0 (via coalesce) rather than null when nothing matches, so callers never null-check. */
+    @Query(
+        """
+        select coalesce(sum(o.subtotal), 0) from Order o
+        where o.store.id = :storeId
+          and o.paymentStatus = com.storepilot.backend.order.PaymentStatus.PAID
+          and o.status <> com.storepilot.backend.order.OrderStatus.CANCELLED
+          and o.createdAt >= :from and o.createdAt < :to
+        """,
+    )
+    fun sumSubtotalForPaidOrders(storeId: UUID, from: Instant, to: Instant): Int
+
+    @Query(
+        """
+        select coalesce(sum(o.platformFee), 0) from Order o
+        where o.store.id = :storeId
+          and o.paymentStatus = com.storepilot.backend.order.PaymentStatus.PAID
+          and o.status <> com.storepilot.backend.order.OrderStatus.CANCELLED
+          and o.createdAt >= :from and o.createdAt < :to
+        """,
+    )
+    fun sumPlatformFeeForPaidOrders(storeId: UUID, from: Instant, to: Instant): Int
+
     /**
      * Bank-transfer orders still missing a receipt that are due a reminder
      * email: never-reminded orders older than [firstReminderThreshold], or

@@ -13,3 +13,6 @@ export * as bookableServicesService from "./bookable-services.service";
 export * as availabilityService from "./availability.service";
 export * as bookingsService from "./bookings.service";
 export * as reviewsService from "./reviews.service";
+export * as savedSearchesService from "./saved-searches.service";
+export * as couponsService from "./coupons.service";
+export * as messagingService from "./messaging.service";

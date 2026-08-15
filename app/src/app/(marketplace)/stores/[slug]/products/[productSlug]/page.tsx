@@ -8,6 +8,7 @@ import { AddToCartControls } from "@/components/marketplace/add-to-cart-controls
 import { ProductCard } from "@/components/marketplace/product-card";
 import { ProductGallery } from "@/components/marketplace/product-gallery";
 import { ReviewsSection } from "@/components/marketplace/reviews-section";
+import { WishlistButton } from "@/components/marketplace/wishlist-button";
 import { CopyLinkButton } from "@/components/shared/copy-link-button";
 import { productsService, storesService } from "@/services";
 
@@ -60,10 +61,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </Link>
             <div className="flex items-start justify-between gap-3">
               <h1 className="text-2xl font-bold text-balance">{product.name}</h1>
-              <CopyLinkButton
-                path={`/stores/${slug}/products/${product.slug}`}
-                className="shrink-0"
-              />
+              <div className="flex shrink-0 gap-2">
+                <WishlistButton productId={product.id} overlay={false} />
+                <CopyLinkButton
+                  path={`/stores/${slug}/products/${product.slug}`}
+                  iconOnly
+                />
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <RatingStars rating={product.rating} reviewCount={product.reviewCount} />

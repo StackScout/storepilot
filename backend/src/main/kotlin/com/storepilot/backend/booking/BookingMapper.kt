@@ -18,6 +18,8 @@ fun Booking.toResponse(receiptStorageService: ReceiptStorageService): BookingRes
         scheduledEnd = scheduledEnd,
         platformFee = platformFee,
         total = total,
+        couponCode = couponCode,
+        discountAmount = discountAmount,
         status = status.wireValue,
         paymentMethod = paymentMethod.wireValue,
         paymentStatus = paymentStatus.wireValue,
@@ -36,4 +38,5 @@ fun Booking.toResponse(receiptStorageService: ReceiptStorageService): BookingRes
             )
         },
         createdAt = requireNotNull(createdAt),
+        recurrenceGroupId = recurrenceGroupId,
     )

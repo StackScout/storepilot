@@ -23,3 +23,16 @@ export interface AddressInput {
   shipping: ShippingDetails;
   isDefault?: boolean;
 }
+
+/** A buyer's saved search — queryString is the raw /search URL query string, replayed verbatim as /search?{queryString}. */
+export interface SavedSearch {
+  id: string;
+  name: string;
+  queryString: string;
+  createdAt: string;
+}
+
+export interface SavedSearchInput {
+  name: string;
+  queryString: string;
+}

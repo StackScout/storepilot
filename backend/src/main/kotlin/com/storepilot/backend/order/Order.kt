@@ -77,6 +77,11 @@ class Order(
     /** Stripe PaymentIntent id, set once checkout.session.completed arrives — needed to issue a refund against the right connected-account charge later. See StripeService. */
     @Column(name = "stripe_payment_intent_id")
     var stripePaymentIntentId: String? = null,
+    /** Immutable snapshot of the coupon applied at checkout (if any) — never re-resolved against the live Coupon row, same "freeze at creation time" principle as OrderItem's price snapshot. Null/0 means no coupon. */
+    @Column(name = "coupon_code")
+    var couponCode: String? = null,
+    @Column(name = "discount_amount", nullable = false)
+    var discountAmount: Int = 0,
 ) : BaseEntity()
 
 /**

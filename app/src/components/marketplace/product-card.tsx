@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { WishlistButton } from "@/components/marketplace/wishlist-button";
 import type { Product } from "@/types";
 
 export function ProductCard({
@@ -43,6 +44,7 @@ export function ProductCard({
             Sale
           </Badge>
         ) : null}
+        <WishlistButton productId={product.id} className="absolute bottom-2 right-2 z-10" />
       </div>
       <div className="mt-2.5 space-y-1">
         <p className="text-muted-foreground truncate text-xs">{product.storeName}</p>

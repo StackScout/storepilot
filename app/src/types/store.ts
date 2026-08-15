@@ -172,6 +172,19 @@ export interface VerificationChangeRequestInput {
   businessRegistrationNumber?: string;
 }
 
+/** GET /api/stores/{storeId}/stats — rolling 7-day window vs the 7 days before it. */
+export interface StoreStats {
+  revenueCurrentPeriod: number;
+  revenuePreviousPeriod: number;
+  platformFeeCurrentPeriod: number;
+  platformFeePreviousPeriod: number;
+}
+
+/** GET /api/stores/{storeId}/follow */
+export interface FollowStatus {
+  following: boolean;
+}
+
 /** Input for creating a new Store at seller onboarding time. */
 export interface StoreApplicationInput {
   name: string;

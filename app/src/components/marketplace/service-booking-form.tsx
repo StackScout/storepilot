@@ -7,19 +7,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Banknote, CreditCard, Landmark, Loader2, Store as StoreIcon } from "lucide-react";
+import { Banknote, CreditCard, Landmark, Loader2, Repeat, Store as StoreIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
-import { availabilityService, bookingsService, buyersService, addressesService, storesService } from "@/services";
-import type { Booking, BookableService, PaymentMethod, SlotResponse, Store } from "@/types";
+import { availabilityService, bookingsService, buyersService, addressesService, storesService, couponsService } from "@/services";
+import type { Booking, BookableService, CouponPreviewResponse, PaymentMethod, SlotResponse, Store } from "@/types";
 
 const bookingSchema = z.object({
   buyerName: z.string().min(2, "Enter your name"),
@@ -94,6 +96,28 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
   const daysWithSlots = (availability ?? []).filter((d) => d.slots.length > 0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SlotResponse | null>(null);
+  // Recurring series only make sense for the two payment methods that don't
+  // involve an upfront gateway redirect — see BookingService.createBooking.
+  const [repeatWeekly, setRepeatWeekly] = useState(false);
+  const [occurrenceCount, setOccurrenceCount] = useState(4);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponPreviewResponse | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const discountAmount = appliedCoupon?.valid ? appliedCoupon.discountAmount : 0;
+
+  async function handleApplyCoupon() {
+    if (!couponCode.trim()) return;
+    setIsApplyingCoupon(true);
+    try {
+      const result = await couponsService.previewCoupon(couponCode.trim(), store.id, "booking", service.price);
+      setAppliedCoupon(result);
+      if (!result.valid) toast.error(result.message ?? "This coupon isn't valid");
+    } catch {
+      setAppliedCoupon({ valid: false, discountAmount: 0, message: "Couldn't check this coupon" });
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedDate && daysWithSlots.length > 0) setSelectedDate(daysWithSlots[0].date);
@@ -134,6 +158,8 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depend on the primitive flags, not the object literal recreated each render
   }, [storeSettings, codEnabled, onlinePaymentEnabled, bankTransferEnabled, stripeEnabled, paymentMethod, setValue]);
 
+  const canRepeatWeekly = paymentMethod === "cod" || paymentMethod === "bank-transfer";
+
   const mutation = useMutation({
     mutationFn: (values: BookingFormValues) => {
       if (!selectedSlot) throw new Error("Select a time slot");
@@ -145,6 +171,8 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
         buyerName: values.buyerName,
         buyerPhone: values.buyerPhone,
         buyerEmail: values.buyerEmail,
+        occurrenceCount: canRepeatWeekly && repeatWeekly ? occurrenceCount : undefined,
+        couponCode: appliedCoupon?.valid ? couponCode.trim() : undefined,
       });
     },
     onSuccess: async (booking) => {
@@ -153,7 +181,9 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
         booking.paymentStatus === "unpaid";
       if (!needsGatewayRedirect) {
         toast.success(
-          booking.paymentMethod === "bank-transfer" ? "Booking requested! Upload your payment receipt to confirm it." : "Booking requested!",
+          booking.recurrenceGroupId
+            ? `${occurrenceCount}-session series requested!`
+            : booking.paymentMethod === "bank-transfer" ? "Booking requested! Upload your payment receipt to confirm it." : "Booking requested!",
         );
         router.push(`/bookings/${booking.id}`);
         return;
@@ -356,15 +386,102 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
               <p className="font-mono">{storeSettings.bankAccountNumber}</p>
             </div>
           ) : null}
+          {canRepeatWeekly ? (
+            <div className="space-y-3 rounded-lg border p-3.5">
+              <Label htmlFor="repeatWeekly" className="flex cursor-pointer items-start gap-2.5">
+                <Checkbox
+                  id="repeatWeekly"
+                  checked={repeatWeekly}
+                  onCheckedChange={(checked) => setRepeatWeekly(checked === true)}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-1 items-start gap-2.5">
+                  <Repeat className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    <span className="block text-sm font-medium">Repeat weekly</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Book this same day and time every week, for a set number of sessions
+                    </span>
+                  </span>
+                </span>
+              </Label>
+              {repeatWeekly ? (
+                <div className="flex items-center gap-2 pl-7">
+                  <Label htmlFor="occurrenceCount" className="text-sm">
+                    Number of sessions
+                  </Label>
+                  <Select value={String(occurrenceCount)} onValueChange={(v) => setOccurrenceCount(Number(v))}>
+                    <SelectTrigger id="occurrenceCount" className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-4">
+          <h2 className="font-semibold">Coupon code</h2>
+          <div className="flex gap-2">
+            <Input
+              value={couponCode}
+              onChange={(e) => {
+                setCouponCode(e.target.value);
+                setAppliedCoupon(null);
+              }}
+              placeholder="e.g. WELCOME10"
+              className="uppercase"
+            />
+            <Button type="button" variant="outline" disabled={!couponCode.trim() || isApplyingCoupon} onClick={handleApplyCoupon}>
+              {isApplyingCoupon ? <Loader2 className="size-4 animate-spin" /> : "Apply"}
+            </Button>
+          </div>
+          {appliedCoupon?.valid ? (
+            <p className="text-success-foreground text-xs">
+              Coupon applied — {formatCurrency(appliedCoupon.discountAmount, currency)} off
+            </p>
+          ) : appliedCoupon && !appliedCoupon.valid ? (
+            <p className="text-destructive text-xs">{appliedCoupon.message}</p>
+          ) : null}
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground text-sm">{service.name}</span>
+            <span className="text-muted-foreground text-sm">
+              {service.name}
+              {canRepeatWeekly && repeatWeekly ? ` × ${occurrenceCount} weekly sessions` : ""}
+            </span>
             <PriceDisplay price={service.price} size="sm" />
           </div>
+          {discountAmount > 0 ? (
+            <div className="text-success-foreground flex items-center justify-between text-sm">
+              <span>Discount{canRepeatWeekly && repeatWeekly ? " (per session)" : ""}</span>
+              <span>-{formatCurrency(discountAmount, currency)}</span>
+            </div>
+          ) : null}
+          {discountAmount > 0 ? (
+            <div className="flex items-center justify-between border-t pt-3 text-sm font-semibold">
+              <span>Total{canRepeatWeekly && repeatWeekly ? " per session" : ""}</span>
+              <span>{formatCurrency(service.price - discountAmount, currency)}</span>
+            </div>
+          ) : null}
+          {canRepeatWeekly && repeatWeekly ? (
+            <p className="text-muted-foreground text-xs">
+              {formatCurrency(service.price - discountAmount, currency)} charged per session, not upfront
+            </p>
+          ) : null}
           <Button
             type="submit"
             size="lg"
@@ -372,7 +489,7 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
             disabled={mutation.isPending || !selectedSlot || noPaymentMethodsAvailable}
           >
             {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Request booking
+            {canRepeatWeekly && repeatWeekly ? `Request ${occurrenceCount} bookings` : "Request booking"}
           </Button>
           <p className="text-muted-foreground text-center text-xs">
             By requesting this booking you agree to {name}&apos;s terms.

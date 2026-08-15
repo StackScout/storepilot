@@ -122,6 +122,8 @@ export interface Booking {
   scheduledEnd: string;
   platformFee: number;
   total: number;
+  couponCode?: string;
+  discountAmount: number;
   status: BookingStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
@@ -135,6 +137,8 @@ export interface Booking {
   cancellationReason?: string;
   timeline: BookingTimelineEntry[];
   createdAt: string;
+  /** Shared by every occurrence of the same weekly-recurring series (see CheckoutBookingInput.occurrenceCount) — undefined for a one-off booking. */
+  recurrenceGroupId?: string;
 }
 
 /** No buyerId field — a signed-in buyer's booking is linked server-side from their auth cookie, never a client-supplied id, same reasoning as CheckoutInput. */
@@ -146,11 +150,36 @@ export interface CheckoutBookingInput {
   buyerName: string;
   buyerPhone: string;
   buyerEmail: string;
+  /** When >1, creates this many weekly-repeating occurrences (same weekday/time, 7 days apart) sharing one recurrenceGroupId — only offered for cod/bank-transfer, see ServiceBookingForm. */
+  occurrenceCount?: number;
+  couponCode?: string;
 }
 
 export interface BookingStatusUpdateInput {
   status: BookingStatus;
   note?: string;
+}
+
+export interface ServiceAnalytics {
+  serviceName: string;
+  bookingCount: number;
+  revenue: number;
+}
+
+/** GET /stores/:storeId/booking-analytics — Pro-only, see backend BookingAnalyticsService's doc comment. */
+export interface BookingAnalytics {
+  totalBookings: number;
+  completedBookings: number;
+  cancelledBookings: number;
+  noShowBookings: number;
+  /** Percent, 0-100, one decimal place. */
+  noShowRate: number;
+  /** Cents. */
+  totalRevenue: number;
+  /** Top 5 services by revenue, highest first. */
+  topServices: ServiceAnalytics[];
+  /** Percent, 0-100, one decimal place. */
+  repeatBuyerRate: number;
 }
 
 export interface VerifyBookingBankTransferInput {

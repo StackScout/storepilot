@@ -18,6 +18,7 @@ import jakarta.persistence.OneToMany
 import jakarta.persistence.OrderBy
 import jakarta.persistence.Table
 import java.time.Instant
+import java.util.UUID
 
 /**
  * An appointment booked against a BookableService — parallel aggregate to
@@ -80,6 +81,17 @@ class Booking(
     var cancelledAt: Instant? = null,
     @Column(name = "cancellation_reason", columnDefinition = "text")
     var cancellationReason: String? = null,
+    /** Null means never reminded — same idempotency shape as Order.lastReminderSentAt, see BookingReminderJob. One-shot (not repeating) since a booking only has one upcoming appointment to remind about. */
+    @Column(name = "last_reminder_sent_at")
+    var lastReminderSentAt: Instant? = null,
+    /** Shared by every occurrence of the same weekly-recurring series (see BookingService.createBooking's occurrenceCount branch) — null for a one-off booking. Each occurrence is otherwise a fully independent Booking row (own status/payment/timeline/cancellation). */
+    @Column(name = "recurrence_group_id")
+    var recurrenceGroupId: UUID? = null,
+    /** Immutable snapshot of the coupon applied at checkout (if any) — same principle as Order.couponCode. Applied identically to every occurrence of a recurring series, but only recorded as one use of the coupon — see BookingService.createBooking. */
+    @Column(name = "coupon_code")
+    var couponCode: String? = null,
+    @Column(name = "discount_amount", nullable = false)
+    var discountAmount: Int = 0,
     @OneToMany(mappedBy = "booking", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("timestamp asc")
     var timeline: MutableList<BookingTimelineEntry> = mutableListOf(),

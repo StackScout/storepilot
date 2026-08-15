@@ -4,6 +4,7 @@ import com.storepilot.backend.common.PageResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
@@ -46,6 +47,24 @@ class StoreController(
     fun getSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {
         val settings = storeService.getSettings(storeId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(settings)
+    }
+
+    /** Owner-only — see StoreService.getStats's doc comment. */
+    @GetMapping("/api/stores/{storeId}/stats")
+    fun getStats(@PathVariable storeId: UUID): StoreStatsResponse = storeService.getStats(storeId)
+
+    @GetMapping("/api/stores/{storeId}/follow")
+    fun getFollowStatus(@PathVariable storeId: UUID): FollowStatusResponse =
+        FollowStatusResponse(storeService.isFollowing(storeId))
+
+    @PostMapping("/api/stores/{storeId}/follow")
+    fun follow(@PathVariable storeId: UUID): FollowStatusResponse =
+        FollowStatusResponse(storeService.follow(storeId))
+
+    @DeleteMapping("/api/stores/{storeId}/follow")
+    fun unfollow(@PathVariable storeId: UUID): ResponseEntity<Void> {
+        storeService.unfollow(storeId)
+        return ResponseEntity.noContent().build()
     }
 
     /** Public — see StoreService.getPublicSettings's doc comment. */

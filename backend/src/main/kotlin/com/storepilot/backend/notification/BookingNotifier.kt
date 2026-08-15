@@ -10,10 +10,9 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
- * Mirrors OrderNotifier exactly — booking-lifecycle email copy, status-
- * change touchpoints only (created/confirmed/cancelled), no time-based
- * "24h before your appointment" reminder job — see docs/features/bookings.md's
- * explicit v1 scope note.
+ * Mirrors OrderNotifier exactly — booking-lifecycle email copy plus, since
+ * BookingReminderJob was added, a time-based "your appointment is coming
+ * up" reminder (see bookingReminder below and docs/features/bookings.md).
  */
 @Component
 class BookingNotifier(
@@ -70,6 +69,21 @@ class BookingNotifier(
                 }
                 appendLine()
                 appendLine(bookingUrl(booking))
+            },
+        )
+    }
+
+    fun bookingReminder(booking: Booking) {
+        sendSafely(
+            to = booking.buyerEmail,
+            subject = "Reminder: your booking ${booking.bookingNumber} is coming up",
+            body = buildString {
+                appendLine("This is a reminder about your upcoming booking with ${booking.store.name}.")
+                appendLine()
+                appendLine("Service: ${booking.serviceName}")
+                appendLine("When: ${formatScheduledTime(booking)}")
+                appendLine()
+                appendLine("View your booking: ${bookingUrl(booking)}")
             },
         )
     }

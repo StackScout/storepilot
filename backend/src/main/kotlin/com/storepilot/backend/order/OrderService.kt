@@ -8,10 +8,13 @@ import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.ShippingDetails
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.sse.SseHub
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
+import com.storepilot.backend.coupon.CouponKind
+import com.storepilot.backend.coupon.CouponService
 import com.storepilot.backend.notification.OrderNotifier
 import com.storepilot.backend.product.ProductService
 import com.storepilot.backend.seller.SellerPlan
@@ -75,7 +78,16 @@ class OrderService(
     private val platformConfigService: PlatformConfigService,
     private val stripeService: StripeService,
     private val guestLookupOtpService: GuestLookupOtpService,
+    private val sseHub: SseHub,
+    private val couponService: CouponService,
 ) {
+    /** Fan-out to any subscribers on GET /api/orders/{id}/events — call after every write that changes what the buyer/seller sees on the order. */
+    private fun publishOrderEvent(order: Order): OrderResponse {
+        val response = order.toResponse(receiptStorageService, fileStorageService)
+        sseHub.publish("order:${order.id}", "status", response)
+        return response
+    }
+
     /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
     fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
         val seller = currentActor.requireSeller()
@@ -191,6 +203,16 @@ class OrderService(
         val subtotal = resolvedItems.sumOf { (product, quantity, _) -> product.price * quantity }
         val platformConfig = platformConfigService.current()
 
+        // Resolved (validated + computed, not yet recorded as used) before
+        // the fee/total math below — a coupon discounts the subtotal that
+        // both the platform fee and the buyer's total are derived from. Use
+        // is only recorded after the order is actually persisted (below),
+        // so a failed/aborted checkout never burns a use.
+        val couponResolution = input.couponCode?.takeIf { it.isNotBlank() }
+            ?.let { couponService.resolve(it, requireNotNull(store.id), CouponKind.ORDER, subtotal) }
+        val discountAmount = couponResolution?.discountAmount ?: 0
+        val discountedSubtotal = subtotal - discountAmount
+
         // fullName/phone matter regardless of delivery method (a courier or
         // the seller both need someone to hand the order to); the rest of
         // the address is meaningless for pickup, so it's only required for
@@ -217,7 +239,7 @@ class OrderService(
             ?.let { storeSettingsRepository.findById(it).orElse(null) }
             ?.transactionFeePercent
             ?: platformConfig.platformFeePercent
-        val platformFee = (BigDecimal(subtotal) * feePercent)
+        val platformFee = (BigDecimal(discountedSubtotal) * feePercent)
             .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
             .toInt()
 
@@ -256,7 +278,9 @@ class OrderService(
             deliveryMethod = deliveryMethod,
             shippingFee = shippingFee,
             platformFee = platformFee,
-            total = subtotal + shippingFee,
+            total = discountedSubtotal + shippingFee,
+            couponCode = couponResolution?.code,
+            discountAmount = discountAmount,
             status = OrderStatus.PENDING,
             paymentMethod = paymentMethod,
             paymentStatus = paymentStatus,
@@ -291,10 +315,11 @@ class OrderService(
 
         val saved = orderRepository.save(order)
         productService.decrementStock(resolvedItems.map { (product, quantity, _) -> requireNotNull(product.id) to quantity })
+        couponResolution?.let { couponService.recordUse(it.couponId) }
 
         orderNotifier.orderConfirmed(saved)
 
-        return saved.toResponse(receiptStorageService, fileStorageService)
+        return publishOrderEvent(saved)
     }
 
     /**
@@ -361,7 +386,7 @@ class OrderService(
         if (status == OrderStatus.SHIPPED) {
             orderNotifier.orderShipped(saved, courierReceipt)
         }
-        return saved.toResponse(receiptStorageService, fileStorageService)
+        return publishOrderEvent(saved)
     }
 
     /** POST /api/orders/{id}/receipt — buyer uploads proof of a bank transfer. */
@@ -387,7 +412,7 @@ class OrderService(
         )
         val saved = orderRepository.save(order)
         orderNotifier.receiptUploaded(saved)
-        return saved.toResponse(receiptStorageService, fileStorageService)
+        return publishOrderEvent(saved)
     }
 
     /** POST /api/orders/{id}/verify-bank-transfer — seller accepts or rejects the uploaded receipt. */
@@ -434,7 +459,7 @@ class OrderService(
         }
         val saved = orderRepository.save(order)
         orderNotifier.bankTransferVerified(saved, input.approved, input.note)
-        return saved.toResponse(receiptStorageService, fileStorageService)
+        return publishOrderEvent(saved)
     }
 
     /**
@@ -476,7 +501,7 @@ class OrderService(
                 },
             ),
         )
-        return orderRepository.save(order).toResponse(receiptStorageService, fileStorageService)
+        return publishOrderEvent(orderRepository.save(order))
     }
 
     private fun generateOrderNumber(now: Instant, countryCode: String): String {

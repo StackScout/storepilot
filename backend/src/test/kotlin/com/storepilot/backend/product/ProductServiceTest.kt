@@ -27,8 +27,9 @@ class ProductServiceTest {
     private val storeSettingsRepository = mockk<StoreSettingsRepository>()
     private val currentActor = mockk<CurrentActor>()
     private val fileStorageService = mockk<FileStorageService>(relaxed = true)
+    private val wishlistItemRepository = mockk<WishlistItemRepository>()
 
-    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService)
+    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService, wishlistItemRepository)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()

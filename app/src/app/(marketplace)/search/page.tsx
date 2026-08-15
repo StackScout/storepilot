@@ -3,6 +3,7 @@ import { SearchBar } from "@/components/marketplace/search-bar";
 import { CategoryFilter } from "@/components/marketplace/category-filter";
 import { PriceRangeFilter } from "@/components/marketplace/price-range-filter";
 import { SearchResults } from "@/components/marketplace/search-results";
+import { SaveSearchButton } from "@/components/marketplace/save-search-button";
 import { cn } from "@/lib/utils";
 import { productsService, storesService } from "@/services";
 import type { StoreCategory } from "@/types";
@@ -80,6 +81,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     return qs ? `/search?${qs}` : "/search";
   }
 
+  function savedQueryString() {
+    const search = baseParams();
+    if (sort !== "newest") search.set("sort", sort);
+    if (minPrice) search.set("minPrice", String(minPrice));
+    if (maxPrice) search.set("maxPrice", String(maxPrice));
+    return search.toString();
+  }
+
   const activePage = tab === "products" ? productsPage : storesPage;
   const prevHref = page > 0 ? pageHref(page) : null;
   const nextHref = page + 1 < activePage.totalPages ? pageHref(page + 2) : null;
@@ -114,13 +123,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 </Link>
               ))}
             </div>
-            <PriceRangeFilter
-              query={query}
-              category={category}
-              sort={sort}
-              minPrice={minPrice}
-              maxPrice={maxPrice}
-            />
+            <div className="flex items-center gap-2">
+              <PriceRangeFilter
+                query={query}
+                category={category}
+                sort={sort}
+                minPrice={minPrice}
+                maxPrice={maxPrice}
+              />
+              <SaveSearchButton queryString={savedQueryString()} />
+            </div>
           </div>
         ) : null}
       </div>

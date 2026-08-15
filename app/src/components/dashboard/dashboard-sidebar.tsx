@@ -14,10 +14,14 @@ import {
   Sparkles,
   CalendarClock,
   CalendarDays,
+  Tag,
+  Mail,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { storesService, billingService } from "@/services";
 
@@ -25,6 +29,8 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/products", label: "Products", icon: Package },
   { href: "/dashboard/orders", label: "Orders", icon: ClipboardList },
+  { href: "/dashboard/coupons", label: "Coupons", icon: Tag },
+  { href: "/dashboard/messages", label: "Messages", icon: Mail },
   { href: "/dashboard/payouts", label: "Payouts", icon: Wallet },
   { href: "/dashboard/settings", label: "Store settings", icon: Settings },
 ];
@@ -34,6 +40,7 @@ const BOOKING_NAV_ITEMS = [
   { href: "/dashboard/services", label: "Services", icon: CalendarClock },
   { href: "/dashboard/availability", label: "Availability", icon: CalendarDays },
   { href: "/dashboard/bookings", label: "Bookings", icon: ClipboardList },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function DashboardSidebarContent() {
@@ -108,16 +115,19 @@ export function DashboardSidebarContent() {
             </Link>
           )}
         </div>
-        {store?.verificationStatus === "active" ? (
-          <Link
-            href={`/stores/${store.slug}`}
-            className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium"
-          >
-            View storefront <ExternalLink className="size-3" />
-          </Link>
-        ) : (
-          <p className="text-muted-foreground text-xs">Storefront hidden until approved</p>
-        )}
+        <div className="flex items-center justify-between gap-2">
+          {store?.verificationStatus === "active" ? (
+            <Link
+              href={`/stores/${store.slug}`}
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium"
+            >
+              View storefront <ExternalLink className="size-3" />
+            </Link>
+          ) : (
+            <p className="text-muted-foreground text-xs">Storefront hidden until approved</p>
+          )}
+          <ThemeToggle className="-mr-2 size-8 shrink-0" />
+        </div>
       </div>
     </div>
   );

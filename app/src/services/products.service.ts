@@ -1,5 +1,5 @@
 import { apiClient, resolveAssetUrl, toQueryString } from "@/lib/api-client";
-import type { PageResponse, Product, ProductFormInput, StoreCategory } from "@/types";
+import type { PageResponse, Product, ProductFormInput, StoreCategory, WishlistStatus } from "@/types";
 
 /** Image URLs coming back from the backend may be relative (local FileStorageService) or already absolute (S3 presigned, or picsum.photos seed data) — normalize once here. */
 function normalizeProduct(product: Product): Product {
@@ -108,4 +108,24 @@ export async function updateProduct(
 /** DELETE /products/:id */
 export async function deleteProduct(id: string): Promise<void> {
   await apiClient.delete<void>(`/api/products/${id}`);
+}
+
+/** GET /products/:id/wishlist — public; reports false for a signed-out visitor. */
+export async function getWishlistStatus(productId: string): Promise<WishlistStatus> {
+  return apiClient.get<WishlistStatus>(`/api/products/${productId}/wishlist`);
+}
+
+/** POST /products/:id/wishlist — requires a signed-in buyer. Idempotent. */
+export async function addToWishlist(productId: string): Promise<WishlistStatus> {
+  return apiClient.post<WishlistStatus>(`/api/products/${productId}/wishlist`);
+}
+
+/** DELETE /products/:id/wishlist — requires a signed-in buyer. Idempotent. */
+export async function removeFromWishlist(productId: string): Promise<void> {
+  await apiClient.delete<void>(`/api/products/${productId}/wishlist`);
+}
+
+/** GET /me/wishlist — the signed-in buyer's saved products. */
+export async function listMyWishlist(): Promise<Product[]> {
+  return (await apiClient.get<Product[]>("/api/me/wishlist")).map(normalizeProduct);
 }

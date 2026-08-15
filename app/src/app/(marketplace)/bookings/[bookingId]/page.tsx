@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CalendarX, CheckCircle2, Circle, Clock, Loader2, MessageCircle, Upload, XCircle } from "lucide-react";
+import { CalendarX, CheckCircle2, Clock, Loader2, MessageCircle, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,12 @@ import { Separator } from "@/components/ui/separator";
 import { CancelBookingButton } from "@/components/marketplace/cancel-booking-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BookingStatusBadge } from "@/components/shared/booking-status-badge";
+import { StatusTimeline } from "@/components/shared/status-timeline";
 import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, bookingPaymentMethodLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { useLiveStatus } from "@/hooks/use-live-status";
 import { bookingsService, storesService } from "@/services";
 import type { Booking, Store, StorePublicSettings } from "@/types";
 
@@ -29,6 +31,7 @@ export default function BookingConfirmationPage({
   const [booking, setBooking] = useState<Booking | null | undefined>(undefined);
   const [store, setStore] = useState<Store | null>(null);
   const [storeSettings, setStoreSettings] = useState<StorePublicSettings | null>(null);
+  const [seriesBookings, setSeriesBookings] = useState<Booking[]>([]);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
 
@@ -38,13 +41,15 @@ export default function BookingConfirmationPage({
       if (cancelled) return;
       setBooking(found);
       if (found) {
-        const [s, settings] = await Promise.all([
+        const [s, settings, series] = await Promise.all([
           storesService.getStoreById(found.storeId),
           found.paymentMethod === "bank-transfer" ? storesService.getPublicStoreSettings(found.storeId) : null,
+          found.recurrenceGroupId ? bookingsService.listBookingsByRecurrenceGroup(found.recurrenceGroupId) : [],
         ]);
         if (!cancelled) {
           setStore(s);
           setStoreSettings(settings);
+          setSeriesBookings(series);
         }
       }
     });
@@ -52,6 +57,9 @@ export default function BookingConfirmationPage({
       cancelled = true;
     };
   }, [bookingId]);
+
+  // Live-updates the page without a manual refresh once the seller acts — see BookingController.subscribeToEvents.
+  useLiveStatus(booking ? `/api/bookings/${bookingId}/events` : null, bookingsService.normalizeBooking, setBooking);
 
   async function handleUploadReceipt() {
     if (!receiptFile || !booking) return;
@@ -130,24 +138,7 @@ export default function BookingConfirmationPage({
             <BookingStatusBadge status={booking.status} />
           </div>
 
-          <ol className="space-y-4">
-            {booking.timeline.map((entry, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="mt-0.5">
-                  {i === booking.timeline.length - 1 ? (
-                    <CheckCircle2 className="text-primary size-4" />
-                  ) : (
-                    <Circle className="text-muted-foreground size-4" />
-                  )}
-                </span>
-                <div>
-                  <p className="text-sm font-medium">{entry.label}</p>
-                  <p className="text-muted-foreground text-xs">{formatDateTime(entry.timestamp)}</p>
-                  {entry.note ? <p className="text-muted-foreground text-xs">{entry.note}</p> : null}
-                </div>
-              </li>
-            ))}
-          </ol>
+          <StatusTimeline entries={booking.timeline} />
 
           <Separator />
 
@@ -159,9 +150,39 @@ export default function BookingConfirmationPage({
             </p>
           </div>
 
+          {seriesBookings.length > 1 ? (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <h2 className="font-semibold">Weekly series ({seriesBookings.length} sessions)</h2>
+                <div className="divide-y">
+                  {seriesBookings.map((session) => (
+                    <Link
+                      key={session.id}
+                      href={`/bookings/${session.id}`}
+                      className={cn(
+                        "hover:bg-accent/50 -mx-1 flex items-center justify-between gap-3 rounded-md px-1 py-2 text-sm",
+                        session.id === booking.id && "bg-accent/50 font-medium",
+                      )}
+                    >
+                      <span>{formatDateTime(session.scheduledStart)}</span>
+                      <BookingStatusBadge status={session.status} />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : null}
+
           <Separator />
 
           <div className="space-y-2 text-sm">
+            {booking.discountAmount > 0 ? (
+              <div className="text-success-foreground flex justify-between">
+                <span>Discount{booking.couponCode ? ` (${booking.couponCode})` : ""}</span>
+                <span>-{formatCurrency(booking.discountAmount, currency)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between text-base font-semibold">
               <span>Total</span>
               <span>{formatCurrency(booking.total, currency)}</span>

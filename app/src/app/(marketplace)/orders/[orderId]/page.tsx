@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2, Circle, Clock, FileText, Loader2, MessageCircle, PackageX, Truck, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, FileText, Loader2, MessageCircle, PackageX, Truck, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,12 +13,14 @@ import { CancelOrderButton } from "@/components/marketplace/cancel-order-button"
 import { EmptyState } from "@/components/shared/empty-state";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
+import { StatusTimeline } from "@/components/shared/status-timeline";
 import { formatCurrency } from "@/lib/currency";
-import { formatDateTime, paymentMethodLabel } from "@/lib/format";
+import { paymentMethodLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { useCart } from "@/hooks/use-cart";
+import { useLiveStatus } from "@/hooks/use-live-status";
 import { ordersService, storesService } from "@/services";
 import type { Order, Store, StorePublicSettings } from "@/types";
 
@@ -57,6 +59,9 @@ export default function OrderTrackingPage({
       cancelled = true;
     };
   }, [orderId]);
+
+  // Live-updates the page (status, timeline, receipt) without a manual refresh once the seller acts — see OrderController.subscribeToEvents.
+  useLiveStatus(order ? `/api/orders/${orderId}/events` : null, ordersService.normalizeOrder, setOrder);
 
   // Checkout deliberately leaves the cart untouched when redirecting to a
   // payment gateway (PayHere/Stripe), so a declined/cancelled payment
@@ -163,24 +168,7 @@ export default function OrderTrackingPage({
             <OrderStatusBadge status={order.status} />
           </div>
 
-          <ol className="space-y-4">
-            {order.timeline.map((entry, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="mt-0.5">
-                  {i === order.timeline.length - 1 ? (
-                    <CheckCircle2 className="text-primary size-4" />
-                  ) : (
-                    <Circle className="text-muted-foreground size-4" />
-                  )}
-                </span>
-                <div>
-                  <p className="text-sm font-medium">{entry.label}</p>
-                  <p className="text-muted-foreground text-xs">{formatDateTime(entry.timestamp)}</p>
-                  {entry.note ? <p className="text-muted-foreground text-xs">{entry.note}</p> : null}
-                </div>
-              </li>
-            ))}
-          </ol>
+          <StatusTimeline entries={order.timeline} />
 
           {order.trackingNumber && order.courierServiceName ? (
             <>
@@ -239,6 +227,12 @@ export default function OrderTrackingPage({
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(order.subtotal, currency)}</span>
             </div>
+            {order.discountAmount > 0 ? (
+              <div className="text-success-foreground flex justify-between">
+                <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                <span>-{formatCurrency(order.discountAmount, currency)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between">
               <span className="text-muted-foreground">{order.deliveryMethod === "pickup" ? "Pickup" : "Shipping"}</span>
               <span>

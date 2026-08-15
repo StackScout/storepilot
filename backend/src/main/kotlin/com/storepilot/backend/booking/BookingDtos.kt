@@ -28,6 +28,8 @@ data class BookingResponse(
     val scheduledEnd: Instant,
     val platformFee: Int,
     val total: Int,
+    val couponCode: String?,
+    val discountAmount: Int,
     val status: String,
     val paymentMethod: String,
     val paymentStatus: String,
@@ -39,6 +41,7 @@ data class BookingResponse(
     val cancellationReason: String?,
     val timeline: List<BookingTimelineEntryResponse>,
     val createdAt: Instant,
+    val recurrenceGroupId: UUID?,
 )
 
 /**
@@ -61,6 +64,9 @@ data class CheckoutBookingInput(
     @field:Email(message = "Enter a valid email")
     @field:NotBlank(message = "Enter a valid email")
     val buyerEmail: String,
+    /** When >1, creates this many weekly-repeating occurrences (same weekday/time, 7 days apart) sharing one recurrenceGroupId — see BookingService.createBooking. Null/1 means a normal one-off booking. Restricted to cod/bank-transfer (see the same method) since a single online-gateway checkout can't cleanly cover N separate charges. */
+    val occurrenceCount: Int? = null,
+    val couponCode: String? = null,
 )
 
 data class BookingStatusUpdateInput(

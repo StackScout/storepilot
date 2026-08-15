@@ -163,6 +163,8 @@ notifications:
   reminder-check-interval-ms: ${NOTIFICATIONS_REMINDER_CHECK_INTERVAL_MS:3600000}
   ses-sender-email: ${NOTIFICATIONS_SES_SENDER_EMAIL:}
   admin-notification-email: ${NOTIFICATIONS_ADMIN_EMAIL:admin@storepilot.test}
+  booking-reminder-before-hours: ${NOTIFICATIONS_BOOKING_REMINDER_BEFORE_HOURS:24}
+  low-stock-threshold: ${NOTIFICATIONS_LOW_STOCK_THRESHOLD:5}
 
 management:
   endpoints:

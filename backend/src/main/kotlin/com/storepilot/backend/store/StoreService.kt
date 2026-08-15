@@ -14,6 +14,7 @@ import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
+import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.seller.SellerRepository
@@ -46,6 +47,8 @@ class StoreService(
     private val adminNotificationService: AdminNotificationService,
     private val platformConfigService: PlatformConfigService,
     private val auditLogService: AuditLogService,
+    private val orderRepository: OrderRepository,
+    private val followRepository: FollowRepository,
 ) {
     private val log = LoggerFactory.getLogger(StoreService::class.java)
 
@@ -104,6 +107,66 @@ class StoreService(
     fun getSettings(storeId: UUID): StoreSettingsResponse? {
         requireOwnedStore(storeId)
         return storeSettingsRepository.findById(storeId).orElse(null)?.toResponse(fileStorageService)
+    }
+
+    /**
+     * GET /api/stores/{storeId}/stats — dashboard trend cards. Rolling
+     * windows rather than calendar weeks (simpler, no timezone-boundary
+     * edge cases) — the last 7 days vs the 7 days before that, both ending
+     * "now". Revenue/fees only count PAID, non-cancelled orders — the same
+     * filter the dashboard's own client-side revenue reduce already uses.
+     */
+    fun getStats(storeId: UUID): StoreStatsResponse {
+        requireOwnedStore(storeId)
+        val now = java.time.Instant.now()
+        val currentFrom = now.minus(7, java.time.temporal.ChronoUnit.DAYS)
+        val previousFrom = now.minus(14, java.time.temporal.ChronoUnit.DAYS)
+        return StoreStatsResponse(
+            revenueCurrentPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, currentFrom, now),
+            revenuePreviousPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, previousFrom, currentFrom),
+            platformFeeCurrentPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, currentFrom, now),
+            platformFeePreviousPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, previousFrom, currentFrom),
+        )
+    }
+
+    /**
+     * GET /api/stores/{storeId}/follow — works for a signed-out visitor too
+     * (permitAll route), just reports false — see
+     * CookieBearerTokenResolver's doc comment on optional-auth guest
+     * routes. Plain @Transactional (not the class default readOnly), same
+     * reasoning as BuyerService.getCurrent() — buyerOrNull() may
+     * JIT-provision a row on this caller's first request.
+     */
+    @Transactional
+    fun isFollowing(storeId: UUID): Boolean {
+        val buyer = currentActor.buyerOrNull() ?: return false
+        return followRepository.existsByBuyerIdAndStoreId(requireNotNull(buyer.id), storeId)
+    }
+
+    /** POST /api/stores/{storeId}/follow — idempotent: following an already-followed store is a silent no-op, not a 409. */
+    @Transactional
+    fun follow(storeId: UUID): Boolean {
+        val buyer = currentActor.requireBuyer()
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        val buyerId = requireNotNull(buyer.id)
+        if (!followRepository.existsByBuyerIdAndStoreId(buyerId, storeId)) {
+            followRepository.save(Follow(buyer = buyer, store = store))
+            store.followerCount += 1
+            storeRepository.save(store)
+        }
+        return true
+    }
+
+    /** DELETE /api/stores/{storeId}/follow — idempotent: unfollowing a store you don't follow is a silent no-op. */
+    @Transactional
+    fun unfollow(storeId: UUID) {
+        val buyer = currentActor.requireBuyer()
+        val buyerId = requireNotNull(buyer.id)
+        val follow = followRepository.findByBuyerIdAndStoreId(buyerId, storeId) ?: return
+        followRepository.delete(follow)
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        store.followerCount = (store.followerCount - 1).coerceAtLeast(0)
+        storeRepository.save(store)
     }
 
     /** GET /api/stores/{storeId}/public-settings — buyer-safe subset, no auth required. */

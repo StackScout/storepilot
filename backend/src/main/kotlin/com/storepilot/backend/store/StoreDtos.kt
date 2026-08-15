@@ -211,3 +211,16 @@ data class StoreVerificationChangeRequestResponse(
     val reviewedAt: Instant?,
     val reviewedByEmail: String?,
 )
+
+/** GET /api/stores/{storeId}/follow. */
+data class FollowStatusResponse(
+    val following: Boolean,
+)
+
+/** GET /api/stores/{storeId}/stats — rolling 7-day window vs the 7 days before it, see StoreService.getStats. */
+data class StoreStatsResponse(
+    val revenueCurrentPeriod: Int,
+    val revenuePreviousPeriod: Int,
+    val platformFeeCurrentPeriod: Int,
+    val platformFeePreviousPeriod: Int,
+)

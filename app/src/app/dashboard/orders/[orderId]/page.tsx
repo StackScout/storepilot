@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,14 +9,19 @@ import { ArrowLeft, Check, ExternalLink, Loader2, PackageX, X } from "lucide-rea
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { OrderStatusSelect } from "@/components/dashboard/order-status-select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PriceDisplay } from "@/components/shared/price-display";
+import { StatusTimeline } from "@/components/shared/status-timeline";
 import { toApiUrl } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, paymentMethodLabel } from "@/lib/format";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { useLiveStatus } from "@/hooks/use-live-status";
 import { ordersService } from "@/services";
+import type { Order } from "@/types";
 
 export default function DashboardOrderDetailPage({
   params,
@@ -33,11 +38,19 @@ export default function DashboardOrderDetailPage({
     queryFn: () => ordersService.getOrderById(orderId),
   });
 
+  // Live-updates the page (e.g. the moment a buyer uploads a receipt) without a manual refresh — see OrderController.subscribeToEvents.
+  useLiveStatus(order ? `/api/orders/${orderId}/events` : null, ordersService.normalizeOrder, (updated: Order) =>
+    queryClient.setQueryData(["order", orderId], updated),
+  );
+
+  const [verifyNote, setVerifyNote] = useState("");
+
   const verifyMutation = useMutation({
-    mutationFn: (approved: boolean) => ordersService.verifyBankTransfer(orderId, approved),
+    mutationFn: (approved: boolean) => ordersService.verifyBankTransfer(orderId, approved, verifyNote.trim() || undefined),
     onSuccess: (_, approved) => {
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
       toast.success(approved ? "Payment confirmed" : "Receipt rejected");
+      setVerifyNote("");
     },
     onError: () => toast.error("Couldn't update the payment. Please try again."),
   });
@@ -54,7 +67,8 @@ export default function DashboardOrderDetailPage({
     return <EmptyState icon={PackageX} title="Order not found" />;
   }
 
-  const netPayout = order.subtotal - order.platformFee;
+  // Platform fee is computed on the discounted subtotal server-side — see OrderService.createOrder.
+  const netPayout = order.subtotal - order.discountAmount - order.platformFee;
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -106,6 +120,12 @@ export default function DashboardOrderDetailPage({
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatCurrency(order.subtotal, currency)}</span>
               </div>
+              {order.discountAmount > 0 ? (
+                <div className="text-muted-foreground flex justify-between">
+                  <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                  <span>-{formatCurrency(order.discountAmount, currency)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping (buyer paid)</span>
                 <span>{formatCurrency(order.shippingFee, currency)}</span>
@@ -119,6 +139,13 @@ export default function DashboardOrderDetailPage({
                 <span>Your payout</span>
                 <span>{formatCurrency(netPayout, currency)}</span>
               </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Timeline</h3>
+              <StatusTimeline entries={order.timeline} />
             </div>
           </CardContent>
         </Card>
@@ -181,7 +208,20 @@ export default function DashboardOrderDetailPage({
                       <ExternalLink className="size-3.5" /> View receipt
                     </Button>
                     {order.paymentStatus === "unpaid" ? (
-                      <div className="flex gap-2">
+                      <div className="space-y-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="verifyNote" className="text-xs font-normal">
+                            Note for the buyer (optional)
+                          </Label>
+                          <Textarea
+                            id="verifyNote"
+                            rows={2}
+                            value={verifyNote}
+                            onChange={(e) => setVerifyNote(e.target.value)}
+                            placeholder="e.g. Receipt doesn't match the order total"
+                          />
+                        </div>
+                        <div className="flex gap-2">
                         <Button
                           type="button"
                           size="sm"
@@ -201,6 +241,7 @@ export default function DashboardOrderDetailPage({
                         >
                           <X className="size-3.5" /> Reject
                         </Button>
+                        </div>
                       </div>
                     ) : (
                       <p className="text-muted-foreground text-sm">

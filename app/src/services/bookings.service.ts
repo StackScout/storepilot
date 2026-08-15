@@ -1,10 +1,15 @@
 import { apiClient, toQueryString } from "@/lib/api-client";
-import type { Booking, BookingStatus, CancelBookingInput, CheckoutBookingInput, PayHereCheckoutPayload } from "@/types";
+import type { Booking, BookingAnalytics, BookingStatus, CancelBookingInput, CheckoutBookingInput, PayHereCheckoutPayload } from "@/types";
 
 /** GET /stores/:storeId/bookings */
 export async function listBookingsByStore(storeId: string, status?: BookingStatus): Promise<Booking[]> {
   const qs = toQueryString({ status });
   return apiClient.get<Booking[]>(`/api/stores/${storeId}/bookings${qs}`);
+}
+
+/** GET /stores/:storeId/booking-analytics — Pro-only; the backend 403s with a "Booking analytics is a Pro feature" message for a non-Pro seller. */
+export async function getBookingAnalytics(storeId: string): Promise<BookingAnalytics> {
+  return apiClient.get<BookingAnalytics>(`/api/stores/${storeId}/booking-analytics`);
 }
 
 /** GET /api/me/bookings — the signed-in buyer's own booking history, derived from the auth cookie. */
@@ -15,6 +20,16 @@ export async function listMyBookings(): Promise<Booking[]> {
 /** GET /bookings/:id */
 export async function getBookingById(id: string): Promise<Booking | null> {
   return apiClient.getOrNull<Booking>(`/api/bookings/${id}`);
+}
+
+/** No transformation needed today (no relative asset URLs on a booking) — kept for symmetry with orders.service.ts's normalizeOrder so callers like useLiveStatus don't need to special-case bookings. */
+export function normalizeBooking(booking: Booking): Booking {
+  return booking;
+}
+
+/** GET /bookings/recurrence/:groupId — every occurrence of a recurring series, chronological order. */
+export async function listBookingsByRecurrenceGroup(groupId: string): Promise<Booking[]> {
+  return apiClient.get<Booking[]>(`/api/bookings/recurrence/${groupId}`);
 }
 
 /** POST /bookings/lookup/request-code — first step of guest lookup, emails a one-time code. Always resolves, regardless of whether bookingNumber/phone matched anything. */

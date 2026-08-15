@@ -49,6 +49,8 @@ export interface Order {
   shippingFee: number;
   platformFee: number;
   total: number;
+  couponCode?: string;
+  discountAmount: number;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
@@ -76,6 +78,7 @@ export interface CheckoutInput {
   paymentMethod: PaymentMethod;
   deliveryMethod: DeliveryMethod;
   email: string;
+  couponCode?: string;
 }
 
 /** Server-generated payload for PayHere's Checkout API form redirect — hash is computed backend-side so the merchant secret never reaches the browser. */

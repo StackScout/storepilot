@@ -58,4 +58,19 @@ class ProductController(
         productService.delete(id)
         return ResponseEntity.noContent().build()
     }
+
+    @GetMapping("/api/products/{id}/wishlist")
+    fun getWishlistStatus(@PathVariable id: UUID): WishlistStatusResponse = WishlistStatusResponse(productService.isWishlisted(id))
+
+    @PostMapping("/api/products/{id}/wishlist")
+    fun addToWishlist(@PathVariable id: UUID): WishlistStatusResponse = WishlistStatusResponse(productService.addToWishlist(id))
+
+    @DeleteMapping("/api/products/{id}/wishlist")
+    fun removeFromWishlist(@PathVariable id: UUID): ResponseEntity<Void> {
+        productService.removeFromWishlist(id)
+        return ResponseEntity.noContent().build()
+    }
+
+    @GetMapping("/api/me/wishlist")
+    fun listWishlist(): List<ProductResponse> = productService.listWishlist()
 }

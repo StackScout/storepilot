@@ -7,6 +7,8 @@ import { BadgeCheck, ExternalLink, MapPin, MessageCircle, PackageX, Users } from
 import { StoreProductGrid } from "@/components/marketplace/store-product-grid";
 import { StoreServiceGrid } from "@/components/marketplace/store-service-grid";
 import { ReviewsSection } from "@/components/marketplace/reviews-section";
+import { FollowStoreButton } from "@/components/marketplace/follow-store-button";
+import { MessageSellerButton } from "@/components/marketplace/message-seller-button";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
@@ -102,13 +104,16 @@ export function StorePageContent({
               <p className="text-muted-foreground text-sm">{store.tagline}</p>
             </div>
           </div>
-          <Button
-            render={<a href={whatsappHref} target="_blank" rel="noopener noreferrer" />}
-            size="lg"
-            className="shrink-0"
-          >
-            <MessageCircle className="size-4" /> Message on WhatsApp
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <FollowStoreButton storeId={store.id} />
+            <MessageSellerButton storeId={store.id} />
+            <Button
+              render={<a href={whatsappHref} target="_blank" rel="noopener noreferrer" />}
+              size="lg"
+            >
+              <MessageCircle className="size-4" /> Message on WhatsApp
+            </Button>
+          </div>
         </div>
 
         <div className="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-b pb-6 text-sm">

@@ -5,8 +5,10 @@ import type {
   StoreApplicationInput,
   StoreCategory,
   StoreProfileInput,
+  FollowStatus,
   StorePublicSettings,
   StoreSettings,
+  StoreStats,
   StoreVerificationChangeRequest,
   StoreVerificationChangeRequestStatus,
   StoreVerificationStatus,
@@ -83,6 +85,26 @@ export async function getStoreSettings(storeId: string): Promise<StoreSettings |
 /** GET /stores/:id/public-settings — no auth required; buyer-safe subset for checkout/order pages. */
 export async function getPublicStoreSettings(storeId: string): Promise<StorePublicSettings | null> {
   return apiClient.getOrNull<StorePublicSettings>(`/api/stores/${storeId}/public-settings`);
+}
+
+/** GET /stores/:id/stats — owner-only dashboard trend cards, rolling 7-day window vs the 7 days before it. */
+export async function getStoreStats(storeId: string): Promise<StoreStats> {
+  return apiClient.get<StoreStats>(`/api/stores/${storeId}/stats`);
+}
+
+/** GET /stores/:id/follow — public; reports false for a signed-out visitor. */
+export async function getFollowStatus(storeId: string): Promise<FollowStatus> {
+  return apiClient.get<FollowStatus>(`/api/stores/${storeId}/follow`);
+}
+
+/** POST /stores/:id/follow — requires a signed-in buyer. Idempotent. */
+export async function followStore(storeId: string): Promise<FollowStatus> {
+  return apiClient.post<FollowStatus>(`/api/stores/${storeId}/follow`);
+}
+
+/** DELETE /stores/:id/follow — requires a signed-in buyer. Idempotent. */
+export async function unfollowStore(storeId: string): Promise<void> {
+  await apiClient.delete<void>(`/api/stores/${storeId}/follow`);
 }
 
 /** PATCH /stores/:id/settings — upsert, same as the backend service. */

@@ -13,7 +13,20 @@ import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { ordersService, productsService } from "@/services";
+import { ordersService, productsService, storesService } from "@/services";
+
+/** "+12.4% vs last week" / "-8.2% vs last week" — undefined when there's nothing to compare (both periods zero). */
+function periodTrend(current: number, previous: number): { trend?: string; trendDirection?: "up" | "down" } {
+  if (previous === 0) {
+    return current > 0 ? { trend: "New this week", trendDirection: "up" } : {};
+  }
+  const percent = ((current - previous) / previous) * 100;
+  const sign = percent >= 0 ? "+" : "";
+  return {
+    trend: `${sign}${percent.toFixed(1)}% vs last week`,
+    trendDirection: percent >= 0 ? "up" : "down",
+  };
+}
 
 export default function DashboardOverviewPage() {
   const storeId = useSellerStoreId();
@@ -30,6 +43,10 @@ export default function DashboardOverviewPage() {
   const productsQuery = useQuery({
     queryKey: ["products", "store", storeId],
     queryFn: () => productsService.listProductsByStore(storeId),
+  });
+  const statsQuery = useQuery({
+    queryKey: ["store-stats", storeId],
+    queryFn: () => storesService.getStoreStats(storeId),
   });
 
   const orders = ordersQuery.data?.content ?? [];
@@ -55,13 +72,21 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Revenue (paid)" value={formatCurrency(revenue, currency)} icon={Wallet} />
+        <StatCard
+          label="Revenue (paid)"
+          value={formatCurrency(revenue, currency)}
+          icon={Wallet}
+          {...(statsQuery.data ? periodTrend(statsQuery.data.revenueCurrentPeriod, statsQuery.data.revenuePreviousPeriod) : {})}
+        />
         <StatCard label="Pending orders" value={String(pendingCount)} icon={ClipboardList} />
         <StatCard label="Active products" value={String(activeProducts.length)} icon={Package} />
         <StatCard
           label={`Platform fees (${platformFeePercent}%)`}
           value={formatCurrency(platformFees, currency)}
           icon={Wallet}
+          {...(statsQuery.data
+            ? periodTrend(statsQuery.data.platformFeeCurrentPeriod, statsQuery.data.platformFeePreviousPeriod)
+            : {})}
         />
       </div>
 

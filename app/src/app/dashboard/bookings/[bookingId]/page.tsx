@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,13 +8,18 @@ import { ArrowLeft, CalendarX, Check, ExternalLink, Loader2, X } from "lucide-re
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { BookingStatusSelect } from "@/components/dashboard/booking-status-select";
 import { EmptyState } from "@/components/shared/empty-state";
+import { StatusTimeline } from "@/components/shared/status-timeline";
 import { toApiUrl } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, bookingPaymentMethodLabel } from "@/lib/format";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { useLiveStatus } from "@/hooks/use-live-status";
 import { bookingsService } from "@/services";
+import type { Booking } from "@/types";
 
 export default function DashboardBookingDetailPage({
   params,
@@ -31,11 +36,20 @@ export default function DashboardBookingDetailPage({
     queryFn: () => bookingsService.getBookingById(bookingId),
   });
 
+  // Live-updates the page without a manual refresh — see BookingController.subscribeToEvents.
+  useLiveStatus(booking ? `/api/bookings/${bookingId}/events` : null, bookingsService.normalizeBooking, (updated: Booking) =>
+    queryClient.setQueryData(["booking", bookingId], updated),
+  );
+
+  const [verifyNote, setVerifyNote] = useState("");
+
   const verifyMutation = useMutation({
-    mutationFn: (approved: boolean) => bookingsService.verifyBookingBankTransfer(bookingId, approved),
+    mutationFn: (approved: boolean) =>
+      bookingsService.verifyBookingBankTransfer(bookingId, approved, verifyNote.trim() || undefined),
     onSuccess: (_, approved) => {
       queryClient.invalidateQueries({ queryKey: ["booking", bookingId] });
       toast.success(approved ? "Payment confirmed" : "Receipt rejected");
+      setVerifyNote("");
     },
     onError: () => toast.error("Couldn't update the payment. Please try again."),
   });
@@ -52,7 +66,8 @@ export default function DashboardBookingDetailPage({
     return <EmptyState icon={CalendarX} title="Booking not found" />;
   }
 
-  const netPayout = booking.servicePrice - booking.platformFee;
+  // total (not servicePrice) is the actual charged/discounted amount the platform fee was computed on — see BookingService.createBooking.
+  const netPayout = booking.total - booking.platformFee;
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -86,6 +101,12 @@ export default function DashboardBookingDetailPage({
                 <span className="text-muted-foreground">Service price</span>
                 <span>{formatCurrency(booking.servicePrice, currency)}</span>
               </div>
+              {booking.discountAmount > 0 ? (
+                <div className="text-muted-foreground flex justify-between">
+                  <span>Coupon{booking.couponCode ? ` (${booking.couponCode})` : ""}</span>
+                  <span>-{formatCurrency(booking.discountAmount, currency)}</span>
+                </div>
+              ) : null}
               <div className="text-danger-foreground flex justify-between">
                 <span>Platform fee</span>
                 <span>-{formatCurrency(booking.platformFee, currency)}</span>
@@ -111,15 +132,7 @@ export default function DashboardBookingDetailPage({
 
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">Timeline</h3>
-              <ol className="space-y-2">
-                {booking.timeline.map((entry, i) => (
-                  <li key={i} className="text-sm">
-                    <span className="font-medium">{entry.label}</span>{" "}
-                    <span className="text-muted-foreground">{formatDateTime(entry.timestamp)}</span>
-                    {entry.note ? <p className="text-muted-foreground text-xs">{entry.note}</p> : null}
-                  </li>
-                ))}
-              </ol>
+              <StatusTimeline entries={booking.timeline} />
             </div>
           </CardContent>
         </Card>
@@ -163,26 +176,40 @@ export default function DashboardBookingDetailPage({
                       <ExternalLink className="size-3.5" /> View receipt
                     </Button>
                     {booking.paymentStatus === "unpaid" ? (
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="flex-1"
-                          disabled={verifyMutation.isPending}
-                          onClick={() => verifyMutation.mutate(true)}
-                        >
-                          <Check className="size-3.5" /> Confirm payment
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          disabled={verifyMutation.isPending}
-                          onClick={() => verifyMutation.mutate(false)}
-                        >
-                          <X className="size-3.5" /> Reject
-                        </Button>
+                      <div className="space-y-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="verifyNote" className="text-xs font-normal">
+                            Note for the buyer (optional)
+                          </Label>
+                          <Textarea
+                            id="verifyNote"
+                            rows={2}
+                            value={verifyNote}
+                            onChange={(e) => setVerifyNote(e.target.value)}
+                            placeholder="e.g. Receipt doesn't match the booking total"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="flex-1"
+                            disabled={verifyMutation.isPending}
+                            onClick={() => verifyMutation.mutate(true)}
+                          >
+                            <Check className="size-3.5" /> Confirm payment
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            disabled={verifyMutation.isPending}
+                            onClick={() => verifyMutation.mutate(false)}
+                          >
+                            <X className="size-3.5" /> Reject
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <p className="text-muted-foreground text-sm">

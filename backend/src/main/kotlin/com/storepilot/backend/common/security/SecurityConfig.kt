@@ -65,6 +65,17 @@ class SecurityConfig {
                     // GET /api/stores/*/public-settings instead, which stays
                     // covered by that broader permitAll rule.
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/settings").hasRole("SELLER")
+                    // Same first-match-wins reasoning — revenue/fee trend
+                    // data isn't public.
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/stats").hasRole("SELLER")
+                    // Reading follow status stays public (permitAll below
+                    // via the broader GET /api/stores/** rule) — only
+                    // toggling it requires a buyer.
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/follow").hasRole("BUYER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/stores/*/follow").hasRole("BUYER")
+                    // Same pattern for wishlisting a product.
+                    .requestMatchers(HttpMethod.POST, "/api/products/*/wishlist").hasRole("BUYER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/products/*/wishlist").hasRole("BUYER")
                     // Same first-match-wins reasoning as /settings above —
                     // a seller's own pending verification-change-request
                     // status is not public.
@@ -93,6 +104,8 @@ class SecurityConfig {
                     // client-supplied field (see OrderDtos.kt).
                     .requestMatchers(HttpMethod.POST, "/api/orders").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/orders/*").permitAll()
+                    // Same "order ID is proof enough" model as the GET above — see OrderController.subscribeToEvents.
+                    .requestMatchers(HttpMethod.GET, "/api/orders/*/events").permitAll()
                     // Guest lookup is now a two-step, code-verified flow —
                     // see OrderService.requestLookupCode's doc comment —
                     // rather than a single GET keyed on phone alone.
@@ -102,6 +115,10 @@ class SecurityConfig {
                     // credential" guest model as orders above.
                     .requestMatchers(HttpMethod.POST, "/api/bookings").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/bookings/*").permitAll()
+                    // Same "booking ID is proof enough" model as the GET above — see BookingController.subscribeToEvents.
+                    .requestMatchers(HttpMethod.GET, "/api/bookings/*/events").permitAll()
+                    // Same model again — a recurrence group id is equally unguessable, see BookingController.listByRecurrenceGroup.
+                    .requestMatchers(HttpMethod.GET, "/api/bookings/recurrence/*").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/bookings/lookup/request-code", "/api/bookings/lookup/verify").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/bookings/*/receipt", "/api/bookings/*/cancel", "/api/bookings/*/payhere-checkout", "/api/bookings/*/stripe-checkout").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/payments/payhere/notify").permitAll()
@@ -109,6 +126,20 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
                     // Signature-verified inside SellerBillingWebhookService — see its doc comment.
                     .requestMatchers(HttpMethod.POST, "/api/billing/stripe/webhook").permitAll()
+                    // Side-effect-free dry run — see CouponService.preview's doc comment.
+                    .requestMatchers(HttpMethod.POST, "/api/coupons/preview").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/coupons").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/coupons").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.PATCH, "/api/coupons/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/coupons/*").hasRole("SELLER")
+                    // /api/conversations/** (get, list messages, send) is
+                    // deliberately left to the anyRequest().authenticated()
+                    // catch-all below — buyer or seller can both be a valid
+                    // participant, and MessagingService.requireParticipant
+                    // is the actual gate (unlike order/booking's public
+                    // "ID is proof enough" model, a conversation is private).
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/conversations").hasRole("BUYER")
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/conversations").hasRole("SELLER")
                     // Seller's own store/plan — must come before the broader
                     // /api/me/** buyer rule below (first-match-wins).
                     .requestMatchers(HttpMethod.GET, "/api/me/store").hasRole("SELLER")
@@ -158,6 +189,8 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/verify-bank-transfer").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/bookings").hasRole("SELLER")
+                    // Pro-plan gate is enforced inside BookingAnalyticsService, not here — this matcher just documents intent.
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/booking-analytics").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/bookings/*/status").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/bookings/*/verify-bank-transfer").hasRole("SELLER")
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")

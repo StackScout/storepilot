@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CalendarClock, LogOut, MapPin, Package, Star, Trash2, User } from "lucide-react";
+import { CalendarClock, ChevronRight, Heart, LogOut, Mail, MapPin, Package, Search, Star, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -14,7 +14,15 @@ import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { AddressFormDialog } from "@/components/marketplace/address-form-dialog";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { formatDate } from "@/lib/format";
-import { ordersService, buyersService, bookingsService, addressesService } from "@/services";
+import {
+  ordersService,
+  buyersService,
+  bookingsService,
+  addressesService,
+  productsService,
+  savedSearchesService,
+  messagingService,
+} from "@/services";
 
 export function AccountView() {
   const signOut = useSignOut();
@@ -29,6 +37,12 @@ export function AccountView() {
     queryKey: ["addresses"],
     queryFn: () => addressesService.listAddresses(),
   });
+
+  const { data: conversations } = useQuery({
+    queryKey: ["conversations", "me"],
+    queryFn: () => messagingService.listMyConversations(),
+  });
+  const messagesUnreadCount = conversations?.reduce((sum, c) => sum + c.unreadCount, 0) ?? 0;
 
   const setDefaultMutation = useMutation({
     mutationFn: (id: string) => addressesService.setDefaultAddress(id),
@@ -58,6 +72,25 @@ export function AccountView() {
     queryFn: () => bookingsService.listMyBookings(),
   });
 
+  const { data: wishlist, isLoading: isWishlistLoading } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: () => productsService.listMyWishlist(),
+  });
+
+  const { data: savedSearches, isLoading: isSavedSearchesLoading } = useQuery({
+    queryKey: ["saved-searches"],
+    queryFn: () => savedSearchesService.listSavedSearches(),
+  });
+
+  const deleteSavedSearchMutation = useMutation({
+    mutationFn: (id: string) => savedSearchesService.deleteSavedSearch(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["saved-searches"] });
+      toast.success("Saved search removed");
+    },
+    onError: () => toast.error("Couldn't remove this saved search. Please try again."),
+  });
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between">
@@ -77,6 +110,23 @@ export function AccountView() {
             <p className="text-muted-foreground text-sm">{buyer?.email}</p>
             {buyer?.phone ? <p className="text-muted-foreground text-sm">{buyer.phone}</p> : null}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Link href="/account/messages" className="hover:bg-accent/50 -m-6 flex items-center justify-between gap-3 p-6">
+            <div className="flex items-center gap-2">
+              <Mail className="text-muted-foreground size-4" />
+              <h2 className="font-semibold">Messages</h2>
+              {messagesUnreadCount > 0 ? (
+                <span className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs font-medium">
+                  {messagesUnreadCount}
+                </span>
+              ) : null}
+            </div>
+            <ChevronRight className="text-muted-foreground size-4" />
+          </Link>
         </CardContent>
       </Card>
 
@@ -230,6 +280,92 @@ export function AccountView() {
                     <BookingStatusBadge status={booking.status} />
                   </div>
                 </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Heart className="text-muted-foreground size-4" />
+            <h2 className="font-semibold">Wishlist</h2>
+          </div>
+
+          {isWishlistLoading ? (
+            <div className="space-y-2">
+              <TableRowSkeleton columns={1} />
+              <TableRowSkeleton columns={1} />
+            </div>
+          ) : !wishlist || wishlist.length === 0 ? (
+            <EmptyState
+              icon={Heart}
+              title="Your wishlist is empty"
+              description="Save products you like and they'll show up here."
+              action={
+                <Button render={<Link href="/search" />} size="sm">
+                  Browse products
+                </Button>
+              }
+            />
+          ) : (
+            <div className="divide-y">
+              {wishlist.map((product) => (
+                <Link
+                  key={product.id}
+                  href={`/stores/${product.storeSlug}/products/${product.slug}`}
+                  className="hover:bg-accent/50 -mx-4 flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="line-clamp-1 text-sm font-medium">{product.name}</p>
+                    <p className="text-muted-foreground text-xs">{product.storeName}</p>
+                  </div>
+                  <PriceDisplay price={product.price} compareAtPrice={product.compareAtPrice} size="sm" />
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Search className="text-muted-foreground size-4" />
+            <h2 className="font-semibold">Saved searches</h2>
+          </div>
+
+          {isSavedSearchesLoading ? (
+            <div className="space-y-2">
+              <TableRowSkeleton columns={1} />
+              <TableRowSkeleton columns={1} />
+            </div>
+          ) : !savedSearches || savedSearches.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              title="No saved searches yet"
+              description="Save a search from the search page to quickly re-run it later."
+            />
+          ) : (
+            <div className="divide-y">
+              {savedSearches.map((savedSearch) => (
+                <div key={savedSearch.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                  <Link href={`/search?${savedSearch.queryString}`} className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{savedSearch.name}</p>
+                    <p className="text-muted-foreground text-xs">{formatDate(savedSearch.createdAt)}</p>
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive size-8 shrink-0"
+                    disabled={deleteSavedSearchMutation.isPending}
+                    onClick={() => deleteSavedSearchMutation.mutate(savedSearch.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
               ))}
             </div>
           )}

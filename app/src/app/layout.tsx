@@ -40,7 +40,7 @@ export default async function RootLayout({
 }>) {
   const config = await getPlatformConfig();
   return (
-    <html lang="en" className={`${publicSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${publicSans.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         <Providers config={config}>{children}</Providers>
       </body>

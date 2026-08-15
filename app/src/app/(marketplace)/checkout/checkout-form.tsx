@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -32,8 +32,8 @@ import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { submitPayHereCheckout } from "@/lib/payhere";
 import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
-import { ordersService, buyersService, addressesService, storesService } from "@/services";
-import type { Address, DeliveryMethod, Order, PaymentMethod } from "@/types";
+import { ordersService, buyersService, addressesService, storesService, couponsService } from "@/services";
+import type { Address, CouponPreviewResponse, DeliveryMethod, Order, PaymentMethod } from "@/types";
 
 const checkoutSchema = z
   .object({
@@ -76,6 +76,25 @@ export function CheckoutForm() {
   useCartReconciliation();
   const availableItems = cart.items.filter((i) => !i.isUnavailable);
   const hasUnavailable = cart.items.some((i) => i.isUnavailable);
+
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponPreviewResponse | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const discountAmount = appliedCoupon?.valid ? appliedCoupon.discountAmount : 0;
+
+  async function handleApplyCoupon() {
+    if (!couponCode.trim() || !cart.storeId) return;
+    setIsApplyingCoupon(true);
+    try {
+      const result = await couponsService.previewCoupon(couponCode.trim(), cart.storeId, "order", subtotal);
+      setAppliedCoupon(result);
+      if (!result.valid) toast.error(result.message ?? "This coupon isn't valid");
+    } catch {
+      setAppliedCoupon({ valid: false, discountAmount: 0, message: "Couldn't check this coupon" });
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  }
 
   const { session } = useAuthSession();
   const isSignedInBuyer = session.signedIn && session.role === "buyer";
@@ -234,6 +253,7 @@ export function CheckoutForm() {
         paymentMethod: values.paymentMethod as PaymentMethod,
         deliveryMethod: values.deliveryMethod,
         email: values.email,
+        couponCode: appliedCoupon?.valid ? couponCode.trim() : undefined,
       });
       // Auto-save this address as the buyer's first (default) saved
       // address, but only when their book is empty — once they have any
@@ -648,11 +668,45 @@ export function CheckoutForm() {
               </div>
             ) : null}
             <Separator />
+            <div className="space-y-2">
+              <Label htmlFor="couponCode" className="text-sm">
+                Coupon code
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="couponCode"
+                  value={couponCode}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value);
+                    setAppliedCoupon(null);
+                  }}
+                  placeholder="e.g. WELCOME10"
+                  className="uppercase"
+                />
+                <Button type="button" variant="outline" disabled={!couponCode.trim() || isApplyingCoupon} onClick={handleApplyCoupon}>
+                  {isApplyingCoupon ? <Loader2 className="size-4 animate-spin" /> : "Apply"}
+                </Button>
+              </div>
+              {appliedCoupon?.valid ? (
+                <p className="text-success-foreground text-xs">
+                  Coupon applied — {formatCurrency(appliedCoupon.discountAmount, currency)} off
+                </p>
+              ) : appliedCoupon && !appliedCoupon.valid ? (
+                <p className="text-destructive text-xs">{appliedCoupon.message}</p>
+              ) : null}
+            </div>
+            <Separator />
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatCurrency(subtotal, currency)}</span>
               </div>
+              {discountAmount > 0 ? (
+                <div className="text-success-foreground flex justify-between">
+                  <span>Discount</span>
+                  <span>-{formatCurrency(discountAmount, currency)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{deliveryMethod === "pickup" ? "Pickup" : "Shipping"}</span>
                 <span>
@@ -663,7 +717,7 @@ export function CheckoutForm() {
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>
                 <span>
-                  {formatCurrency(subtotal + (deliveryMethod === "pickup" ? 0 : flatShippingFee), currency)}
+                  {formatCurrency(subtotal - discountAmount + (deliveryMethod === "pickup" ? 0 : flatShippingFee), currency)}
                 </span>
               </div>
             </div>

@@ -38,6 +38,7 @@ class ProductService(
     private val storeSettingsRepository: StoreSettingsRepository,
     private val currentActor: CurrentActor,
     private val fileStorageService: FileStorageService,
+    private val wishlistItemRepository: WishlistItemRepository,
 ) {
     /**
      * GET /api/products — the matching row set is never fully materialized:
@@ -172,6 +173,8 @@ class ProductService(
         product.category = category
         product.price = input.price
         product.compareAtPrice = input.compareAtPrice
+        // A restock clears any pending low-stock alert so LowStockAlertJob can re-fire next time stock actually drops low again — see Product.lastLowStockAlertSentAt's doc comment.
+        if (input.stockQuantity > product.stockQuantity) product.lastLowStockAlertSentAt = null
         product.stockQuantity = input.stockQuantity
         val trackStock = effectiveTrackStock(requireNotNull(product.store.id), input.trackStock)
         product.trackStock = trackStock
@@ -210,6 +213,40 @@ class ProductService(
         val product = productRepository.findById(id).orElseThrow { NotFoundException("Product $id not found") }
         requireOwnership(product.store)
         productRepository.deleteById(id)
+    }
+
+    /** GET /api/products/{id}/wishlist — public route, works for a signed-out visitor too (reports false), same pattern as StoreService.isFollowing. */
+    @Transactional
+    fun isWishlisted(productId: UUID): Boolean {
+        val buyer = currentActor.buyerOrNull() ?: return false
+        return wishlistItemRepository.existsByBuyerIdAndProductId(requireNotNull(buyer.id), productId)
+    }
+
+    /** POST /api/products/{id}/wishlist — idempotent, mirrors StoreService.follow. */
+    @Transactional
+    fun addToWishlist(productId: UUID): Boolean {
+        val buyer = currentActor.requireBuyer()
+        val product = productRepository.findById(productId).orElseThrow { NotFoundException("Product $productId not found") }
+        val buyerId = requireNotNull(buyer.id)
+        if (!wishlistItemRepository.existsByBuyerIdAndProductId(buyerId, productId)) {
+            wishlistItemRepository.save(WishlistItem(buyer = buyer, product = product))
+        }
+        return true
+    }
+
+    /** DELETE /api/products/{id}/wishlist — idempotent, mirrors StoreService.unfollow. */
+    @Transactional
+    fun removeFromWishlist(productId: UUID) {
+        val buyer = currentActor.requireBuyer()
+        val item = wishlistItemRepository.findByBuyerIdAndProductId(requireNotNull(buyer.id), productId) ?: return
+        wishlistItemRepository.delete(item)
+    }
+
+    /** GET /api/me/wishlist — mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
+    @Transactional
+    fun listWishlist(): List<ProductResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.product.toResponse(fileStorageService) }
     }
 
     private fun resolveStatus(input: ProductFormInput, trackStock: Boolean): ProductStatus =

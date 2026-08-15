@@ -58,3 +58,8 @@ data class ProductFormInput(
     @field:NotBlank(message = "Select a status")
     val status: String,
 )
+
+/** GET /api/products/{id}/wishlist */
+data class WishlistStatusResponse(
+    val wishlisted: Boolean,
+)

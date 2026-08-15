@@ -1,8 +1,10 @@
 package com.storepilot.backend.order
 
 import com.storepilot.backend.common.PageResponse
+import com.storepilot.backend.common.sse.SseHub
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -13,12 +15,14 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 
 /** Matches the endpoints documented in docs/api-contracts.md#orders. */
 @RestController
 class OrderController(
     private val orderService: OrderService,
+    private val sseHub: SseHub,
 ) {
     @GetMapping("/api/stores/{storeId}/orders")
     fun listByStore(
@@ -51,6 +55,13 @@ class OrderController(
 
     @GetMapping("/api/orders/{id}")
     fun getById(@PathVariable id: UUID): OrderResponse = orderService.getById(id)
+
+    /** Live order-status push — same "order ID is proof enough" auth model as the GET above. Emits a "status" event with the fresh OrderResponse body each time OrderService writes a change; see OrderService's sseHub.publish call sites. */
+    @GetMapping("/api/orders/{id}/events", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun subscribeToEvents(@PathVariable id: UUID): SseEmitter {
+        orderService.getById(id) // 404s if the order doesn't exist, same as the GET above
+        return sseHub.subscribe("order:$id")
+    }
 
     @PostMapping("/api/orders")
     fun create(@Valid @RequestBody input: CheckoutInput): ResponseEntity<OrderResponse> =

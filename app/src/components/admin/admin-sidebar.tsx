@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell, ShieldCheck, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/stores", label: "Store approvals", icon: ClipboardCheck },
   { href: "/admin/accounting", label: "Accounting", icon: Wallet },
+  { href: "/admin/coupons", label: "Coupons", icon: Tag },
   { href: "/admin/admins", label: "Admins", icon: Users },
   { href: "/admin/audit-log", label: "Audit log", icon: History },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
@@ -46,6 +48,10 @@ export function AdminSidebarContent() {
         })}
       </nav>
 
+      <div className="flex items-center justify-between border-t p-4">
+        <span className="text-muted-foreground text-xs font-medium">Theme</span>
+        <ThemeToggle className="-mr-2 size-8" />
+      </div>
     </div>
   );
 }

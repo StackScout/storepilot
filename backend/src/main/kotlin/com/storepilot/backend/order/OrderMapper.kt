@@ -24,6 +24,8 @@ fun Order.toResponse(receiptStorageService: ReceiptStorageService, fileStorageSe
         shippingFee = shippingFee,
         platformFee = platformFee,
         total = total,
+        couponCode = couponCode,
+        discountAmount = discountAmount,
         status = status.wireValue,
         paymentMethod = paymentMethod.wireValue,
         paymentStatus = paymentStatus.wireValue,

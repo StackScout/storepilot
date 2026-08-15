@@ -7,6 +7,7 @@ import { Logo } from "@/components/shared/logo";
 import { SearchBar } from "@/components/marketplace/search-bar";
 import { CartDrawer } from "@/components/marketplace/cart-drawer";
 import { MobileNav } from "@/components/marketplace/mobile-nav";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { UserAccountMenu } from "@/components/shared/user-account-menu";
 import { useBuyerAccountLink } from "@/hooks/use-buyer-account-link";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
@@ -28,6 +29,7 @@ export function SiteHeader() {
             <Button render={<Link href="/onboarding" />} variant="outline" className="hidden md:inline-flex">
               Sell on {name}
             </Button>
+            <ThemeToggle />
             {buyerName ? (
               <UserAccountMenu
                 name={buyerName}

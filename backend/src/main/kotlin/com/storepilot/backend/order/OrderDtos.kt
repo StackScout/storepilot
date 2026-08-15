@@ -45,6 +45,8 @@ data class OrderResponse(
     val shippingFee: Int,
     val platformFee: Int,
     val total: Int,
+    val couponCode: String?,
+    val discountAmount: Int,
     val status: String,
     val paymentMethod: String,
     val paymentStatus: String,
@@ -118,6 +120,7 @@ data class CheckoutInput(
     @field:Email(message = "Enter a valid email")
     @field:NotBlank(message = "Enter a valid email")
     val email: String,
+    val couponCode: String? = null,
 )
 
 /** trackingNumber/courierServiceName are required by OrderService.updateStatus specifically when status is "shipped" — not enforced here since that's conditional on the target status, not always mandatory. */

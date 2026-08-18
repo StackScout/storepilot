@@ -6,8 +6,8 @@ import com.storepilot.backend.common.PlatformProperties
 import com.storepilot.backend.common.security.CognitoProperties
 import com.storepilot.backend.common.storage.FileStorageProperties
 import com.storepilot.backend.notification.NotificationProperties
-import com.storepilot.backend.order.PayHereProperties
 import com.storepilot.backend.order.ReceiptStorageProperties
+import com.storepilot.backend.payhere.PayHereProperties
 import com.storepilot.backend.stripe.StripeProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties

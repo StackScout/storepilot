@@ -1,4 +1,4 @@
-package com.storepilot.backend.order
+package com.storepilot.backend.payhere
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 

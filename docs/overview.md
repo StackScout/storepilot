@@ -102,12 +102,18 @@ contract.
   a seller only becomes `ROLE_SELLER` the moment they complete onboarding
   (`POST /api/stores`), which creates their `Seller` row, their `Store`
   (in `pending` verification status), and grants the Cognito group all in
-  one transaction.
+  one transaction. Can also start this way via Google sign-in
+  (`GET /api/auth/google/start?intent=seller`) — a first-time seller
+  Google identity gets no Cognito group either, and lands straight on
+  `/onboarding`, same as a freshly-verified password-registered seller;
+  onboarding is still the only thing that ever grants `seller`.
 - **Buyer.** Can also sign in via Google (Cognito Hosted UI OAuth), which
   JIT-provisions the `buyer` group on first sign-in. A buyer row is also
   JIT-provisioned for a guest checkout under a given email, and gets
   linked (not duplicated) if that same person later creates a real
-  account.
+  account. A Google identity that already belongs to the other account
+  type (e.g. an existing seller using the buyer sign-in button, or vice
+  versa) is rejected rather than silently signed in.
 - **Admin.** No self-registration path exists at all. The first admin is
   bootstrapped out-of-band via `infra/scripts/create-admin.sh`; every
   admin after that is invited in-app by an existing one

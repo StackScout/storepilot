@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { storesService, billingService } from "@/services";
 
@@ -45,6 +46,7 @@ const BOOKING_NAV_ITEMS = [
 
 export function DashboardSidebarContent() {
   const pathname = usePathname();
+  const { countryCode } = usePlatformConfig();
   const storeId = useSellerStoreId();
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
@@ -75,6 +77,9 @@ export function DashboardSidebarContent() {
         {navItems.map((item) => {
           const isActive =
             item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+          // PayHere-funded "payouts" only exist for LK stores — everywhere else this page is really
+          // an earnings summary (Stripe settles directly), see dashboard/payouts/page.tsx.
+          const label = item.href === "/dashboard/payouts" && countryCode !== "LK" ? "Earnings" : item.label;
           return (
             <Link
               key={item.href}
@@ -87,7 +92,7 @@ export function DashboardSidebarContent() {
               )}
             >
               <item.icon className="size-4" />
-              {item.label}
+              {label}
             </Link>
           );
         })}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmailVerificationForm } from "@/components/shared/email-verification-form";
+import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
 import { MfaChallengeForm } from "@/components/shared/mfa-challenge-form";
 import { authService } from "@/services";
 import { ApiRequestError } from "@/lib/api-client";
@@ -43,6 +44,19 @@ function SellerLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState<{ email: string; password: string } | null>(null);
   const [pendingMfa, setPendingMfa] = useState<{ email: string; session: string } | null>(null);
+
+  // AuthController.googleCallback redirects here on failure or on a
+  // cross-account-type mismatch (e.g. a buyer account clicking this page's
+  // Google button) — see the equivalent effect in account/login/page.tsx.
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error === "google_auth_failed") {
+      toast.error("Google sign-in didn't work. Please try again.");
+    } else if (error === "google_wrong_account_type") {
+      const existingRole = searchParams.get("existingRole");
+      toast.error(`This Google account is registered as a ${existingRole}. Try the ${existingRole} sign-in instead.`);
+    }
+  }, [searchParams]);
 
   const {
     register,
@@ -161,6 +175,14 @@ function SellerLoginForm() {
               Sign in
             </Button>
           </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">or</span>
+            <div className="bg-border h-px flex-1" />
+          </div>
+
+          <GoogleSignInButton intent="seller" />
         </CardContent>
       </Card>
 

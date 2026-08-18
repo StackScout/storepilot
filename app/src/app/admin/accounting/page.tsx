@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { formatCurrency } from "@/lib/currency";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { storesService, payoutsService, ordersService, adminService } from "@/services";
 import type { Store } from "@/types";
@@ -40,8 +41,11 @@ interface EligibleFeeStore {
 
 export default function AdminAccountingPage() {
   const queryClient = useQueryClient();
-  const { currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const { countryCode, currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
+  // Payouts only ever contain PayHere-funded money (LK-only) — see PayoutService.getEligibleOrders'
+  // doc comment. Outside LK this tab would always be empty, so hide it rather than show dead UI.
+  const showPayouts = countryCode === "LK";
   const [payoutToMarkPaid, setPayoutToMarkPaid] = useState<string | null>(null);
   const [bankReference, setBankReference] = useState("");
   const [feeCollectionToMarkCollected, setFeeCollectionToMarkCollected] = useState<string | null>(null);
@@ -54,6 +58,7 @@ export default function AdminAccountingPage() {
 
   const { data: eligibleStores, isLoading: eligibleLoading } = useQuery<EligibleStore[]>({
     queryKey: ["admin-eligible-stores"],
+    enabled: showPayouts,
     queryFn: async () => {
       const stores = await storesService.adminListStores("active");
       const enriched = await Promise.all(
@@ -80,6 +85,7 @@ export default function AdminAccountingPage() {
   const { data: allPayouts, isLoading: payoutsLoading } = useQuery({
     queryKey: ["admin-payouts"],
     queryFn: () => payoutsService.adminListPayouts(),
+    enabled: showPayouts,
   });
 
   const { data: eligibleFeeStores, isLoading: eligibleFeeLoading } = useQuery<EligibleFeeStore[]>({
@@ -171,22 +177,26 @@ export default function AdminAccountingPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Accounting</h1>
-        <p className="text-muted-foreground text-sm">Payouts, fee collections, and Stripe settlements.</p>
+        <p className="text-muted-foreground text-sm">
+          {showPayouts ? "Payouts, fee collections, and Stripe settlements." : "Fee collections and Stripe settlements."}
+        </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="space-y-1">
-            <p className="text-muted-foreground text-xs">Payouts scheduled / paid</p>
-            <p className="text-lg font-semibold">
-              {summary ? formatCurrency(summary.payoutsScheduledTotal, currency) : "—"}
-              <span className="text-muted-foreground text-sm font-normal">
-                {" "}
-                / {summary ? formatCurrency(summary.payoutsPaidTotal, currency) : "—"}
-              </span>
-            </p>
-          </CardContent>
-        </Card>
+      <div className={cn("grid gap-4", showPayouts ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+        {showPayouts ? (
+          <Card>
+            <CardContent className="space-y-1">
+              <p className="text-muted-foreground text-xs">Payouts scheduled / paid</p>
+              <p className="text-lg font-semibold">
+                {summary ? formatCurrency(summary.payoutsScheduledTotal, currency) : "—"}
+                <span className="text-muted-foreground text-sm font-normal">
+                  {" "}
+                  / {summary ? formatCurrency(summary.payoutsPaidTotal, currency) : "—"}
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardContent className="space-y-1">
             <p className="text-muted-foreground text-xs">Fees pending / collected</p>
@@ -213,11 +223,13 @@ export default function AdminAccountingPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="payouts">
+      <Tabs defaultValue={showPayouts ? "payouts" : "stripe"}>
         <TabsList>
-          <TabsTrigger value="payouts">
-            <Wallet className="size-3.5" /> Payouts
-          </TabsTrigger>
+          {showPayouts ? (
+            <TabsTrigger value="payouts">
+              <Wallet className="size-3.5" /> Payouts
+            </TabsTrigger>
+          ) : null}
           <TabsTrigger value="fee-collections">
             <ReceiptText className="size-3.5" /> Fee collections
           </TabsTrigger>
@@ -226,95 +238,97 @@ export default function AdminAccountingPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="payouts">
-          <Card>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground text-xs">
-                Stores with delivered orders or completed bookings, paid via PayHere, not yet included
-                in a payout batch.
-              </p>
-              {eligibleLoading ? (
-                <TableRowSkeleton columns={3} />
-              ) : !eligibleStores || eligibleStores.length === 0 ? (
-                <EmptyState icon={Landmark} title="Nothing eligible for payout right now" />
-              ) : (
-                <div className="space-y-2">
-                  {eligibleStores.map(({ store, eligibleCount, eligibleNet }) => (
-                    <div
-                      key={store.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{store.name}</p>
-                        <p className="text-muted-foreground text-xs">
-                          {eligibleCount} order{eligibleCount === 1 ? "" : "s"} ·{" "}
-                          {formatCurrency(eligibleNet, currency)} net
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        disabled={createPayoutMutation.isPending}
-                        onClick={() => createPayoutMutation.mutate(store.id)}
-                      >
-                        Create payout batch
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="border-t pt-4">
-                <h3 className="mb-2 text-sm font-semibold">All payouts</h3>
-                {payoutsLoading ? (
-                  <TableRowSkeleton columns={5} />
-                ) : !allPayouts || allPayouts.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">No payouts created yet.</p>
+        {showPayouts ? (
+          <TabsContent value="payouts">
+            <Card>
+              <CardContent className="space-y-4">
+                <p className="text-muted-foreground text-xs">
+                  Stores with delivered orders or completed bookings, paid via PayHere, not yet included
+                  in a payout batch.
+                </p>
+                {eligibleLoading ? (
+                  <TableRowSkeleton columns={3} />
+                ) : !eligibleStores || eligibleStores.length === 0 ? (
+                  <EmptyState icon={Landmark} title="Nothing eligible for payout right now" />
                 ) : (
-                  <div className="-mx-6 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-muted-foreground border-y text-left text-xs">
-                          <th className="px-6 py-2 font-medium">Store</th>
-                          <th className="px-6 py-2 font-medium">Created</th>
-                          <th className="px-6 py-2 font-medium">Net</th>
-                          <th className="px-6 py-2 font-medium">Status</th>
-                          <th className="px-6 py-2 font-medium">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allPayouts.map((payout) => (
-                          <tr key={payout.id} className="border-b last:border-0">
-                            <td className="px-6 py-3 font-medium">{payout.storeName}</td>
-                            <td className="text-muted-foreground px-6 py-3">
-                              {formatDateTime(payout.createdAt)}
-                            </td>
-                            <td className="px-6 py-3">{formatCurrency(payout.net, currency)}</td>
-                            <td className="px-6 py-3">
-                              <StatusBadge tone={payout.status === "paid" ? "success" : "warning"}>
-                                {payout.status === "paid" ? "Paid" : "Scheduled"}
-                              </StatusBadge>
-                            </td>
-                            <td className="px-6 py-3">
-                              {payout.status === "scheduled" ? (
-                                <Button size="sm" variant="outline" onClick={() => setPayoutToMarkPaid(payout.id)}>
-                                  Mark as paid
-                                </Button>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">
-                                  {payout.bankReference ?? "—"}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-2">
+                    {eligibleStores.map(({ store, eligibleCount, eligibleNet }) => (
+                      <div
+                        key={store.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{store.name}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {eligibleCount} order{eligibleCount === 1 ? "" : "s"} ·{" "}
+                            {formatCurrency(eligibleNet, currency)} net
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={createPayoutMutation.isPending}
+                          onClick={() => createPayoutMutation.mutate(store.id)}
+                        >
+                          Create payout batch
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+
+                <div className="border-t pt-4">
+                  <h3 className="mb-2 text-sm font-semibold">All payouts</h3>
+                  {payoutsLoading ? (
+                    <TableRowSkeleton columns={5} />
+                  ) : !allPayouts || allPayouts.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No payouts created yet.</p>
+                  ) : (
+                    <div className="-mx-6 overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-muted-foreground border-y text-left text-xs">
+                            <th className="px-6 py-2 font-medium">Store</th>
+                            <th className="px-6 py-2 font-medium">Created</th>
+                            <th className="px-6 py-2 font-medium">Net</th>
+                            <th className="px-6 py-2 font-medium">Status</th>
+                            <th className="px-6 py-2 font-medium">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allPayouts.map((payout) => (
+                            <tr key={payout.id} className="border-b last:border-0">
+                              <td className="px-6 py-3 font-medium">{payout.storeName}</td>
+                              <td className="text-muted-foreground px-6 py-3">
+                                {formatDateTime(payout.createdAt)}
+                              </td>
+                              <td className="px-6 py-3">{formatCurrency(payout.net, currency)}</td>
+                              <td className="px-6 py-3">
+                                <StatusBadge tone={payout.status === "paid" ? "success" : "warning"}>
+                                  {payout.status === "paid" ? "Paid" : "Scheduled"}
+                                </StatusBadge>
+                              </td>
+                              <td className="px-6 py-3">
+                                {payout.status === "scheduled" ? (
+                                  <Button size="sm" variant="outline" onClick={() => setPayoutToMarkPaid(payout.id)}>
+                                    Mark as paid
+                                  </Button>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">
+                                    {payout.bankReference ?? "—"}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="fee-collections">
           <Card>

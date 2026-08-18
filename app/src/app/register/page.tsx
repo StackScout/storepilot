@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmailVerificationForm } from "@/components/shared/email-verification-form";
+import { GoogleSignInButton } from "@/components/shared/google-sign-in-button";
 import { authService } from "@/services";
 
 const registerSchema = z
@@ -146,6 +147,14 @@ function SellerRegisterForm() {
               Create account
             </Button>
           </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">or</span>
+            <div className="bg-border h-px flex-1" />
+          </div>
+
+          <GoogleSignInButton intent="seller" />
         </CardContent>
       </Card>
 

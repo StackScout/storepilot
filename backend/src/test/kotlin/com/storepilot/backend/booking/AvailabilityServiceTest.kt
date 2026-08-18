@@ -20,6 +20,7 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.temporal.TemporalAdjusters
 import java.util.Optional
 import java.util.UUID
 
@@ -116,7 +117,9 @@ class AvailabilityServiceTest {
     @Test
     fun `computeSlots uses the store's weekly rule when the service has no override`() {
         bookableService.hasCustomAvailability = false
-        val monday = LocalDate.of(2026, 8, 17)
+        // Always the next Monday strictly after "today" — a fixed calendar date would eventually
+        // fall in the past and get filtered out by computeSlots' lead-time cutoff (Instant.now()).
+        val monday = LocalDate.now().with(TemporalAdjusters.next(DayOfWeek.MONDAY))
         require(monday.dayOfWeek == DayOfWeek.MONDAY)
         every { weeklyAvailabilityRuleRepository.findByStoreIdOrderByDayOfWeekAsc(storeId) } returns listOf(
             WeeklyAvailabilityRule(store = store, dayOfWeek = DayOfWeek.MONDAY, isOpen = true, openTime = LocalTime.of(9, 0), closeTime = LocalTime.of(10, 0)),
@@ -130,7 +133,9 @@ class AvailabilityServiceTest {
     @Test
     fun `computeSlots uses the service's own override instead of the store's weekly rule when hasCustomAvailability is true`() {
         bookableService.hasCustomAvailability = true
-        val monday = LocalDate.of(2026, 8, 17)
+        // Always the next Monday strictly after "today" — a fixed calendar date would eventually
+        // fall in the past and get filtered out by computeSlots' lead-time cutoff (Instant.now()).
+        val monday = LocalDate.now().with(TemporalAdjusters.next(DayOfWeek.MONDAY))
         // Store says Monday is closed — if the override weren't honored, this would yield zero slots.
         every { weeklyAvailabilityRuleRepository.findByStoreIdOrderByDayOfWeekAsc(storeId) } returns listOf(
             WeeklyAvailabilityRule(store = store, dayOfWeek = DayOfWeek.MONDAY, isOpen = false),
@@ -147,7 +152,9 @@ class AvailabilityServiceTest {
     @Test
     fun `computeSlots still honors a store exception even when the service has a custom weekly override`() {
         bookableService.hasCustomAvailability = true
-        val monday = LocalDate.of(2026, 8, 17)
+        // Always the next Monday strictly after "today" — a fixed calendar date would eventually
+        // fall in the past and get filtered out by computeSlots' lead-time cutoff (Instant.now()).
+        val monday = LocalDate.now().with(TemporalAdjusters.next(DayOfWeek.MONDAY))
         every { serviceWeeklyAvailabilityRuleRepository.findByServiceIdOrderByDayOfWeekAsc(serviceId) } returns listOf(
             ServiceWeeklyAvailabilityRule(service = bookableService, dayOfWeek = DayOfWeek.MONDAY, isOpen = true, openTime = LocalTime.of(9, 0), closeTime = LocalTime.of(10, 0)),
         )

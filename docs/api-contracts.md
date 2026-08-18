@@ -113,12 +113,24 @@ rationale.
   automatically and retries once on any `401`, so most 401s are invisible
   to the rest of the app.
 
-### `GET /api/auth/google/start` / `GET /api/auth/google/callback`
+### `GET /api/auth/google/start?intent=buyer|seller` / `GET /api/auth/google/callback`
 - **Auth**: None. Redirect-based Hosted-UI OAuth handoff — the frontend
-  only ever links to `start`; Cognito redirects back to `callback`, which
-  exchanges the auth code, JIT-assigns the `buyer` group on a Google
-  account's first sign-in, sets the same cookies as `login()`, and
-  redirects to `/account`.
+  only ever links to `start` (defaulting `intent` to `buyer`); `intent`
+  round-trips through Cognito unchanged as the OAuth2 `state` param, back
+  to `callback`, which exchanges the auth code and then branches on
+  `(intent, existing Cognito group)`:
+  - groupless + `buyer` intent: JIT-assigns the `buyer` group (as before),
+    sets cookies, redirects to `/account`.
+  - groupless + `seller` intent: assigns **no** group — lands on
+    `/onboarding` exactly like a freshly-verified password-registered
+    seller. Onboarding (`POST /api/stores`) remains the only thing that
+    ever grants `seller`.
+  - existing group matches intent: ordinary returning sign-in, redirects
+    to `/account` (buyer) or `/dashboard` (seller).
+  - existing group doesn't match intent (e.g. an existing buyer using the
+    seller button): rejected — no cookies set, redirected back to the
+    intent-appropriate login page with
+    `?error=google_wrong_account_type&existingRole=<role>`.
 
 ### `POST /api/auth/logout`
 - **Auth**: Authenticated or none (no-op success either way).

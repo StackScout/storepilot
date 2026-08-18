@@ -43,11 +43,18 @@ function BuyerLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState<{ email: string; password: string } | null>(null);
 
-  // AuthController.googleCallback redirects here with this on failure
-  // (e.g. the Google popup was cancelled, or the code exchange failed).
+  // AuthController.googleCallback redirects here on failure (e.g. the
+  // Google popup was cancelled, or the code exchange failed) or when this
+  // Google account already belongs to a different account type (e.g. a
+  // seller clicking this page's Google button) — see the equivalent effect
+  // in login/page.tsx (the seller login page).
   useEffect(() => {
-    if (searchParams.get("error") === "google_auth_failed") {
+    const error = searchParams.get("error");
+    if (error === "google_auth_failed") {
       toast.error("Google sign-in didn't work. Please try again.");
+    } else if (error === "google_wrong_account_type") {
+      const existingRole = searchParams.get("existingRole");
+      toast.error(`This Google account is registered as a ${existingRole}. Try the ${existingRole} sign-in instead.`);
     }
   }, [searchParams]);
 

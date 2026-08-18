@@ -4,13 +4,17 @@ import { Button } from "@/components/ui/button";
 /**
  * A plain top-level navigation, not a fetch — the browser needs to actually
  * leave the app for Cognito's Hosted UI, then Google, then back through
- * /api/auth/google/callback (which sets the auth cookies and redirects to
- * /account). See AuthController.googleStart/.googleCallback.
+ * /api/auth/google/callback (which sets the auth cookies and redirects
+ * onward). `intent` is round-tripped through Cognito as the OAuth2 `state`
+ * param — a "seller" sign-in never gets JIT-assigned a Cognito group, it
+ * lands on /onboarding just like a freshly-verified password-registered
+ * seller. See AuthController.googleStart/.googleCallback and
+ * resolveGoogleSignInOutcome.
  */
-export function GoogleSignInButton() {
+export function GoogleSignInButton({ intent = "buyer" }: { intent?: "buyer" | "seller" }) {
   return (
     <Button
-      render={<a href={toApiUrl("/api/auth/google/start")} />}
+      render={<a href={toApiUrl(`/api/auth/google/start?intent=${intent}`)} />}
       type="button"
       variant="outline"
       size="lg"

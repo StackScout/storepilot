@@ -1,6 +1,5 @@
 package com.storepilot.backend.common.security
 
-import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.EmailNotVerifiedException
 import com.storepilot.backend.common.UnauthenticatedException
@@ -146,7 +145,6 @@ class AuthController(
     private val notificationProperties: NotificationProperties,
     private val jwtDecoder: JwtDecoder,
     private val emailVerificationService: EmailVerificationService,
-    private val auditLogService: AuditLogService,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
     private val restClient = RestClient.create()
@@ -311,9 +309,6 @@ class AuthController(
         ).groups().map { it.groupName() }
 
         val role = resolveAppRole(groups)
-        if (role == "admin") {
-            auditLogService.recordAdminLogin(attributes["email"] ?: email)
-        }
 
         return AuthSessionResponse(
             signedIn = true,

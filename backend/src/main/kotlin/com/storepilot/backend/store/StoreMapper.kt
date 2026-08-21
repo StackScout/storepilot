@@ -57,6 +57,7 @@ fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSetti
         stripePayoutsEnabled = stripePayoutsEnabled,
         stripeEnabled = stripeEnabled,
         bookingsEnabled = bookingsEnabled,
+        gstRegistered = gstRegistered,
     )
 
 /** currentSettings is read fresh at map time (see StoreVerificationChangeRequestResponse's doc comment), not stored on the request row — null only if a store somehow has no settings row at all, defensively defaulted to INDIVIDUAL/blank rather than crashing the admin review list over one bad row. */
@@ -80,6 +81,10 @@ fun StoreVerificationChangeRequest.toResponse(currentSettings: StoreSettings?, f
         currentAbn = currentSettings?.abn,
         currentNicNumber = currentSettings?.nicNumber,
         currentBusinessRegistrationNumber = currentSettings?.businessRegistrationNumber,
+        currentDriverLicenceDocumentUrl = currentSettings?.driverLicenceDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        currentAbnDocumentUrl = currentSettings?.abnDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        currentNicDocumentUrl = currentSettings?.nicDocumentUrl?.let { fileStorageService.resolveUrl(it) },
+        currentBusinessRegDocumentUrl = currentSettings?.businessRegDocumentUrl?.let { fileStorageService.resolveUrl(it) },
         rejectionReason = rejectionReason,
         submittedAt = requireNotNull(createdAt),
         reviewedAt = reviewedAt,

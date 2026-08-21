@@ -149,6 +149,24 @@ class SellerBillingService(
         syncFromSubscription(seller, subscription)
     }
 
+    /**
+     * Seller-account-deletion step — cancels the Pro subscription
+     * immediately (not at period end) and deletes the platform Customer
+     * object. Both calls are idempotent in practice: cancelling an
+     * already-canceled subscription or deleting an already-deleted customer
+     * is treated by Stripe as already done, not a hard failure, so this is
+     * safe to retry after a partial failure elsewhere in the deletion
+     * sequence. Deleting the Customer also cancels any subscription as a
+     * side effect per Stripe's docs — the subscription is cancelled
+     * explicitly first anyway, for a clean, unambiguous object to reason
+     * about. Does not touch the `Seller` row itself — the caller anonymizes
+     * it afterward.
+     */
+    fun cancelAndDeleteCustomer(seller: Seller) {
+        seller.stripeSubscriptionId?.let { Subscription.retrieve(it).cancel() }
+        seller.stripeCustomerId?.let { Customer.retrieve(it).delete() }
+    }
+
     private fun syncFromSubscription(seller: Seller, subscription: Subscription) {
         seller.stripeSubscriptionId = subscription.id
         seller.plan = if (subscription.status in ACTIVE_SUBSCRIPTION_STATUSES) SellerPlan.PRO else SellerPlan.FREE

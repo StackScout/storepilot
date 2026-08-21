@@ -1,6 +1,7 @@
 package com.storepilot.backend.common
 
 import com.storepilot.backend.notification.EmailService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.nio.charset.StandardCharsets
@@ -33,7 +34,19 @@ class GuestLookupOtpService(
     private val platformConfigService: PlatformConfigService,
 ) {
     private val secureRandom = SecureRandom()
+    private val log = LoggerFactory.getLogger(GuestLookupOtpService::class.java)
 
+    /**
+     * Both callers (OrderService/BookingService's own requestLookupCode)
+     * document this as "always resolves, regardless of match" — that
+     * contract depends on the email send never throwing. Previously it
+     * called emailService.send(...) directly and unguarded, so a transport
+     * failure (e.g. SES sandbox-mode rejection of an unverified recipient
+     * — see SesEmailService's doc comment) propagated straight up through
+     * this @Transactional method into an opaque 500, instead of the silent
+     * no-op this endpoint is supposed to behave like. Mirrors
+     * OrderNotifier.sendSafely's log-and-continue pattern.
+     */
     @Transactional
     fun requestCode(targetType: String, targetId: UUID, email: String, recipientName: String) {
         val code = "%06d".format(secureRandom.nextInt(1_000_000))
@@ -45,17 +58,21 @@ class GuestLookupOtpService(
         repository.save(record)
 
         val platformName = platformConfigService.current().name
-        emailService.send(
-            to = email,
-            subject = "Your $platformName lookup code",
-            body = buildString {
-                appendLine("Hi $recipientName,")
-                appendLine()
-                appendLine("Your one-time code is: $code")
-                appendLine()
-                appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
-            },
-        )
+        try {
+            emailService.send(
+                to = email,
+                subject = "Your $platformName lookup code",
+                body = buildString {
+                    appendLine("Hi $recipientName,")
+                    appendLine()
+                    appendLine("Your one-time code is: $code")
+                    appendLine()
+                    appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
+                },
+            )
+        } catch (e: Exception) {
+            log.warn("Failed to send guest-lookup code email to {} (targetType={}, targetId={}) — not failing the request", email, targetType, targetId, e)
+        }
     }
 
     /** Every failure path throws IllegalArgumentException — same "client-fixable, 400" convention as EmailVerificationService.verifyCode. */

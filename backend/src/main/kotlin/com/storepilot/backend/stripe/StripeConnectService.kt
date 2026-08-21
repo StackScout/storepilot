@@ -9,6 +9,8 @@ import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.stripe.model.Account
+import com.stripe.net.OAuth
+import com.stripe.net.RequestOptions
 import com.stripe.param.AccountCreateParams
 import com.stripe.param.AccountLinkCreateParams
 import com.stripe.model.AccountLink
@@ -34,6 +36,7 @@ class StripeConnectService(
     private val currentActor: CurrentActor,
     private val notificationProperties: NotificationProperties,
     private val platformConfigService: PlatformConfigService,
+    private val stripeProperties: StripeProperties,
 ) {
     private val log = LoggerFactory.getLogger(StripeConnectService::class.java)
 
@@ -119,5 +122,21 @@ class StripeConnectService(
         settings.stripeChargesEnabled = account.chargesEnabled ?: false
         settings.stripePayoutsEnabled = account.payoutsEnabled ?: false
         storeSettingsRepository.save(settings)
+    }
+
+    /**
+     * Seller-account-deletion step — disconnects this Standard account from
+     * the platform. Deliberately deauthorize, never `Account.delete()`:
+     * Standard accounts are wholly owned by the connected user, and Stripe's
+     * API throws for a platform trying to delete one outright. Idempotent in
+     * practice — deauthorizing an already-deauthorized account is treated by
+     * Stripe as already done, not a hard failure, so callers can safely
+     * retry after a partial failure elsewhere in the deletion sequence.
+     */
+    fun deauthorize(accountId: String) {
+        OAuth.deauthorize(
+            mapOf("client_id" to stripeProperties.connectClientId, "stripe_user_id" to accountId),
+            RequestOptions.getDefault(),
+        )
     }
 }

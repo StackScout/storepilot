@@ -1,5 +1,6 @@
 package com.storepilot.backend.common
 
+import com.stripe.exception.StripeException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -54,6 +55,25 @@ class GlobalExceptionHandler {
             .associate { it.field to (it.defaultMessage ?: "Invalid value") }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ApiError.of("VALIDATION_ERROR", "Validation failed", fields))
+    }
+
+    /**
+     * Every Stripe SDK call (Connect onboarding/checkout, buyer Stripe
+     * checkout, refunds, seller Pro billing) previously had no dedicated
+     * handler, so any StripeException — a bad/missing API key
+     * (AuthenticationException), an unsupported currency
+     * (InvalidRequestException), a network blip (ApiConnectionException) —
+     * fell through to handleUnexpected below as an opaque 500 with no
+     * detail. Logging the real Stripe error code/message server-side here
+     * is what makes that class of failure diagnosable at all; the client
+     * still just sees a generic message, since Stripe's own wording isn't
+     * meant for end users.
+     */
+    @ExceptionHandler(StripeException::class)
+    fun handleStripeException(ex: StripeException): ResponseEntity<ApiError> {
+        log.error("Stripe API call failed (code={}, requestId={})", ex.code, ex.requestId, ex)
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .body(ApiError.of("PAYMENT_PROVIDER_ERROR", "The payment provider couldn't complete this request. Please try again shortly."))
     }
 
     @ExceptionHandler(Exception::class)

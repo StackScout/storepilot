@@ -13,6 +13,8 @@ enum class StoreVerificationStatus(override val wireValue: String) : WireValue {
     PENDING("pending"),
     ACTIVE("active"),
     REJECTED("rejected"),
+    /** Seller-initiated closure (see StoreService.closeStore) — a terminal state, never re-opened. Search/getBySlug already only surface ACTIVE, so a closed store drops out of the public marketplace with no other code changes; its own identity fields (name/slug/description) stay untouched so past buyers' order history keeps showing a coherent store name. */
+    CLOSED("closed"),
 }
 
 @Converter(autoApply = true)

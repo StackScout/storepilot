@@ -11,6 +11,9 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
 
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Booking>
 
+    /** Close-store precondition check — see StoreService.closeStore. */
+    fun existsByStoreIdAndStatusIn(storeId: UUID, statuses: Collection<BookingStatus>): Boolean
+
     /** Verified-purchase gate for a store review — see ReviewService.createStoreReview. */
     fun existsByBuyerIdAndStoreIdAndStatus(buyerId: UUID, storeId: UUID, status: BookingStatus): Boolean
 

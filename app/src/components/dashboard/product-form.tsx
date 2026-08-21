@@ -221,7 +221,7 @@ export function ProductForm({
             <Label htmlFor="status">Status</Label>
             <Select value={status} onValueChange={(v) => setValue("status", v as ProductFormInput["status"])}>
               <SelectTrigger id="status" className="w-full sm:w-48">
-                <SelectValue />
+                <SelectValue>{(v: ProductFormInput["status"]) => (v === "draft" ? "Draft" : "Active")}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>

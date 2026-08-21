@@ -47,6 +47,9 @@ data class OrderResponse(
     val total: Int,
     val couponCode: String?,
     val discountAmount: Int,
+    /** Both present only when the seller was GST-registered at the time of this order — see Order.kt's doc comment. Their presence is what the frontend uses to render this as a tax invoice rather than a plain confirmation. */
+    val sellerAbn: String?,
+    val gstAmount: Int?,
     val status: String,
     val paymentMethod: String,
     val paymentStatus: String,

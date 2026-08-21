@@ -101,4 +101,16 @@ class StoreSettings(
     /** Opt-in and off by default, same reasoning as pickupEnabled — most stores sell products only. Gates whether the store's bookable-services section exists at all; not Pro-gated itself (only the "pay at venue"/bank-transfer booking payment methods are, mirroring codEnabled/bankTransferEnabled — see BookingService). */
     @Column(name = "bookings_enabled", nullable = false)
     var bookingsEnabled: Boolean = false,
+    /**
+     * Self-declared, opt-in, off by default — GST registration is
+     * turnover-based (mandatory above A$75,000/year, optional below it),
+     * not something ABN presence implies. Only meaningful for AU sellers,
+     * but not itself country-gated here (mirrors abn/nicNumber — the
+     * deployment's country decides which fields are shown/required, not
+     * the entity). Read at order-creation time by OrderService to decide
+     * whether to snapshot a tax invoice's sellerAbn/gstAmount onto the
+     * Order — see Order.kt's doc comment on those fields.
+     */
+    @Column(name = "gst_registered", nullable = false)
+    var gstRegistered: Boolean = false,
 ) : BaseEntity()

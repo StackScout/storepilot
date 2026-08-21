@@ -53,16 +53,4 @@ class AuditLogServiceTest {
         assertEquals(seller.id, slot.captured.actorId)
         assertEquals(AuditAction.STORE_SETTINGS_UPDATED, slot.captured.action)
     }
-
-    @Test
-    fun `recordAdminLogin writes an entry with the given email and a null actorId`() {
-        val slot = slot<AuditLog>()
-        every { auditLogRepository.save(capture(slot)) } answers { firstArg() }
-
-        service.recordAdminLogin("admin@example.com")
-
-        assertEquals("admin@example.com", slot.captured.actorEmail)
-        assertEquals(null, slot.captured.actorId)
-        assertEquals(AuditAction.ADMIN_LOGIN, slot.captured.action)
-    }
 }

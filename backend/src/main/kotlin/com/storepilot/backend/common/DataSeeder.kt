@@ -180,6 +180,7 @@ class DataSeeder(
                 supportEmail = platformProperties.supportEmail,
                 companyLocation = platformProperties.companyLocation,
                 timezone = platformProperties.timezone,
+                returnWindowDays = platformProperties.returnWindowDays,
             ),
         )
         log.info("Seeded platform_settings from bootstrap PlatformProperties (name={}).", platformProperties.name)

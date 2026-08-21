@@ -20,6 +20,9 @@ interface OrderRepository : JpaRepository<Order, UUID> {
 
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Order>
 
+    /** Close-store precondition check — see StoreService.closeStore. */
+    fun existsByStoreIdAndStatusIn(storeId: UUID, statuses: Collection<OrderStatus>): Boolean
+
     /** Verified-purchase gate for a product review — see ReviewService.createProductReview. */
     fun existsByBuyerIdAndStatusAndItems_ProductId(buyerId: UUID, status: OrderStatus, productId: UUID): Boolean
 

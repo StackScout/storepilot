@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CreditCard, Landmark, ReceiptText, Wallet } from "lucide-react";
+import { CreditCard, Landmark, ReceiptText, RotateCcw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -21,10 +21,10 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { formatCurrency } from "@/lib/currency";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, returnReasonLabel, returnStatusLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { storesService, payoutsService, ordersService, adminService } from "@/services";
+import { storesService, payoutsService, ordersService, adminService, returnsService } from "@/services";
 import type { Store } from "@/types";
 
 interface EligibleStore {
@@ -50,6 +50,8 @@ export default function AdminAccountingPage() {
   const [bankReference, setBankReference] = useState("");
   const [feeCollectionToMarkCollected, setFeeCollectionToMarkCollected] = useState<string | null>(null);
   const [collectionReference, setCollectionReference] = useState("");
+  const [returnToMarkRefunded, setReturnToMarkRefunded] = useState<string | null>(null);
+  const [returnRefundReference, setReturnRefundReference] = useState("");
 
   const { data: summary } = useQuery({
     queryKey: ["admin-accounting-summary"],
@@ -66,8 +68,8 @@ export default function AdminAccountingPage() {
           // A payout batch bundles every eligible order AND booking for a
           // store into one run — see PayoutSourceRef's doc comment.
           const [orders, bookings] = await Promise.all([
-            payoutsService.getEligibleOrdersForPayout(store.id),
-            payoutsService.getEligibleBookingsForPayout(store.id),
+            payoutsService.adminGetEligibleOrdersForPayout(store.id),
+            payoutsService.adminGetEligibleBookingsForPayout(store.id),
           ]);
           return {
             store,
@@ -95,8 +97,8 @@ export default function AdminAccountingPage() {
       const enriched = await Promise.all(
         stores.map(async (store) => {
           const [orders, bookings] = await Promise.all([
-            payoutsService.getEligibleOrdersForFeeCollection(store.id),
-            payoutsService.getEligibleBookingsForFeeCollection(store.id),
+            payoutsService.adminGetEligibleOrdersForFeeCollection(store.id),
+            payoutsService.adminGetEligibleBookingsForFeeCollection(store.id),
           ]);
           return {
             store,
@@ -119,6 +121,11 @@ export default function AdminAccountingPage() {
   const { data: stripeSettlements, isLoading: stripeSettlementsLoading } = useQuery({
     queryKey: ["admin-stripe-settlements"],
     queryFn: () => ordersService.adminListStripeSettlements(),
+  });
+
+  const { data: allReturns, isLoading: returnsLoading } = useQuery({
+    queryKey: ["admin-returns"],
+    queryFn: () => returnsService.adminListReturns(),
   });
 
   function invalidateAccounting() {
@@ -171,6 +178,18 @@ export default function AdminAccountingPage() {
       setCollectionReference("");
     },
     onError: () => toast.error("Couldn't update fee collection"),
+  });
+
+  const markReturnRefundedMutation = useMutation({
+    mutationFn: ({ returnId, reference }: { returnId: string; reference: string }) =>
+      returnsService.adminMarkReturnRefunded(returnId, reference || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-returns"] });
+      toast.success("Return marked as refunded");
+      setReturnToMarkRefunded(null);
+      setReturnRefundReference("");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't update the return"),
   });
 
   return (
@@ -235,6 +254,9 @@ export default function AdminAccountingPage() {
           </TabsTrigger>
           <TabsTrigger value="stripe">
             <CreditCard className="size-3.5" /> Stripe settlements
+          </TabsTrigger>
+          <TabsTrigger value="returns">
+            <RotateCcw className="size-3.5" /> Returns
           </TabsTrigger>
         </TabsList>
 
@@ -463,6 +485,67 @@ export default function AdminAccountingPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="returns">
+          <Card>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground text-xs">
+                Buyer return requests across every store. PayHere refunds need admin confirmation here — the
+                platform&apos;s own merchant account is the one holding that money. Every other payment method is
+                self-attested by the seller on the order page.
+              </p>
+              {returnsLoading ? (
+                <TableRowSkeleton columns={5} />
+              ) : !allReturns || allReturns.length === 0 ? (
+                <EmptyState icon={RotateCcw} title="No returns yet" />
+              ) : (
+                <div className="-mx-6 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-muted-foreground border-y text-left text-xs">
+                        <th className="px-6 py-2 font-medium">Store</th>
+                        <th className="px-6 py-2 font-medium">Order</th>
+                        <th className="px-6 py-2 font-medium">Reason</th>
+                        <th className="px-6 py-2 font-medium">Payment</th>
+                        <th className="px-6 py-2 font-medium">Status</th>
+                        <th className="px-6 py-2 font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allReturns.map((r) => (
+                        <tr key={r.id} className="border-b last:border-0">
+                          <td className="px-6 py-3 font-medium">{r.storeName}</td>
+                          <td className="text-muted-foreground px-6 py-3">{r.orderNumber}</td>
+                          <td className="px-6 py-3">
+                            {returnReasonLabel(r.reasonCategory)}
+                            {r.settlementReconciliationNote ? (
+                              <p className="text-warning-foreground mt-1 text-xs">{r.settlementReconciliationNote}</p>
+                            ) : null}
+                          </td>
+                          <td className="text-muted-foreground px-6 py-3 capitalize">{r.paymentMethod}</td>
+                          <td className="px-6 py-3">
+                            <StatusBadge tone={r.status === "refunded" ? "success" : r.status === "rejected" ? "danger" : "warning"}>
+                              {returnStatusLabel(r.status)}
+                            </StatusBadge>
+                          </td>
+                          <td className="px-6 py-3">
+                            {r.status === "refund-pending" && r.paymentMethod === "payhere" ? (
+                              <Button size="sm" variant="outline" onClick={() => setReturnToMarkRefunded(r.id)}>
+                                Mark refunded
+                              </Button>
+                            ) : r.status === "refunded" ? (
+                              <span className="text-muted-foreground text-xs">{r.refundReference ?? "—"}</span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <Dialog open={!!payoutToMarkPaid} onOpenChange={(open) => !open && setPayoutToMarkPaid(null)}>
@@ -534,6 +617,40 @@ export default function AdminAccountingPage() {
               }
             >
               Confirm collected
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!returnToMarkRefunded} onOpenChange={(open) => !open && setReturnToMarkRefunded(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark return as refunded</DialogTitle>
+            <DialogDescription>
+              Record a reference once the PayHere refund has actually been sent to the buyer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="returnRefundReference">Reference (optional)</Label>
+            <Input
+              id="returnRefundReference"
+              placeholder="e.g. payhere-refund-88214"
+              value={returnRefundReference}
+              onChange={(e) => setReturnRefundReference(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnToMarkRefunded(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={markReturnRefundedMutation.isPending}
+              onClick={() =>
+                returnToMarkRefunded &&
+                markReturnRefundedMutation.mutate({ returnId: returnToMarkRefunded, reference: returnRefundReference })
+              }
+            >
+              Confirm refunded
             </Button>
           </DialogFooter>
         </DialogContent>

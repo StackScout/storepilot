@@ -88,7 +88,7 @@ export function OrderStatusSelect({ order }: { order: Order }) {
         onValueChange={(value) => handleStatusChange(value as OrderStatus)}
       >
         <SelectTrigger className="w-[160px]">
-          <SelectValue />
+          <SelectValue>{(v: OrderStatus) => ORDER_STATUS_LABELS[v]}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((status) => (

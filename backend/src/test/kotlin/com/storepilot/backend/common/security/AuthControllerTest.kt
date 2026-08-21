@@ -1,6 +1,5 @@
 package com.storepilot.backend.common.security
 
-import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.notification.NotificationProperties
 import io.mockk.every
 import io.mockk.mockk
@@ -27,9 +26,8 @@ class AuthControllerTest {
     private val notificationProperties = NotificationProperties()
     private val jwtDecoder = mockk<JwtDecoder>()
     private val emailVerificationService = mockk<EmailVerificationService>()
-    private val auditLogService = mockk<AuditLogService>()
     private val controller = AuthController(
-        cognitoClient, cognitoProperties, currentActor, notificationProperties, jwtDecoder, emailVerificationService, auditLogService,
+        cognitoClient, cognitoProperties, currentActor, notificationProperties, jwtDecoder, emailVerificationService,
     )
 
     // --- resolveGoogleSignInOutcome: the pure (existingRole x intent) decision table ---

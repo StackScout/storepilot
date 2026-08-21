@@ -93,8 +93,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const prevHref = page > 0 ? pageHref(page) : null;
   const nextHref = page + 1 < activePage.totalPages ? pageHref(page + 2) : null;
 
+  // The default "newest" sort is what ProductService.search actually runs as
+  // relevance ranking (see its doc comment) whenever a search query is
+  // present — same URL param, so the pill just needs a label that matches
+  // what it's really doing in each context, no new sort value.
   const SORT_OPTIONS: { value: string; label: string }[] = [
-    { value: "newest", label: "Newest" },
+    { value: "newest", label: query ? "Best match" : "Newest" },
     { value: "rating", label: "Top rated" },
     { value: "price-asc", label: "Price: low to high" },
     { value: "price-desc", label: "Price: high to low" },

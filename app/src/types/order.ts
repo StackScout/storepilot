@@ -51,6 +51,9 @@ export interface Order {
   total: number;
   couponCode?: string;
   discountAmount: number;
+  /** Both present only when the seller was GST-registered at the time of this order — see backend Order.kt's doc comment. Their presence is what makes an order render as a tax invoice rather than a plain confirmation. */
+  sellerAbn?: string;
+  gstAmount?: number;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;

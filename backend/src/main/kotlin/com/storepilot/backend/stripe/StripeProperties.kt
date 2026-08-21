@@ -35,4 +35,13 @@ data class StripeProperties(
     val billingWebhookSecret: String = "",
     val billingSuccessUrlBase: String = "http://localhost:3000/dashboard/settings",
     val billingCancelUrlBase: String = "http://localhost:3000/dashboard/settings",
+    /**
+     * The platform's own Stripe Connect application id (`ca_...`, from the
+     * Stripe Dashboard's Connect settings) — required to deauthorize a
+     * seller's Standard account on account deletion (see
+     * StripeConnectService.deauthorize). Not used anywhere else; this app's
+     * Connect onboarding never goes through the OAuth handshake that would
+     * otherwise need this value for authorization too.
+     */
+    val connectClientId: String = "",
 )

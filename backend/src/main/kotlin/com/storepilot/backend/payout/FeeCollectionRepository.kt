@@ -5,4 +5,7 @@ import java.util.UUID
 
 interface FeeCollectionRepository : JpaRepository<FeeCollection, UUID> {
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<FeeCollection>
+
+    /** Close-store precondition check — see StoreService.closeStore. */
+    fun existsByStoreIdAndStatus(storeId: UUID, status: FeeCollectionStatus): Boolean
 }

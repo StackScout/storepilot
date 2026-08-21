@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -51,8 +52,16 @@ const checkoutSchema = z
     postalCode: z.string().optional(),
     paymentMethod: z.enum(["payhere", "cod", "bank-transfer", "stripe"]),
     deliveryMethod: z.enum(["shipping", "pickup"]),
+    agreeToTerms: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    if (!data.agreeToTerms) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["agreeToTerms"],
+        message: "You must agree to the Terms of Service and Privacy Policy to place an order",
+      });
+    }
     if (data.deliveryMethod !== "shipping") return;
     if (!data.addressLine1 || data.addressLine1.length < 5) {
       ctx.addIssue({ code: "custom", path: ["addressLine1"], message: "Enter the delivery address" });
@@ -167,7 +176,13 @@ export function CheckoutForm() {
     formState: { errors },
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: { state: "", paymentMethod: "cod", deliveryMethod: "shipping", email: session.email ?? "" },
+    defaultValues: {
+      state: "",
+      paymentMethod: "cod",
+      deliveryMethod: "shipping",
+      email: session.email ?? "",
+      agreeToTerms: false,
+    },
   });
 
   // Prefill from the signed-in buyer's default saved address once it loads
@@ -210,6 +225,7 @@ export function CheckoutForm() {
   const state = watch("state");
   const paymentMethod = watch("paymentMethod");
   const deliveryMethod = watch("deliveryMethod");
+  const agreeToTerms = watch("agreeToTerms");
 
   // Pickup always defaults to "shipping" (see defaultValues/reset above) —
   // this only matters if the store's pickupEnabled flips off after the
@@ -233,6 +249,62 @@ export function CheckoutForm() {
   // Set synchronously (before clearCart) so the empty-cart redirect effect
   // below can't race the post-order navigation to /orders/[id].
   const orderPlacedRef = useRef(false);
+
+  // Guards against the classic "back button" duplicate-order bug: submit ->
+  // order created -> redirected to Stripe/PayHere -> buyer clicks browser
+  // back -> lands back here with the cart still intact (deliberately not
+  // cleared, see onSuccess below) -> submits again -> a second order gets
+  // created from the same cart. PENDING_GATEWAY_ORDER_KEY already recorded
+  // which order we last sent to a gateway (see startStripePayment/
+  // startPayHerePayment) — on mount, check it before ever showing the form:
+  // if that order is still unpaid and still matches the current cart,
+  // resume payment on it instead of letting the form submit a fresh one.
+  const [pendingOrderCheck, setPendingOrderCheck] = useState<"checking" | "resuming" | "done">("checking");
+
+  useEffect(() => {
+    if (pendingOrderCheck !== "checking" || !isHydrated) return;
+    const pendingOrderId = sessionStorage.getItem(PENDING_GATEWAY_ORDER_KEY);
+    if (!pendingOrderId) {
+      setPendingOrderCheck("done");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const order = await ordersService.getOrderById(pendingOrderId).catch(() => null);
+      if (cancelled) return;
+      const sameCart =
+        order != null &&
+        order.storeId === cart.storeId &&
+        order.items.length === availableItems.length &&
+        order.items.every((oi) =>
+          availableItems.some((ci) => ci.productId === oi.productId && ci.quantity === oi.quantity),
+        );
+      const canResume =
+        order != null &&
+        sameCart &&
+        order.paymentStatus === "unpaid" &&
+        (order.paymentMethod === "stripe" || order.paymentMethod === "payhere");
+      if (canResume) {
+        orderPlacedRef.current = true;
+        setPendingOrderCheck("resuming");
+        if (order.paymentMethod === "stripe") {
+          await startStripePayment(order);
+        } else {
+          await startPayHerePayment(order);
+        }
+        return;
+      }
+      // Already paid, cancelled, or the cart has changed since — don't
+      // silently resume a stale order. Let a fresh checkout proceed
+      // normally.
+      sessionStorage.removeItem(PENDING_GATEWAY_ORDER_KEY);
+      if (!cancelled) setPendingOrderCheck("done");
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per mount (guarded by the "checking" state itself); startStripePayment/startPayHerePayment/cart/availableItems are read via closure intentionally, not tracked as deps
+  }, [pendingOrderCheck, isHydrated]);
 
   const mutation = useMutation({
     mutationFn: async (values: CheckoutFormValues) => {
@@ -358,6 +430,14 @@ export function CheckoutForm() {
     return null;
   }
 
+  if (pendingOrderCheck !== "done") {
+    return (
+      <div className="flex justify-center py-24">
+        <Loader2 className="text-muted-foreground size-6 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-bold">Checkout</h1>
@@ -381,7 +461,13 @@ export function CheckoutForm() {
                   <Label htmlFor="saved-address">Use a different saved address</Label>
                   <Select onValueChange={(id) => applyAddress(addresses.find((a) => a.id === id)!)}>
                     <SelectTrigger id="saved-address" className="w-full">
-                      <SelectValue placeholder="Choose a saved address" />
+                      <SelectValue placeholder="Choose a saved address">
+                        {(id: string) => {
+                          if (!id) return "Choose a saved address";
+                          const a = addresses.find((addr) => addr.id === id);
+                          return a ? `${a.label || a.shipping.fullName} — ${a.shipping.addressLine1}, ${a.shipping.city}` : id;
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {addresses.map((a) => (
@@ -721,6 +807,24 @@ export function CheckoutForm() {
                 </span>
               </div>
             </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={agreeToTerms}
+                onCheckedChange={(checked) => setValue("agreeToTerms", checked === true, { shouldValidate: true })}
+                className="mt-0.5"
+              />
+              <span className="text-muted-foreground text-xs">
+                I agree to {name}&apos;s{" "}
+                <Link href="/terms" target="_blank" className="text-primary underline-offset-4 hover:underline">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" className="text-primary underline-offset-4 hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
             <Button
               type="submit"
               size="lg"
@@ -735,13 +839,9 @@ export function CheckoutForm() {
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               Place order
             </Button>
-            <p className="text-muted-foreground text-center text-xs">
-              By placing this order you agree to {name}&apos;s{" "}
-              <Link href="#" className="underline">
-                terms
-              </Link>
-              .
-            </p>
+            {errors.agreeToTerms ? (
+              <p className="text-destructive text-center text-xs">{errors.agreeToTerms.message}</p>
+            ) : null}
           </CardContent>
         </Card>
       </form>

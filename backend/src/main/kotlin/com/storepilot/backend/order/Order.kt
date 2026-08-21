@@ -82,6 +82,22 @@ class Order(
     var couponCode: String? = null,
     @Column(name = "discount_amount", nullable = false)
     var discountAmount: Int = 0,
+    /**
+     * Both null unless the seller's StoreSettings.gstRegistered was true at
+     * the moment this order was created — presence of these two fields
+     * together is what makes an order confirmation render as an ATO tax
+     * invoice rather than a plain receipt (see OrderNotifier.orderConfirmed
+     * and OrderMapper). Snapshotted rather than resolved live from the
+     * store's current settings, same "freeze at creation time" principle as
+     * OrderItem's price snapshot — a seller's GST-registration status or
+     * ABN could change after the sale, but a tax invoice must reflect their
+     * status at the time of that specific sale, not today's.
+     */
+    @Column(name = "seller_abn")
+    var sellerAbn: String? = null,
+    /** Cents, same convention as every other money field — see Product.price's doc comment. Computed as total / 11 at order-creation time (AU retail prices are GST-inclusive by convention), never recomputed later. */
+    @Column(name = "gst_amount")
+    var gstAmount: Int? = null,
 ) : BaseEntity()
 
 /**

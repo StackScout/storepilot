@@ -57,7 +57,7 @@ export function BookingStatusSelect({ booking }: { booking: Booking }) {
         onValueChange={(value) => setDialogStatus(value as BookingStatus)}
       >
         <SelectTrigger className="w-[160px]">
-          <SelectValue />
+          <SelectValue>{(v: BookingStatus) => BOOKING_STATUS_LABELS[v]}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((status) => (

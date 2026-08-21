@@ -2,6 +2,7 @@ package com.storepilot.backend.notification
 
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.order.Order
+import com.storepilot.backend.returns.ReturnRequest
 import com.storepilot.backend.store.StoreSettingsRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -24,16 +25,39 @@ class OrderNotifier(
 ) {
     private val log = LoggerFactory.getLogger(OrderNotifier::class.java)
 
+    /**
+     * order.sellerAbn/gstAmount are both non-null only when the seller had
+     * self-declared GST registration at the moment this order was created
+     * (see Order.kt's doc comment) — their presence is what makes this
+     * email include the ATO-required tax-invoice fields (seller ABN, GST
+     * amount) rather than a plain order confirmation. Not itself a PDF —
+     * the ATO explicitly accepts a digital document like this one.
+     */
     fun orderConfirmed(order: Order) {
         val platformConfig = platformConfigService.current()
+        val isTaxInvoice = order.sellerAbn != null && order.gstAmount != null
         sendSafely(
             to = order.buyerEmail,
-            subject = "Your ${platformConfig.name} order ${order.orderNumber} is confirmed",
+            subject = if (isTaxInvoice) {
+                "Tax invoice for your ${platformConfig.name} order ${order.orderNumber}"
+            } else {
+                "Your ${platformConfig.name} order ${order.orderNumber} is confirmed"
+            },
             body = buildString {
+                if (isTaxInvoice) {
+                    appendLine("TAX INVOICE")
+                    appendLine()
+                }
                 appendLine("Thanks for your order from ${order.store.name}!")
                 appendLine()
                 appendLine("Order: ${order.orderNumber}")
+                if (isTaxInvoice) {
+                    appendLine("Seller ABN: ${order.sellerAbn}")
+                }
                 appendLine("Total: ${platformConfig.currencyCode} ${formatMoney(order.total)}")
+                if (isTaxInvoice) {
+                    appendLine("Includes GST: ${platformConfig.currencyCode} ${formatMoney(requireNotNull(order.gstAmount))}")
+                }
                 appendLine()
                 appendLine("Track your order: ${orderUrl(order)}")
             },
@@ -102,6 +126,69 @@ class OrderNotifier(
                 appendLine("Track your order: ${orderUrl(order)}")
             },
             attachment = attachment,
+        )
+    }
+
+    /** ReturnRequestService.create — seller notification, mirrors receiptUploaded's "seller needs to act" shape. */
+    fun returnRequested(order: Order, request: ReturnRequest) {
+        val storeId = order.store.id ?: return
+        val settings = storeSettingsRepository.findById(storeId).orElse(null)
+        if (settings == null) {
+            log.warn("No StoreSettings for store {} — skipping return-requested notification for order {}", storeId, order.orderNumber)
+            return
+        }
+        sendSafely(
+            to = settings.contactEmail,
+            subject = "Return requested for order ${order.orderNumber}",
+            body = buildString {
+                appendLine("A buyer has requested a return for order ${order.orderNumber}.")
+                appendLine("Reason: ${request.reasonCategory.wireValue}")
+                if (!request.reasonNote.isNullOrBlank()) {
+                    appendLine("Details: ${request.reasonNote}")
+                }
+                appendLine()
+                appendLine("Review and respond from your seller dashboard.")
+            },
+        )
+    }
+
+    /** ReturnRequestService.decide — buyer notification, mirrors bankTransferVerified's approved/rejected shape. */
+    fun returnDecided(order: Order, approved: Boolean, note: String?) {
+        val subject = if (approved) {
+            "Your return for order ${order.orderNumber} was approved"
+        } else {
+            "Your return for order ${order.orderNumber} was declined"
+        }
+        val body = buildString {
+            if (approved) {
+                appendLine("Good news — the seller has approved your return for order ${order.orderNumber}.")
+                appendLine("We'll email you again once your refund has gone through.")
+            } else {
+                appendLine("The seller couldn't approve your return for order ${order.orderNumber}.")
+                if (!note.isNullOrBlank()) {
+                    appendLine("Reason: $note")
+                }
+            }
+            appendLine()
+            appendLine(orderUrl(order))
+        }
+        sendSafely(to = order.buyerEmail, subject = subject, body = body)
+    }
+
+    /** ReturnRequestService.completeRefund — buyer notification once the refund has actually gone through (immediately for Stripe, or once a seller/admin confirms it for every other payment method). */
+    fun returnRefunded(order: Order, refundReference: String?) {
+        sendSafely(
+            to = order.buyerEmail,
+            subject = "Your refund for order ${order.orderNumber} is complete",
+            body = buildString {
+                appendLine("Your refund for order ${order.orderNumber} from ${order.store.name} has been processed.")
+                appendLine("Amount: ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}")
+                if (!refundReference.isNullOrBlank()) {
+                    appendLine("Reference: $refundReference")
+                }
+                appendLine()
+                appendLine(orderUrl(order))
+            },
         )
     }
 

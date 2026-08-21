@@ -126,6 +126,10 @@ class StoreController(
     fun create(@Valid @RequestBody input: StoreApplicationInput): ResponseEntity<StoreResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(storeService.create(input))
 
+    /** Owner-only, permanent — see StoreService.closeStore's doc comment. */
+    @PostMapping("/api/stores/{storeId}/close")
+    fun closeStore(@PathVariable storeId: UUID): StoreResponse = storeService.closeStore(storeId)
+
     @GetMapping("/api/admin/stores")
     fun adminList(@RequestParam status: String?): List<StoreResponse> = storeService.adminList(status)
 

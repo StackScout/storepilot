@@ -175,7 +175,7 @@ export function CouponFormDialog({
               <Label htmlFor="discountType">Discount type</Label>
               <Select value={discountType} onValueChange={(v) => setValue("discountType", v as "percent" | "fixed")}>
                 <SelectTrigger id="discountType">
-                  <SelectValue />
+                  <SelectValue>{(v: "percent" | "fixed") => (v === "fixed" ? "Fixed amount off" : "Percent off")}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percent">Percent off</SelectItem>

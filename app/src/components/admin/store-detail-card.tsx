@@ -11,12 +11,14 @@ const STATUS_TONES: Record<StoreVerificationStatus, StatusTone> = {
   pending: "warning",
   active: "success",
   rejected: "danger",
+  closed: "danger",
 };
 
 const STATUS_LABEL: Record<StoreVerificationStatus, string> = {
   pending: "Pending",
   active: "Active",
   rejected: "Rejected",
+  closed: "Closed",
 };
 
 /** Full store details for admin review — seller/business identity, bank account, verification documents. Used by both the pending-approval queue and the all-stores directory on /admin/stores. */

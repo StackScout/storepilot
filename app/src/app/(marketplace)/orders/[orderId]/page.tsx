@@ -4,25 +4,36 @@ import { use, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, FileText, Loader2, MessageCircle, PackageX, Truck, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, FileText, Loader2, MessageCircle, PackageX, RotateCcw, Truck, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { CancelOrderButton } from "@/components/marketplace/cancel-order-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { OrderStatusBadge } from "@/components/shared/order-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { StatusTimeline } from "@/components/shared/status-timeline";
 import { formatCurrency } from "@/lib/currency";
-import { paymentMethodLabel } from "@/lib/format";
+import { paymentMethodLabel, returnReasonLabel, returnStatusLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PENDING_GATEWAY_ORDER_KEY } from "@/lib/constants";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { useCart } from "@/hooks/use-cart";
 import { useLiveStatus } from "@/hooks/use-live-status";
-import { ordersService, storesService } from "@/services";
-import type { Order, Store, StorePublicSettings } from "@/types";
+import { ordersService, returnsService, storesService } from "@/services";
+import type { Order, ReturnReasonCategory, ReturnRequest, Store, StorePublicSettings } from "@/types";
+
+const RETURN_REASON_OPTIONS: ReturnReasonCategory[] = [
+  "defective",
+  "wrong-item",
+  "not-as-described",
+  "changed-mind",
+  "other",
+];
 
 export default function OrderTrackingPage({
   params,
@@ -38,6 +49,10 @@ export default function OrderTrackingPage({
   const [storeSettings, setStoreSettings] = useState<StorePublicSettings | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [returns, setReturns] = useState<ReturnRequest[]>([]);
+  const [returnReason, setReturnReason] = useState<ReturnReasonCategory>("defective");
+  const [returnNote, setReturnNote] = useState("");
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,13 +60,15 @@ export default function OrderTrackingPage({
       if (cancelled) return;
       setOrder(found);
       if (found) {
-        const [s, settings] = await Promise.all([
+        const [s, settings, returnRequests] = await Promise.all([
           storesService.getStoreById(found.storeId),
           found.paymentMethod === "bank-transfer" ? storesService.getPublicStoreSettings(found.storeId) : null,
+          found.status === "delivered" ? returnsService.listReturnsForOrder(found.id) : Promise.resolve([]),
         ]);
         if (!cancelled) {
           setStore(s);
           setStoreSettings(settings);
+          setReturns(returnRequests);
         }
       }
     });
@@ -75,6 +92,24 @@ export default function OrderTrackingPage({
     sessionStorage.removeItem(PENDING_GATEWAY_ORDER_KEY);
     clearCart();
   }, [order, clearCart]);
+
+  async function handleRequestReturn() {
+    if (!order) return;
+    setIsSubmittingReturn(true);
+    try {
+      const created = await returnsService.createReturnRequest(order.id, {
+        reasonCategory: returnReason,
+        reasonNote: returnNote.trim() || undefined,
+      });
+      setReturns((prev) => [created, ...prev]);
+      setReturnNote("");
+      toast.success("Return requested — the seller will review it shortly.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't request a return. Please try again.");
+    } finally {
+      setIsSubmittingReturn(false);
+    }
+  }
 
   async function handleUploadReceipt() {
     if (!receiptFile || !order) return;
@@ -163,6 +198,15 @@ export default function OrderTrackingPage({
 
       <Card className="mt-8">
         <CardContent className="space-y-5">
+          {order.sellerAbn && order.gstAmount != null ? (
+            <div className="bg-muted/50 space-y-0.5 rounded-lg p-3.5 text-sm">
+              <p className="font-semibold">Tax Invoice</p>
+              <p className="text-muted-foreground text-xs">
+                {order.storeName} — ABN {order.sellerAbn}
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Order status</h2>
             <OrderStatusBadge status={order.status} />
@@ -243,6 +287,12 @@ export default function OrderTrackingPage({
               <span>Total</span>
               <span>{formatCurrency(order.total, currency)}</span>
             </div>
+            {order.gstAmount != null ? (
+              <div className="text-muted-foreground flex justify-between text-xs">
+                <span>Includes GST</span>
+                <span>{formatCurrency(order.gstAmount, currency)}</span>
+              </div>
+            ) : null}
             <p className="text-muted-foreground pt-1 text-xs">
               Paying by {paymentMethodLabel(order.paymentMethod)}
             </p>
@@ -332,6 +382,85 @@ export default function OrderTrackingPage({
             <p className="text-muted-foreground text-sm">{order.shipping.phone}</p>
             <p className="text-muted-foreground text-sm">{order.buyerEmail}</p>
           </div>
+
+          {order.status === "delivered" ? (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <h2 className="font-semibold">Return &amp; refund</h2>
+                {returns.length > 0 && returns[0].status !== "rejected" ? (
+                  <div className="bg-muted/50 space-y-1 rounded-lg border p-3.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{returnReasonLabel(returns[0].reasonCategory)}</p>
+                      <span className="text-muted-foreground text-xs">{returnStatusLabel(returns[0].status)}</span>
+                    </div>
+                    {returns[0].reasonNote ? (
+                      <p className="text-muted-foreground">{returns[0].reasonNote}</p>
+                    ) : null}
+                    {returns[0].sellerDecisionNote ? (
+                      <p className="text-muted-foreground">Seller note: {returns[0].sellerDecisionNote}</p>
+                    ) : null}
+                    {returns[0].status === "refunded" ? (
+                      <p className="text-success-foreground">Your refund has been processed.</p>
+                    ) : returns[0].status === "refund-pending" ? (
+                      <p className="text-muted-foreground">Approved — your refund is being processed.</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {returns.length > 0 ? (
+                      <p className="text-muted-foreground text-sm">
+                        Your previous return request was declined
+                        {returns[0].sellerDecisionNote ? `: ${returns[0].sellerDecisionNote}` : "."} You can submit
+                        a new one below.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">
+                        Not what you expected? Request a return within the store&apos;s return window.
+                      </p>
+                    )}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="returnReason" className="text-xs font-normal">
+                        Reason
+                      </Label>
+                      <Select value={returnReason} onValueChange={(v) => setReturnReason(v as ReturnReasonCategory)}>
+                        <SelectTrigger id="returnReason" className="w-full">
+                          <SelectValue>{(v: ReturnReasonCategory) => returnReasonLabel(v)}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RETURN_REASON_OPTIONS.map((reason) => (
+                            <SelectItem key={reason} value={reason}>
+                              {returnReasonLabel(reason)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="returnNote" className="text-xs font-normal">
+                        Details (optional)
+                      </Label>
+                      <Textarea
+                        id="returnNote"
+                        rows={2}
+                        value={returnNote}
+                        onChange={(e) => setReturnNote(e.target.value)}
+                        placeholder="Tell the seller more about the issue"
+                      />
+                    </div>
+                    <Button type="button" size="sm" disabled={isSubmittingReturn} onClick={handleRequestReturn}>
+                      {isSubmittingReturn ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <RotateCcw className="size-4" />
+                      )}
+                      Request return
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
         </CardContent>
       </Card>
 

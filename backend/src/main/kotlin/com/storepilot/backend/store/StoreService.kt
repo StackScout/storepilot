@@ -14,7 +14,14 @@ import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
+import com.storepilot.backend.booking.BookingRepository
+import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.order.OrderRepository
+import com.storepilot.backend.order.OrderStatus
+import com.storepilot.backend.payout.FeeCollectionRepository
+import com.storepilot.backend.payout.FeeCollectionStatus
+import com.storepilot.backend.payout.PayoutRepository
+import com.storepilot.backend.payout.PayoutStatus
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.seller.SellerRepository
@@ -49,6 +56,9 @@ class StoreService(
     private val auditLogService: AuditLogService,
     private val orderRepository: OrderRepository,
     private val followRepository: FollowRepository,
+    private val bookingRepository: BookingRepository,
+    private val payoutRepository: PayoutRepository,
+    private val feeCollectionRepository: FeeCollectionRepository,
 ) {
     private val log = LoggerFactory.getLogger(StoreService::class.java)
 
@@ -328,6 +338,7 @@ class StoreService(
             input.pickupEnabled?.let { existing.pickupEnabled = it }
             input.stripeEnabled?.let { existing.stripeEnabled = it }
             input.bookingsEnabled?.let { existing.bookingsEnabled = it }
+            input.gstRegistered?.let { existing.gstRegistered = it }
             requireAtLeastOnePaymentMethod(existing.codEnabled, existing.onlinePaymentEnabled, existing.bankTransferEnabled)
             requireCountryVerificationFields(existing)
             val saved = storeSettingsRepository.save(existing)
@@ -386,6 +397,7 @@ class StoreService(
             rejectionReason = input.rejectionReason,
             stockManagementEnabled = input.stockManagementEnabled ?: true,
             pickupEnabled = input.pickupEnabled ?: false,
+            gstRegistered = input.gstRegistered ?: false,
         )
         requireCountryVerificationFields(created)
         return storeSettingsRepository.save(created).toResponse(fileStorageService)
@@ -563,6 +575,48 @@ class StoreService(
             auditLogService.record(AuditAction.STORE_REJECTED, "store", storeId.toString(), "Rejected store \"${store.name}\"$reasonSuffix")
         }
         return store.toResponse(fileStorageService)
+    }
+
+    /**
+     * POST /api/stores/{storeId}/close — seller-initiated, permanent. Blocked
+     * while anything is still in flight or owed either direction, so once it
+     * succeeds a seller can safely move on to account deletion (see
+     * SellerAccountService) with no orphaned obligations left behind. The
+     * store's own identity fields (name/slug/description/logo) are
+     * deliberately left untouched — search()/getBySlug() already only
+     * surface ACTIVE stores, so closing one drops it out of the public
+     * marketplace with no other code changes, while a past buyer's order
+     * history keeps showing a coherent store name.
+     */
+    @Transactional
+    fun closeStore(storeId: UUID): StoreResponse {
+        val store = requireOwnedStore(storeId)
+        if (store.verificationStatus == StoreVerificationStatus.CLOSED) return store.toResponse(fileStorageService)
+
+        if (orderRepository.existsByStoreIdAndStatusIn(storeId, setOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED))) {
+            throw ConflictException("This store has orders still in progress — resolve them before closing")
+        }
+        if (bookingRepository.existsByStoreIdAndStatusIn(storeId, setOf(BookingStatus.PENDING, BookingStatus.CONFIRMED))) {
+            throw ConflictException("This store has bookings still in progress — resolve them before closing")
+        }
+        if (feeCollectionRepository.existsByStoreIdAndStatus(storeId, FeeCollectionStatus.PENDING)) {
+            throw ConflictException("This store has an outstanding platform fee — settle it before closing")
+        }
+        if (payoutRepository.existsByStoreIdAndStatus(storeId, PayoutStatus.SCHEDULED)) {
+            throw ConflictException("This store has a payout still scheduled — wait for it to complete before closing")
+        }
+
+        store.verificationStatus = StoreVerificationStatus.CLOSED
+        store.isVerified = false
+        val saved = storeRepository.save(store)
+        auditLogService.recordAsSeller(
+            store.seller,
+            AuditAction.STORE_CLOSED,
+            "store",
+            storeId.toString(),
+            "Closed store \"${store.name}\"",
+        )
+        return saved.toResponse(fileStorageService)
     }
 
     private fun uniqueSlug(name: String): String {

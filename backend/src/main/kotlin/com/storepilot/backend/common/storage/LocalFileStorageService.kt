@@ -36,4 +36,12 @@ class LocalFileStorageService(
      * Product.images, never having gone through store()).
      */
     override fun resolveUrl(reference: String): String = reference
+
+    /** Reverses store()'s own path construction — strips the public-path prefix, resolves the remainder against uploadDir. */
+    override fun delete(reference: String) {
+        if (reference.startsWith("http://") || reference.startsWith("https://")) return
+        val relative = reference.removePrefix(properties.publicPath).trimStart('/')
+        val path = Path.of(properties.uploadDir, relative).toAbsolutePath().normalize()
+        Files.deleteIfExists(path)
+    }
 }

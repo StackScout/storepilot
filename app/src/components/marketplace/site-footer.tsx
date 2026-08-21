@@ -36,6 +36,12 @@ export async function SiteFooter() {
           <p className="font-medium">Company</p>
           <span className="text-muted-foreground block">{config.companyLocation}</span>
           <span className="text-muted-foreground block">{config.supportEmail}</span>
+          <Link href="/terms" className="text-muted-foreground hover:text-foreground block">
+            Terms of Service
+          </Link>
+          <Link href="/privacy" className="text-muted-foreground hover:text-foreground block">
+            Privacy Policy
+          </Link>
         </div>
       </div>
       <div className="text-muted-foreground border-t px-4 py-4 text-center text-xs sm:px-6 lg:px-8">

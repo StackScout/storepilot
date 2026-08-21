@@ -17,7 +17,6 @@ const ACTIONS = [
   { value: "store_approved", label: "Store approved" },
   { value: "store_rejected", label: "Store rejected" },
   { value: "admin_invited", label: "Admin invited" },
-  { value: "admin_login", label: "Admin login" },
   { value: "payout_marked_paid", label: "Payout marked paid" },
   { value: "fee_collection_marked_collected", label: "Fee collection marked collected" },
   { value: "store_settings_updated", label: "Store settings updated" },
@@ -54,7 +53,7 @@ export default function AdminAuditLogPage() {
           }}
         >
           <SelectTrigger className="w-56">
-            <SelectValue />
+            <SelectValue>{(v: string) => ACTION_LABELS[v] ?? v}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {ACTIONS.map((a) => (

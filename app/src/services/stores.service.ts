@@ -198,6 +198,17 @@ export async function getMyStore(): Promise<Store | null> {
   return store ? normalizeStore(store) : null;
 }
 
+/**
+ * POST /stores/:id/close — permanent, seller-initiated. Blocked (409, with
+ * a specific reason in the error message) unless every in-flight order,
+ * booking, fee collection, and payout for the store has been resolved.
+ * Precondition for seller account deletion — see seller-account.service.ts.
+ */
+export async function closeStore(storeId: string): Promise<Store> {
+  const store = await apiClient.post<Store>(`/api/stores/${storeId}/close`);
+  return normalizeStore(store);
+}
+
 // --- Admin (requires the admin Cognito role) ---
 
 /** GET /admin/stores?status= */

@@ -68,6 +68,7 @@ data class StoreSettingsResponse(
     val stripePayoutsEnabled: Boolean,
     val stripeEnabled: Boolean,
     val bookingsEnabled: Boolean,
+    val gstRegistered: Boolean,
 )
 
 /**
@@ -141,6 +142,8 @@ data class StoreSettingsInput(
     val stripeEnabled: Boolean? = null,
     /** Plain opt-in, no Pro-gate — see StoreSettings.bookingsEnabled's doc comment. */
     val bookingsEnabled: Boolean? = null,
+    /** Self-declared, freely editable regardless of verification status — not an identity claim, see StoreSettings.gstRegistered's doc comment. */
+    val gstRegistered: Boolean? = null,
 )
 
 /** PATCH /api/stores/{storeId}/profile — seller-editable public social links. A field left null is untouched; send an empty string to clear a link. */
@@ -206,6 +209,10 @@ data class StoreVerificationChangeRequestResponse(
     val currentAbn: String?,
     val currentNicNumber: String?,
     val currentBusinessRegistrationNumber: String?,
+    val currentDriverLicenceDocumentUrl: String?,
+    val currentAbnDocumentUrl: String?,
+    val currentNicDocumentUrl: String?,
+    val currentBusinessRegDocumentUrl: String?,
     val rejectionReason: String?,
     val submittedAt: Instant,
     val reviewedAt: Instant?,

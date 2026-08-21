@@ -143,6 +143,7 @@ stripe:
   billing-webhook-secret: ${STRIPE_BILLING_WEBHOOK_SECRET:}
   billing-success-url-base: ${STRIPE_BILLING_SUCCESS_URL_BASE:http://localhost:3000/dashboard/settings}
   billing-cancel-url-base: ${STRIPE_BILLING_CANCEL_URL_BASE:http://localhost:3000/dashboard/settings}
+  connect-client-id: ${STRIPE_CONNECT_CLIENT_ID:}
 
 # ABR "ABN Lookup" free web service — see AbnLookupService. Empty-string
 # default so the app boots fine before a real GUID is set; lookups just

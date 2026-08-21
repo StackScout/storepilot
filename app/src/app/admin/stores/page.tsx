@@ -227,7 +227,9 @@ export default function AdminStoresPage() {
                 </p>
                 <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
                   <SelectTrigger className="w-44">
-                    <SelectValue />
+                    <SelectValue>
+                      {(v: StatusFilter) => STATUS_FILTERS.find((f) => f.value === v)?.label ?? v}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_FILTERS.map((filter) => (
@@ -321,12 +323,25 @@ export default function AdminStoresPage() {
                             {request.nicDocumentUrl ? (
                               <div>
                                 <dt className="text-muted-foreground text-xs">NIC document</dt>
-                                <dd>
+                                <dd className="flex flex-wrap items-center gap-x-2">
+                                  {request.currentNicDocumentUrl ? (
+                                    <>
+                                      <a
+                                        href={request.currentNicDocumentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-muted-foreground underline-offset-4 hover:underline"
+                                      >
+                                        View current file
+                                      </a>
+                                      <span className="text-muted-foreground">→</span>
+                                    </>
+                                  ) : null}
                                   <a
                                     href={request.nicDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-primary underline-offset-4 hover:underline"
+                                    className="text-primary font-medium underline-offset-4 hover:underline"
                                   >
                                     View new file
                                   </a>
@@ -336,12 +351,25 @@ export default function AdminStoresPage() {
                             {request.businessRegDocumentUrl ? (
                               <div>
                                 <dt className="text-muted-foreground text-xs">Business reg. document</dt>
-                                <dd>
+                                <dd className="flex flex-wrap items-center gap-x-2">
+                                  {request.currentBusinessRegDocumentUrl ? (
+                                    <>
+                                      <a
+                                        href={request.currentBusinessRegDocumentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-muted-foreground underline-offset-4 hover:underline"
+                                      >
+                                        View current file
+                                      </a>
+                                      <span className="text-muted-foreground">→</span>
+                                    </>
+                                  ) : null}
                                   <a
                                     href={request.businessRegDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-primary underline-offset-4 hover:underline"
+                                    className="text-primary font-medium underline-offset-4 hover:underline"
                                   >
                                     View new file
                                   </a>
@@ -377,12 +405,25 @@ export default function AdminStoresPage() {
                             {request.driverLicenceDocumentUrl ? (
                               <div>
                                 <dt className="text-muted-foreground text-xs">Driver&apos;s licence document</dt>
-                                <dd>
+                                <dd className="flex flex-wrap items-center gap-x-2">
+                                  {request.currentDriverLicenceDocumentUrl ? (
+                                    <>
+                                      <a
+                                        href={request.currentDriverLicenceDocumentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-muted-foreground underline-offset-4 hover:underline"
+                                      >
+                                        View current file
+                                      </a>
+                                      <span className="text-muted-foreground">→</span>
+                                    </>
+                                  ) : null}
                                   <a
                                     href={request.driverLicenceDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-primary underline-offset-4 hover:underline"
+                                    className="text-primary font-medium underline-offset-4 hover:underline"
                                   >
                                     View new file
                                   </a>
@@ -392,12 +433,25 @@ export default function AdminStoresPage() {
                             {request.abnDocumentUrl ? (
                               <div>
                                 <dt className="text-muted-foreground text-xs">ABN document</dt>
-                                <dd>
+                                <dd className="flex flex-wrap items-center gap-x-2">
+                                  {request.currentAbnDocumentUrl ? (
+                                    <>
+                                      <a
+                                        href={request.currentAbnDocumentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-muted-foreground underline-offset-4 hover:underline"
+                                      >
+                                        View current file
+                                      </a>
+                                      <span className="text-muted-foreground">→</span>
+                                    </>
+                                  ) : null}
                                   <a
                                     href={request.abnDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-primary underline-offset-4 hover:underline"
+                                    className="text-primary font-medium underline-offset-4 hover:underline"
                                   >
                                     View new file
                                   </a>

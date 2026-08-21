@@ -12,6 +12,7 @@ import { BookingStatusBadge } from "@/components/shared/booking-status-badge";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { AddressFormDialog } from "@/components/marketplace/address-form-dialog";
+import { DeleteAccountDialog } from "@/components/marketplace/delete-account-dialog";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { formatDate } from "@/lib/format";
 import {
@@ -371,6 +372,18 @@ export function AccountView() {
           )}
         </CardContent>
       </Card>
+
+      {buyer ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <div>
+              <h2 className="font-semibold">Danger zone</h2>
+              <p className="text-muted-foreground text-sm">Export or permanently delete your account data.</p>
+            </div>
+            <DeleteAccountDialog email={buyer.email} />
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

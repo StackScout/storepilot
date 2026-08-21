@@ -19,7 +19,7 @@ export interface StoreAddress {
  * Set by the (mock) admin review flow, not by the seller themselves — see
  * `docs/features/seller-auth.md`.
  */
-export type StoreVerificationStatus = "pending" | "active" | "rejected";
+export type StoreVerificationStatus = "pending" | "active" | "rejected" | "closed";
 
 export interface Store {
   id: string;
@@ -105,6 +105,8 @@ export interface StoreSettings {
   stripeEnabled: boolean;
   /** Opt-in, defaults false — gates whether this store's bookable-services section exists at all. Not itself Pro-gated; only the "pay at venue"/bank-transfer booking payment methods are (mirroring codEnabled/bankTransferEnabled) — see docs/features/bookings.md. */
   bookingsEnabled: boolean;
+  /** Self-declared, opt-in, defaults false — GST registration is turnover-based (mandatory above A$75k/year, optional below it), never implied by ABN presence alone. Drives whether order confirmations render as ATO tax invoices — see order.ts's Order.sellerAbn/gstAmount. */
+  gstRegistered: boolean;
 }
 
 /**
@@ -157,6 +159,10 @@ export interface StoreVerificationChangeRequest {
   currentAbn?: string;
   currentNicNumber?: string;
   currentBusinessRegistrationNumber?: string;
+  currentDriverLicenceDocumentUrl?: string;
+  currentAbnDocumentUrl?: string;
+  currentNicDocumentUrl?: string;
+  currentBusinessRegDocumentUrl?: string;
   rejectionReason?: string;
   submittedAt: string;
   reviewedAt?: string;

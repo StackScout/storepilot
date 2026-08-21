@@ -28,6 +28,7 @@ export interface PlatformConfig {
   defaultBankTransferEnabled: boolean;
   supportEmail: string;
   companyLocation: string;
+  returnWindowDays: number;
 }
 
 /**
@@ -55,6 +56,7 @@ const FALLBACK_CONFIG: PlatformConfig = {
   defaultBankTransferEnabled: true,
   supportEmail: "hello@storepilot.au",
   companyLocation: "Sydney, Australia",
+  returnWindowDays: 30,
 };
 
 export async function getPlatformConfig(): Promise<PlatformConfig> {

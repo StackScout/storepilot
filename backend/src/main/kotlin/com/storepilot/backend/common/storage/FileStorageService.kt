@@ -33,6 +33,15 @@ interface FileStorageService {
      * needs a freshly-signed URL with its own expiry, not a fixed one.
      */
     fun resolveUrl(reference: String): String
+
+    /**
+     * Permanently removes the underlying file — used by account-deletion
+     * flows (see SellerAccountService) so a document isn't just orphaned
+     * once its DB pointer is nulled. A no-op (not an error) for an
+     * already-absolute URL never actually stored here (e.g. seed-data
+     * placeholders), same guard resolveUrl() already applies.
+     */
+    fun delete(reference: String)
 }
 
 fun validateUploadFile(file: MultipartFile, allowedContentTypes: Set<String>, maxBytes: Long) {

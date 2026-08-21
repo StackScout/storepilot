@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { MfaSettingsCard } from "@/components/shared/mfa-settings-card";
+import { DangerZoneCard } from "@/components/dashboard/danger-zone-card";
 import { cn } from "@/lib/utils";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
@@ -60,6 +61,7 @@ const settingsSchema = z
     stockManagementEnabled: z.boolean(),
     pickupEnabled: z.boolean(),
     bookingsEnabled: z.boolean(),
+    gstRegistered: z.boolean(),
     facebookUrl: urlOrEmpty,
     instagramUrl: urlOrEmpty,
     tiktokUrl: urlOrEmpty,
@@ -189,6 +191,7 @@ function DashboardSettingsForm() {
         stockManagementEnabled: settings.stockManagementEnabled,
         pickupEnabled: settings.pickupEnabled,
         bookingsEnabled: settings.bookingsEnabled,
+        gstRegistered: settings.gstRegistered,
         facebookUrl: store.facebookUrl ?? "",
         instagramUrl: store.instagramUrl ?? "",
         tiktokUrl: store.tiktokUrl ?? "",
@@ -203,6 +206,7 @@ function DashboardSettingsForm() {
   const stockManagementEnabled = watch("stockManagementEnabled");
   const pickupEnabled = watch("pickupEnabled");
   const bookingsEnabled = watch("bookingsEnabled");
+  const gstRegistered = watch("gstRegistered");
 
   const stripeOnboardingMutation = useMutation({
     mutationFn: () => storesService.startStripeConnectOnboarding(storeId),
@@ -762,6 +766,28 @@ function DashboardSettingsForm() {
           </CardContent>
         </Card>
 
+        {isAustralia ? (
+          <Card>
+            <CardContent className="space-y-4">
+              <h2 className="font-semibold">Tax</h2>
+              <label className="flex items-start gap-3">
+                <Checkbox
+                  checked={gstRegistered}
+                  onCheckedChange={(checked) => setValue("gstRegistered", checked === true)}
+                />
+                <span>
+                  <span className="block text-sm font-medium">Registered for GST</span>
+                  <span className="text-muted-foreground block text-xs">
+                    GST registration is optional below A$75,000 annual turnover. When enabled, your
+                    order confirmations include your ABN and a GST breakdown as a tax invoice. Don&apos;t
+                    enable this unless you&apos;re actually registered with the ATO.
+                  </span>
+                </span>
+              </label>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardContent className="space-y-4">
             <h2 className="font-semibold">Inventory</h2>
@@ -969,6 +995,12 @@ function DashboardSettingsForm() {
       </Card>
       )}
 
+      <DangerZoneCard
+        storeId={store?.id ?? null}
+        storeName={store?.name ?? null}
+        verificationStatus={store?.verificationStatus ?? null}
+      />
+
       <Dialog open={changeRequestOpen} onOpenChange={setChangeRequestOpen}>
         <DialogContent>
           <DialogHeader>
@@ -989,7 +1021,7 @@ function DashboardSettingsForm() {
                 onValueChange={(v) => setChangeRequestValue("sellerType", v as SellerType)}
               >
                 <SelectTrigger id="crSellerType">
-                  <SelectValue />
+                  <SelectValue>{(v: SellerType) => (v === "business" ? "Business" : "Individual")}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="individual">Individual</SelectItem>

@@ -61,6 +61,22 @@ class FeeCollectionService(
         return eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
     }
 
+    /**
+     * Admin-facing equivalent of getEligibleOrders — used by the accounting
+     * dashboard's "which stores owe a fee collection" scan across every
+     * active store, not just the caller's own. Deliberately skips
+     * requireSellerOwnsStore, mirroring PayoutService.adminGetEligibleOrders
+     * and the same split createBatch below already relies on. Reachable
+     * only under the "/api/admin" prefix, already gated to hasRole("ADMIN")
+     * by SecurityConfig as a whole.
+     */
+    fun adminGetEligibleOrders(storeId: UUID): List<OrderResponse> =
+        eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+
+    /** Admin-facing equivalent of getEligibleBookings — see adminGetEligibleOrders's doc comment. */
+    fun adminGetEligibleBookings(storeId: UUID): List<BookingResponse> =
+        eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+
     private fun requireSellerOwnsStore(storeId: UUID) {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }

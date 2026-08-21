@@ -1,4 +1,4 @@
-import type { PaymentMethod } from "@/types";
+import type { PaymentMethod, ReturnReasonCategory, ReturnRequestStatus } from "@/types";
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cod: "Cash on Delivery",
@@ -14,6 +14,30 @@ export function paymentMethodLabel(method: PaymentMethod): string {
 /** Same wire values as paymentMethodLabel, but "cod" reads as "Pay at venue" in a booking context — see docs/features/bookings.md. */
 export function bookingPaymentMethodLabel(method: PaymentMethod): string {
   return method === "cod" ? "Pay at venue" : PAYMENT_METHOD_LABELS[method];
+}
+
+const RETURN_REASON_LABELS: Record<ReturnReasonCategory, string> = {
+  defective: "Item arrived defective",
+  "wrong-item": "Received the wrong item",
+  "not-as-described": "Not as described",
+  "changed-mind": "Changed my mind",
+  other: "Other",
+};
+
+export function returnReasonLabel(reason: ReturnReasonCategory): string {
+  return RETURN_REASON_LABELS[reason];
+}
+
+const RETURN_STATUS_LABELS: Record<ReturnRequestStatus, string> = {
+  requested: "Requested",
+  approved: "Approved",
+  rejected: "Rejected",
+  "refund-pending": "Refund pending",
+  refunded: "Refunded",
+};
+
+export function returnStatusLabel(status: ReturnRequestStatus): string {
+  return RETURN_STATUS_LABELS[status];
 }
 
 export function formatDate(iso: string): string {

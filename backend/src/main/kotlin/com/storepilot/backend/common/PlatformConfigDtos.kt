@@ -19,6 +19,7 @@ data class PlatformConfigResponse(
     val defaultBankTransferEnabled: Boolean,
     val supportEmail: String,
     val companyLocation: String,
+    val returnWindowDays: Int,
 )
 
 fun PlatformSettings.toResponse(): PlatformConfigResponse =
@@ -38,6 +39,7 @@ fun PlatformSettings.toResponse(): PlatformConfigResponse =
         defaultBankTransferEnabled = defaultBankTransferEnabled,
         supportEmail = supportEmail,
         companyLocation = companyLocation,
+        returnWindowDays = returnWindowDays,
     )
 
 data class StateResponse(val name: String)

@@ -111,6 +111,13 @@ class SecurityConfig {
                     // rather than a single GET keyed on phone alone.
                     .requestMatchers(HttpMethod.POST, "/api/orders/lookup/request-code", "/api/orders/lookup/verify").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/receipt", "/api/orders/*/cancel", "/api/orders/*/payhere-checkout", "/api/orders/*/stripe-checkout").permitAll()
+                    // Same "order ID is proof enough" model — a buyer
+                    // request and its history are both reachable
+                    // unauthenticated; only the seller-only decision/refund
+                    // actions below are gated.
+                    .requestMatchers(HttpMethod.POST, "/api/orders/*/returns").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/orders/*/returns").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/orders/*/returns/*/decision", "/api/orders/*/returns/*/mark-refunded").hasRole("SELLER")
                     // Same "booking ID (+ phone for lookup) is the
                     // credential" guest model as orders above.
                     .requestMatchers(HttpMethod.POST, "/api/bookings").permitAll()
@@ -167,6 +174,7 @@ class SecurityConfig {
                         "/api/stores/*/verification-change-requests",
                     ).hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard", "/api/stores/*/stripe-connect/refresh").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.POST, "/api/stores/*/close").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/products/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasRole("SELLER")
@@ -185,6 +193,7 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/orders").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/payouts", "/api/stores/*/payouts/*").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/fee-collections", "/api/stores/*/fee-collections/*").hasRole("SELLER")
+                    .requestMatchers(HttpMethod.GET, "/api/stores/*/returns").hasRole("SELLER")
                     .requestMatchers(HttpMethod.GET, "/api/stores/*/stripe-settlements").hasRole("SELLER")
                     .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("SELLER")
                     .requestMatchers(HttpMethod.POST, "/api/orders/*/verify-bank-transfer").hasRole("SELLER")

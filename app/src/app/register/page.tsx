@@ -24,10 +24,15 @@ const registerSchema = z
     email: z.string().email("Enter a valid email"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string().min(1, "Confirm your password"),
+    agreeToTerms: z.boolean(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .refine((data) => data.agreeToTerms, {
+    message: "You must agree to the Terms of Service and Privacy Policy to create an account",
+    path: ["agreeToTerms"],
   });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -60,8 +65,11 @@ function SellerRegisterForm() {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
-  } = useForm<RegisterFormValues>({ resolver: zodResolver(registerSchema) });
+  } = useForm<RegisterFormValues>({ resolver: zodResolver(registerSchema), defaultValues: { agreeToTerms: false } });
+  const agreeToTerms = watch("agreeToTerms");
 
   const mutation = useMutation({
     mutationFn: (values: RegisterFormValues) =>
@@ -142,6 +150,27 @@ function SellerRegisterForm() {
               <Checkbox checked={showPassword} onCheckedChange={(checked) => setShowPassword(checked === true)} />
               <span className="text-muted-foreground">Show password</span>
             </label>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={agreeToTerms}
+                onCheckedChange={(checked) => setValue("agreeToTerms", checked === true, { shouldValidate: true })}
+                className="mt-0.5"
+              />
+              <span className="text-muted-foreground text-xs">
+                I agree to the{" "}
+                <Link href="/terms" target="_blank" className="text-primary underline-offset-4 hover:underline">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" className="text-primary underline-offset-4 hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+            {errors.agreeToTerms ? (
+              <p className="text-destructive text-xs">{errors.agreeToTerms.message}</p>
+            ) : null}
             <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               Create account

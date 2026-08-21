@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
-/** Hard cap regardless of what a caller requests via `size` — see docs/gaps-and-assumptions.md's search-scalability note. */
+/** Hard cap regardless of what a caller requests via `size` — a client-supplied page size has no other bound otherwise. */
 private const val MAX_PAGE_SIZE = 100
 
 /**
@@ -43,8 +43,16 @@ class ProductService(
     /**
      * GET /api/products — the matching row set is never fully materialized:
      * filtering (category/query/price) and sorting both happen in the SQL
-     * query itself (Specification + Pageable), and the DB is only ever
-     * asked for one page's worth of rows, not "everything, then take()".
+     * query itself, and the DB is only ever asked for one page's worth of
+     * rows, not "everything, then take()".
+     *
+     * A present [query] branches to the relevance-ranked full-text search
+     * path (ProductRepository.searchFullText, see its doc comment) instead
+     * of the plain Specification browse path below — substring matching has
+     * no concept of "how well" something matched, so ordering a text search
+     * by createdAt (this method's own default with no query) would be
+     * actively misleading. An explicit [sort] still wins over relevance,
+     * same as it already overrides the no-query default.
      */
     fun search(
         category: String?,
@@ -56,11 +64,31 @@ class ProductService(
         size: Int,
     ): PageResponse<ProductResponse> {
         val categoryEnum = category?.let { wireValueOf<StoreCategory>(it) }
+        val trimmedQuery = query?.trim()
+        val boundedPage = page.coerceAtLeast(0)
+        val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
+
+        if (!trimmedQuery.isNullOrBlank()) {
+            val sortMode = when (sort) {
+                "price-asc", "price-desc", "rating" -> sort
+                else -> "relevance"
+            }
+            val results = productRepository.searchFullText(
+                category = categoryEnum?.wireValue,
+                query = trimmedQuery,
+                likePattern = "%${trimmedQuery.lowercase()}%",
+                minPrice = minPrice,
+                maxPrice = maxPrice,
+                sortMode = sortMode,
+                pageable = PageRequest.of(boundedPage, boundedSize),
+            )
+            return results.toPageResponse { it.toResponse(fileStorageService) }
+        }
+
         val spec = Specification.allOf(
             ProductSpecifications.storeActive(),
             ProductSpecifications.notDraft(),
             ProductSpecifications.hasCategory(categoryEnum),
-            ProductSpecifications.matchesQuery(query?.trim()),
             ProductSpecifications.priceBetween(minPrice, maxPrice),
         )
         val sortOrder = when (sort) {
@@ -69,7 +97,7 @@ class ProductService(
             "rating" -> Sort.by("rating").descending()
             else -> Sort.by("createdAt").descending()
         }
-        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE), sortOrder)
+        val pageable = PageRequest.of(boundedPage, boundedSize, sortOrder)
         val results = productRepository.findAll(spec, pageable)
         return results.toPageResponse { it.toResponse(fileStorageService) }
     }

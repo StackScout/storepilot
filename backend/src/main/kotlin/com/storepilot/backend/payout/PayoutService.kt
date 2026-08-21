@@ -64,6 +64,24 @@ class PayoutService(
         return eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
     }
 
+    /**
+     * Admin-facing equivalent of getEligibleOrders — used by the accounting
+     * dashboard's "which stores are due a payout" scan across every active
+     * store, not just the caller's own. Deliberately skips
+     * requireSellerOwnsStore (an admin isn't the owning seller of any
+     * store) — same "admin bypasses ownership, seller path enforces it"
+     * split already established by createBatch below, which also calls
+     * eligibleOrderEntities directly. Reachable only under the
+     * "/api/admin" prefix, already gated to hasRole("ADMIN") by
+     * SecurityConfig as a whole.
+     */
+    fun adminGetEligibleOrders(storeId: UUID): List<OrderResponse> =
+        eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+
+    /** Admin-facing equivalent of getEligibleBookings — see adminGetEligibleOrders's doc comment. */
+    fun adminGetEligibleBookings(storeId: UUID): List<BookingResponse> =
+        eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+
     private fun requireSellerOwnsStore(storeId: UUID) {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }

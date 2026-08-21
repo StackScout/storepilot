@@ -202,6 +202,7 @@ class OrderService(
         val store = resolvedItems.first().third
         val subtotal = resolvedItems.sumOf { (product, quantity, _) -> product.price * quantity }
         val platformConfig = platformConfigService.current()
+        val storeSettings = store.id?.let { storeSettingsRepository.findById(it).orElse(null) }
 
         // Resolved (validated + computed, not yet recorded as used) before
         // the fee/total math below — a coupon discounts the subtotal that
@@ -228,17 +229,11 @@ class OrderService(
             require(!input.shipping.state.isNullOrBlank()) { "Select a state/province" }
             require(!input.shipping.postalCode.isNullOrBlank()) { "Enter a postal code" }
         } else {
-            val storeAllowsPickup = store.id
-                ?.let { storeSettingsRepository.findById(it).orElse(null) }
-                ?.pickupEnabled ?: false
-            if (!storeAllowsPickup) throw ConflictException("This store doesn't offer pickup")
+            if (storeSettings?.pickupEnabled != true) throw ConflictException("This store doesn't offer pickup")
         }
         val shippingFee = if (deliveryMethod == DeliveryMethod.PICKUP) 0 else platformConfig.flatShippingFee
 
-        val feePercent = store.id
-            ?.let { storeSettingsRepository.findById(it).orElse(null) }
-            ?.transactionFeePercent
-            ?: platformConfig.platformFeePercent
+        val feePercent = storeSettings?.transactionFeePercent ?: platformConfig.platformFeePercent
         val platformFee = (BigDecimal(discountedSubtotal) * feePercent)
             .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
             .toInt()
@@ -270,6 +265,18 @@ class OrderService(
         // for later lookup) — this is null for a guest, never a
         // client-supplied field (see CheckoutInput's doc comment).
         val buyer = currentActor.buyerOrNull()
+        val total = discountedSubtotal + shippingFee
+
+        // Snapshotted only when the seller had self-declared GST
+        // registration at this exact moment — see Order.kt's doc comment.
+        // AU retail prices are GST-inclusive by convention, so the GST
+        // component of a GST-inclusive total is total / 11, not total * 0.1.
+        val gstAmount = if (storeSettings?.gstRegistered == true) {
+            BigDecimal(total).divide(BigDecimal(11), 0, RoundingMode.HALF_UP).toInt()
+        } else {
+            null
+        }
+        val sellerAbn = if (storeSettings?.gstRegistered == true) storeSettings.abn else null
 
         val order = Order(
             orderNumber = generateOrderNumber(now, platformConfig.countryCode),
@@ -278,9 +285,11 @@ class OrderService(
             deliveryMethod = deliveryMethod,
             shippingFee = shippingFee,
             platformFee = platformFee,
-            total = discountedSubtotal + shippingFee,
+            total = total,
             couponCode = couponResolution?.code,
             discountAmount = discountAmount,
+            sellerAbn = sellerAbn,
+            gstAmount = gstAmount,
             status = OrderStatus.PENDING,
             paymentMethod = paymentMethod,
             paymentStatus = paymentStatus,

@@ -20,6 +20,20 @@ export async function getEligibleBookingsForPayout(storeId: string): Promise<Boo
   return apiClient.get<Booking[]>(`/api/stores/${storeId}/payouts/eligible-bookings`);
 }
 
+/**
+ * Admin-only equivalent of getEligibleOrdersForPayout/getEligibleBookingsForPayout —
+ * the seller-facing endpoints reject a non-owning caller (including admin),
+ * so the accounting dashboard's "which stores are due a payout" scan across
+ * every active store must go through these instead.
+ */
+export async function adminGetEligibleOrdersForPayout(storeId: string): Promise<Order[]> {
+  return apiClient.get<Order[]>(`/api/admin/stores/${storeId}/payouts/eligible-orders`);
+}
+
+export async function adminGetEligibleBookingsForPayout(storeId: string): Promise<Booking[]> {
+  return apiClient.get<Booking[]>(`/api/admin/stores/${storeId}/payouts/eligible-bookings`);
+}
+
 /** POST /stores/:storeId/payouts — bundle all currently-eligible orders into one scheduled payout. */
 export async function createPayout(storeId: string): Promise<Payout> {
   return apiClient.post<Payout>(`/api/admin/stores/${storeId}/payouts`);
@@ -54,6 +68,15 @@ export async function getEligibleOrdersForFeeCollection(storeId: string): Promis
 /** Same idea as getEligibleOrdersForFeeCollection, for bookings paid via "Pay at venue"/bank-transfer. */
 export async function getEligibleBookingsForFeeCollection(storeId: string): Promise<Booking[]> {
   return apiClient.get<Booking[]>(`/api/stores/${storeId}/fee-collections/eligible-bookings`);
+}
+
+/** Admin-only equivalent of getEligibleOrdersForFeeCollection/getEligibleBookingsForFeeCollection — see adminGetEligibleOrdersForPayout's doc comment. */
+export async function adminGetEligibleOrdersForFeeCollection(storeId: string): Promise<Order[]> {
+  return apiClient.get<Order[]>(`/api/admin/stores/${storeId}/fee-collections/eligible-orders`);
+}
+
+export async function adminGetEligibleBookingsForFeeCollection(storeId: string): Promise<Booking[]> {
+  return apiClient.get<Booking[]>(`/api/admin/stores/${storeId}/fee-collections/eligible-bookings`);
 }
 
 /** POST /stores/:storeId/fee-collections — bundle all currently-eligible orders into one pending fee collection. */

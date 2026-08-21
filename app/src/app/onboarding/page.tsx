@@ -251,7 +251,9 @@ export default function OnboardingPage() {
                   onValueChange={(v) => setValue("category", v as string, { shouldValidate: true })}
                 >
                   <SelectTrigger id="category" className="w-full">
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder="Select category">
+                      {(v: string) => (v ? (CATEGORIES.find((c) => c.value === v)?.label ?? v) : "Select category")}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map((c) => (

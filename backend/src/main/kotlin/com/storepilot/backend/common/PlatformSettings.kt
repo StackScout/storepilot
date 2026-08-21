@@ -53,4 +53,7 @@ class PlatformSettings(
     /** IANA zone id — see PlatformProperties.timezone's doc comment for why this is deployment-wide, not per-store. */
     @Column(nullable = false)
     var timezone: String,
+    /** See PlatformProperties.returnWindowDays' doc comment. */
+    @Column(name = "return_window_days", nullable = false)
+    var returnWindowDays: Int,
 ) : BaseEntity()

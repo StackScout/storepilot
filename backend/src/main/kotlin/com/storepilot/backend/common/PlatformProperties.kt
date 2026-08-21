@@ -66,4 +66,6 @@ data class PlatformProperties(
      * default here rather than adding a per-store timezone field.
      */
     val timezone: String = "Australia/Sydney",
+    /** How long after delivery a buyer may request a return — see ReturnRequestService.create. A business/policy decision, not a legal minimum this codebase asserts; tune per deployment via the platform_settings row, same as every other PlatformProperties bootstrap value. */
+    val returnWindowDays: Int = 30,
 )

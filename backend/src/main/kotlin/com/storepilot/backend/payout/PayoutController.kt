@@ -26,6 +26,14 @@ class PayoutController(
     @GetMapping("/api/stores/{storeId}/payouts/eligible-bookings")
     fun eligibleBookings(@PathVariable storeId: UUID): List<BookingResponse> = payoutService.getEligibleBookings(storeId)
 
+    /** Admin-only — see PayoutService.adminGetEligibleOrders's doc comment. */
+    @GetMapping("/api/admin/stores/{storeId}/payouts/eligible-orders")
+    fun adminEligibleOrders(@PathVariable storeId: UUID): List<OrderResponse> = payoutService.adminGetEligibleOrders(storeId)
+
+    /** Admin-only — see PayoutService.adminGetEligibleBookings's doc comment. */
+    @GetMapping("/api/admin/stores/{storeId}/payouts/eligible-bookings")
+    fun adminEligibleBookings(@PathVariable storeId: UUID): List<BookingResponse> = payoutService.adminGetEligibleBookings(storeId)
+
     @PostMapping("/api/admin/stores/{storeId}/payouts")
     fun createBatch(@PathVariable storeId: UUID): ResponseEntity<PayoutResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(payoutService.createBatch(storeId))

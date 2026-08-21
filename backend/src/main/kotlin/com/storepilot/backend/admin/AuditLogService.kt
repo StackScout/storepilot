@@ -1,5 +1,6 @@
 package com.storepilot.backend.admin
 
+import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.toPageResponse
@@ -37,17 +38,10 @@ class AuditLogService(
         save(actorEmail = seller.email, actorId = seller.id, action, targetType, targetId, description)
     }
 
-    /**
-     * Called from AuthController.login() for an admin sign-in — that request
-     * authenticates by direct Cognito username/password exchange, not an
-     * already-validated JWT, so there's no CurrentActor session yet to
-     * resolve record()'s admin from (the JWT this login just minted only
-     * takes effect on the *next* request). actorId stays null; email alone
-     * is enough to identify the admin in the audit feed.
-     */
+    /** For buyer-initiated actions (currently just account deletion) — mirrors recordAsSeller exactly. */
     @Transactional
-    fun recordAdminLogin(email: String) {
-        save(actorEmail = email, actorId = null, AuditAction.ADMIN_LOGIN, targetType = null, targetId = null, description = "Signed in")
+    fun recordAsBuyer(buyer: Buyer, action: AuditAction, targetType: String?, targetId: String?, description: String) {
+        save(actorEmail = buyer.email, actorId = buyer.id, action, targetType, targetId, description)
     }
 
     private fun save(actorEmail: String, actorId: UUID?, action: AuditAction, targetType: String?, targetId: String?, description: String) {

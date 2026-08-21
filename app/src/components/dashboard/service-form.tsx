@@ -164,7 +164,7 @@ export function ServiceForm({
             <Label htmlFor="status">Status</Label>
             <Select value={status} onValueChange={(v) => setValue("status", v as ServiceStatus)}>
               <SelectTrigger id="status" className="w-full sm:w-48">
-                <SelectValue />
+                <SelectValue>{(v: ServiceStatus) => (v === "draft" ? "Draft" : "Active")}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>

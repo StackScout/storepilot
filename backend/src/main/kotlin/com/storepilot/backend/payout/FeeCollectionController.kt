@@ -26,6 +26,14 @@ class FeeCollectionController(
     @GetMapping("/api/stores/{storeId}/fee-collections/eligible-bookings")
     fun eligibleBookings(@PathVariable storeId: UUID): List<BookingResponse> = feeCollectionService.getEligibleBookings(storeId)
 
+    /** Admin-only — see FeeCollectionService.adminGetEligibleOrders's doc comment. */
+    @GetMapping("/api/admin/stores/{storeId}/fee-collections/eligible-orders")
+    fun adminEligibleOrders(@PathVariable storeId: UUID): List<OrderResponse> = feeCollectionService.adminGetEligibleOrders(storeId)
+
+    /** Admin-only — see FeeCollectionService.adminGetEligibleBookings's doc comment. */
+    @GetMapping("/api/admin/stores/{storeId}/fee-collections/eligible-bookings")
+    fun adminEligibleBookings(@PathVariable storeId: UUID): List<BookingResponse> = feeCollectionService.adminGetEligibleBookings(storeId)
+
     @PostMapping("/api/admin/stores/{storeId}/fee-collections")
     fun createBatch(@PathVariable storeId: UUID): ResponseEntity<FeeCollectionResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(feeCollectionService.createBatch(storeId))

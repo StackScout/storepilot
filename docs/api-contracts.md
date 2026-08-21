@@ -100,8 +100,11 @@ rationale.
   `false` (`403 EMAIL_NOT_VERIFIED`), checked **before** any session
   cookie is set. On success, sets httpOnly `access_token`/`refresh_token`
   cookies (`SameSite=Lax`) and returns
-  `{ signedIn: true, role, email, name }`. An admin login is additionally
-  recorded in `audit_logs` (`ADMIN_LOGIN`).
+  `{ signedIn: true, role, email, name }`. Logins of any role are **not**
+  recorded in `audit_logs` — a login isn't itself a platform change, and
+  logging one for every session would crowd out substantive activity on
+  the admin overview's "Recent activity" widget with no compliance/security
+  need it actually served.
 - **Errors**: `401` wrong credentials or unknown email (same message
   either way — doesn't distinguish which).
 
@@ -190,7 +193,10 @@ rationale.
   `transactionFeePercent?` (0–100), `codEnabled?`, `onlinePaymentEnabled?`,
   `bankTransferEnabled?`, `sellerType?`, `driverLicenceNumber?`, `abn?`,
   `nicNumber?`, `businessRegistrationNumber?`, `rejectionReason?`,
-  `stockManagementEnabled?`, `pickupEnabled?`, `stripeEnabled?`.
+  `stockManagementEnabled?`, `pickupEnabled?`, `stripeEnabled?`,
+  `bookingsEnabled?`, `gstRegistered?` (self-declared, AU-only in practice —
+  see [`gaps-and-assumptions.md`](gaps-and-assumptions.md) for why this can
+  never be inferred from `abn` alone).
 - **Business rules**:
   - **`409`** if the store is `verification_status = 'active'` and the
     request touches any identity-verification field (`sellerType`,
@@ -249,6 +255,21 @@ rationale.
   `PATCH /api/stores/{storeId}/settings` as a second step.
 - **Response**: `201 Store`.
 
+### `POST /api/stores/{storeId}/close`
+- **Auth**: SELLER (must own `storeId`). Permanent, self-service store
+  closure — the precondition step before seller account deletion (see
+  `POST /api/me/seller/delete`). `409` (with the specific blocking reason
+  in the error message) unless: no order with status in
+  `PENDING/CONFIRMED/SHIPPED`, no booking with status in
+  `PENDING/CONFIRMED`, no `FeeCollection` with status `PENDING`, no
+  `Payout` with status `SCHEDULED`. On success, sets
+  `verificationStatus = 'closed'` and `isVerified = false` — the store's
+  own identity fields (name/slug/description/logo) are left untouched, so
+  a past buyer's order history still shows a coherent store name; the
+  store simply drops out of search/storefront (both already filter to
+  `ACTIVE` only). Idempotent — closing an already-closed store is a no-op.
+  **Response**: `200 Store`.
+
 ---
 
 ## Store verification change requests
@@ -306,9 +327,15 @@ The post-approval identity-change workflow — see
 - **Auth**: None. **Query**: `category?`, `query?`, `minPrice?`,
   `maxPrice?`, `sort?` (`"newest"` default | `"price-asc"` |
   `"price-desc"` | `"rating"`), `page?`, `size?`.
-- Filtering, sorting, and pagination all happen in the SQL query
-  (`Specification` + `Pageable`) — never "fetch everything, filter in
-  memory." Excludes drafts and products belonging to a non-`active` store.
+- Filtering, sorting, and pagination all happen in the SQL query — never
+  "fetch everything, filter in memory." Excludes drafts and products
+  belonging to a non-`active` store.
+- A present `query` branches to a relevance-ranked full-text search (a
+  weighted Postgres `tsvector`, name > description — see
+  `database-model.md#product`), not substring matching; `sort=newest`
+  (the default) means "best match" in this branch, not "most recent." An
+  explicit `sort` other than `newest` still overrides ranking, same as the
+  no-`query` browse path.
 - **Response**: `200 PageResponse<Product>`.
 
 ### `GET /api/products/{id}`
@@ -429,6 +456,15 @@ The post-approval identity-change workflow — see
   - `platformFee` is computed from the order's store's
     `transactionFeePercent` (falling back to the platform-wide default only
     if the store has no settings row yet).
+  - `sellerAbn`/`gstAmount` on the response are both non-null only if the
+    seller's `StoreSettings.gstRegistered` was `true` at this exact moment
+    — snapshotted onto the order (never re-derived later), and the
+    presence of these two fields is what the order-confirmation email/page
+    use to render as an ATO tax invoice instead of a plain confirmation.
+    `gstAmount` is `total / 11` (AU retail prices are GST-inclusive by
+    convention). See
+    [`gaps-and-assumptions.md`](gaps-and-assumptions.md) for what's still
+    deliberately out of scope (buyer ABN capture for sales ≥ A$1,000).
   - Side effects: decrements stock for every trackable line item;
     sends an order-confirmation email
     (see [`features/notification-emails.md`](../app/docs/features/notification-emails.md)).
@@ -597,11 +633,90 @@ owes the platform its fee. Mirrors Payouts exactly; see
 
 ---
 
+## Returns & refunds
+
+Post-delivery buyer returns — separate from the pre-delivery
+seller-cancellation refund path already covered under
+[`PATCH /api/orders/{id}/status`](#patch-apiordersidstatus). See
+[`database-model.md#return_requests`](database-model.md#return_requests).
+
+### `POST /api/orders/{orderId}/returns`
+- **Auth**: none — same "order ID is proof enough" model as
+  `/receipt`/`/cancel`. **Body**: `{ reasonCategory: string, reasonNote?:
+  string }`. Requires `status: delivered` + `paymentStatus: paid`, within
+  `PlatformConfig.returnWindowDays` of the order's earliest `delivered`
+  timeline entry, and no existing non-`rejected` return on the order.
+  **Response**: `201 ReturnRequest`. **Errors**: `409` on any of the above.
+
+### `GET /api/orders/{orderId}/returns`
+- **Auth**: none, same model. Full history for the order, newest first —
+  used by both the buyer order page and the seller dashboard.
+  **Response**: `200 ReturnRequest[]`.
+
+### `POST /api/orders/{orderId}/returns/{returnId}/decision`
+- **Auth**: Owner (SELLER). **Body**: `{ approved: boolean, note?: string
+  }`. On approve: Stripe orders refund synchronously in this call and land
+  on `refunded`; every other payment method moves to `refund-pending`
+  (no live refund API exists for PayHere/COD/bank-transfer). **Response**:
+  `200 ReturnRequest`. **Errors**: `409` if the return isn't `requested`.
+
+### `POST /api/orders/{orderId}/returns/{returnId}/mark-refunded`
+- **Auth**: Owner (SELLER). COD/bank-transfer only — the seller
+  self-attests that they refunded the buyer directly, the same trust model
+  as `verifyBankTransfer`'s seller-side attestation (the platform is never
+  a party to this money). **Body**: `{ refundReference?: string }`.
+  **Response**: `200 ReturnRequest`. **Errors**: `409` for a PayHere/Stripe
+  order or a return not in `refund-pending`.
+
+### `GET /api/stores/{storeId}/returns`
+- **Auth**: Owner (SELLER). Every return across the store's orders.
+  **Response**: `200 ReturnRequest[]`.
+
+### `GET /api/admin/returns`
+- **Auth**: ADMIN. **Query**: `status?`. **Response**: `200
+  ReturnRequest[]`.
+
+### `PATCH /api/admin/returns/{returnId}`
+- **Auth**: ADMIN. PayHere only — the platform's own merchant account is
+  the one that has to send the refund, same reasoning as
+  `PATCH /api/admin/payouts/{payoutId}`. **Body**: `{ refundReference?:
+  string }`. Records `RETURN_REFUND_MARKED_COMPLETE`. **Response**: `200
+  ReturnRequest`. **Errors**: `409` for a non-PayHere order or a return not
+  in `refund-pending`.
+
+`ReturnRequest` may carry a `settlementReconciliationNote` — set at
+seller-approval time if the order was already included in a
+`Payout`/`FeeCollection` batch. There's no automatic clawback for an
+already-settled batch; this is a visible flag for manual admin
+reconciliation only.
+
+---
+
 ## Buyer account
 
 ### `GET /api/me`
 - **Auth**: BUYER. The authenticated buyer's own profile (JIT-provisioned
   on first call if needed). **Response**: `200 Buyer`.
+
+### `GET /api/me/export`
+- **Auth**: BUYER. Data-subject access request — a single JSON bundle of
+  everything StorePilot holds about the buyer: profile, addresses, orders,
+  bookings, reviews, conversations/messages, saved searches, wishlist,
+  follows. Assembled from the same services/mappers every other
+  buyer-facing read path uses — no new data exposure. **Response**: `200
+  BuyerExportResponse`.
+
+### `POST /api/me/delete`
+- **Auth**: BUYER. Instant, self-service account deletion, no admin
+  review. Order/booking history is anonymized in place (PII redacted, the
+  record itself kept for tax/accounting retention — `buyer`/`order`/
+  `booking` associations are never nulled, only personal fields);
+  addresses, saved searches, wishlist items, and follows are genuinely
+  deleted. Reviews/conversations/messages are untouched — they resolve the
+  buyer's name live from the `Buyer` row at read time, so anonymizing that
+  row alone is sufficient. Also globally signs out and deletes the Cognito
+  identity (in that order) — a Cognito failure here is **not**
+  swallowed, unlike `/api/auth/logout`. **Response**: `204`.
 
 ### `PATCH /api/me/default-shipping`
 - **Auth**: BUYER. **Body**: full `ShippingDetails` (all fields required —
@@ -651,6 +766,33 @@ above (the seller receiving buyer payments). See
   `plan`/`stripeSubscriptionId`/`planCurrentPeriodEnd`/
   `planCancelAtPeriodEnd` from the Stripe Subscription object.
   **Response**: `200`.
+
+---
+
+## Seller account
+
+### `GET /api/me/seller/export`
+- **Auth**: SELLER. Data-subject access request — a single JSON bundle of
+  everything StorePilot holds about the seller: profile/plan, store, store
+  settings (same fields the seller already sees via
+  `GET /api/stores/{storeId}/settings`), products, orders received,
+  bookings received, payouts, fee collections, reviews of their store, and
+  coupons. **Response**: `200 SellerExportResponse`.
+
+### `POST /api/me/seller/delete`
+- **Auth**: SELLER. Instant, self-service account deletion, no admin
+  review — but `409` unless the seller's store is already `closed` (see
+  `POST /api/stores/{storeId}/close` below); that two-step split is the
+  safety mechanism in place of a human reviewer. Cancels the Stripe
+  Subscription immediately (not at period end), deletes the Stripe
+  Customer, deauthorizes the Stripe Connect account (never
+  `Account.delete()` — Standard accounts can't be deleted by the
+  platform), anonymizes the `Seller` row (tombstoned email/cognitoSub) and
+  `StoreSettings` (contact/bank fields redacted, ID numbers nulled,
+  verification-document files actually deleted from storage, not just
+  pointer-nulled), then globally signs out and deletes the Cognito
+  identity. Every step is idempotent, so a partial failure is safe to
+  retry. **Response**: `204`.
 
 ---
 

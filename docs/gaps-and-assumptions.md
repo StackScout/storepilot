@@ -67,27 +67,59 @@ today (a newly-`"pending"` store has zero products at signup time), but a
 real backend should filter products by owning-store status too. See
 [`database-model.md#product`](database-model.md#product).
 
-### Buyer accounts have no password — email alone is the credential
-`/account/login` does a **real** lookup (`buyersService.getBuyerByEmail`,
-unlike seller `/login`'s "any email works" shortcut) but still asks for
-nothing else — anyone who knows (or guesses) a buyer's email can sign in as
-them and see their order history and saved address. Explicitly flagged in
-the UI copy on both `/account/register` and `/account/login`. Must be
-replaced with a real credential (password, OTP, magic link) before this
-account system holds anything sensitive. See
-[`features/buyer-accounts.md`](../app/docs/features/buyer-accounts.md).
+### ~~Buyer accounts have no password — email alone is the credential~~ RESOLVED
+This described the pre-Cognito, `localStorage`-mock era. Since the real
+Spring Boot/Cognito backend landed, `AuthController.register()` requires a
+real `password` for `accountType == "buyer"` (provisioned via Cognito's
+`AdminSetUserPassword(permanent=true)`), and `login()` authenticates via
+`adminInitiateAuth` with `USERNAME`/`PASSWORD` — the same mechanism seller
+accounts use. `BuyerController` now only exposes a read-only `GET /api/me`;
+there is no email-only sign-in path left anywhere.
 
-### Session cookie is unsigned and unencrypted
-Explicitly called out in source as a demo shortcut
-(`src/lib/session.ts`). A client that can set cookies can forge a session
-for any `storeId`. Must be replaced before real accounts exist. See
-[`features/seller-auth.md`](../app/docs/features/seller-auth.md).
+### ~~Session cookie is unsigned and unencrypted~~ RESOLVED
+This described the pre-Cognito, `localStorage`-mock era
+(`src/lib/session.ts`, deleted in the same commit that landed real
+Google/Cognito login). The real backend sets `storepilot_access_token`/
+`storepilot_refresh_token` as `httpOnly` + `secure` + `SameSite=Lax`
+cookies (`AuthController.kt`'s `setAuthCookies`), carrying a genuine
+Cognito-issued, cryptographically signed JWT — not an opaque/forgeable
+value. `CookieBearerTokenResolver` feeds this straight into Spring
+Security's standard JWT signature validation. One mechanism, shared
+identically by buyer, seller, and admin auth — no weaker path exists for
+any of the three.
 
-### Order lookup uses a weak "credential" (last 9 phone digits)
-`findOrderByNumberAndPhone` matches on order number + a phone-number
-suffix. Not secret, easily guessable/enumerable at scale. Flagged as a
-product decision (e.g. require an OTP instead), not silently patched. See
+### ~~Order lookup uses a weak "credential" (last 9 phone digits)~~ RESOLVED
+Replaced with a real two-step, emailed one-time-code flow
+(`GuestLookupOtpService`): a 6-digit code, SHA-256 hashed at rest, 10-minute
+TTL, 5-attempt lockout, required before `OrderService`/`BookingService`
+reveal anything (`POST /api/orders/lookup/request-code` then
+`POST /api/orders/lookup/verify` — same shape for bookings). See
 [`features/order-tracking.md`](../app/docs/features/order-tracking.md#business-rules).
+
+### ~~No data subject access/export/delete mechanism~~ RESOLVED
+Neither buyers nor sellers had a way to see, export, or delete what
+StorePilot holds about them — a real gap under Australian Privacy Act
+APP 12 (access)/APP 13 (correction) and Sri Lanka's PDPA, which
+additionally grants an explicit erasure right. Both sides now have this,
+self-service and instant (no admin review):
+
+- **Buyers**: `GET /api/me/export` (a full JSON bundle of profile,
+  addresses, orders, bookings, reviews, conversations, saved searches,
+  wishlist, follows) and `POST /api/me/delete` (`BuyerAccountService`).
+- **Sellers**: `GET /api/me/seller/export` and `POST /api/me/seller/delete`
+  (`SellerAccountService`) — gated behind a new, separate
+  `POST /api/stores/{storeId}/close` step (`StoreService.closeStore`),
+  since a seller can't be deleted while a store still has orders/bookings
+  in flight or fees/payouts owed either direction.
+
+**Agreed policy**: "delete" never destroys financial/order/booking
+history — those rows are anonymized in place (personal fields redacted,
+the transaction itself kept for tax/accounting retention) — while
+everything with no independent retention need (addresses, saved searches,
+wishlist, follows, seller verification documents) is genuinely deleted,
+including the Cognito identity itself. Full design:
+[`api-contracts.md`](api-contracts.md#buyer-account) and
+[`api-contracts.md`](api-contracts.md#seller-account).
 
 ### ~~No stock re-validation at checkout~~ RESOLVED
 `OrderService.createOrder` now rejects checkout with a 409 if any line
@@ -97,6 +129,42 @@ or its store has opted out. `ProductService.decrementStock`'s clamp-to-zero
 now only matters as a defense against a same-product race between two
 concurrent checkouts, not as the primary overselling guard. See
 [`features/checkout.md#edge-cases`](../app/docs/features/checkout.md#edge-cases).
+
+### Return refunds for COD/bank-transfer are seller self-attested, with no platform verification
+`ReturnRequestService.markRefundedBySeller` lets the seller mark a
+return `refunded` on their own word — a `refundReference` is recorded but
+never checked against anything. A dishonest seller could mark a return
+refunded without actually paying the buyer back, and the platform has no
+way to detect it. This is a deliberate design choice, not an oversight:
+it mirrors the exact trust model `verifyBankTransfer` already accepts on
+the *inbound* side (a seller could verify a bank-transfer receipt they
+never actually checked) — so it's consistent with this codebase's
+existing risk posture for COD/bank-transfer money, not a new hole. Flag
+before launch if stronger guarantees (e.g. requiring the buyer to confirm
+receipt) are needed. See
+[`api-contracts.md#returns--refunds`](api-contracts.md#returns--refunds).
+
+### No line-item-removal/clawback mechanism for Payout/FeeCollection batches
+If a return is approved for an order that's already inside a *settled*
+(`paid`/`collected`) `payouts`/`fee_collections` batch, real money has
+already changed hands between the platform and the seller for that
+order — and there is no code path anywhere to remove a line item from an
+existing batch, scheduled or paid. `ReturnRequestService` surfaces this
+as a `settlementReconciliationNote` visible to admins (see
+[`database-model.md#return_requests`](database-model.md#return_requests)),
+but reconciling the overlap (e.g. adjusting the seller's next payout by
+hand) is entirely manual. Worth a real batch-adjustment feature if
+returns on already-settled orders turn out to be common in practice.
+
+### No buyer ABN/business-name capture for tax invoices ≥ A$1,000
+The ATO requires a compliant tax invoice for a sale of A$1,000 or more to
+additionally show the *buyer's* identity or ABN, not just the seller's.
+Checkout never asks for this, and `Order`/`OrderResponse` have no field for
+it — deliberately deferred (see [`api-contracts.md`](api-contracts.md)'s
+tax-invoice fields, `sellerAbn`/`gstAmount`, which cover every sale under
+that threshold). Low practical impact today given this catalog's price
+points, but worth adding — likely an optional "buying for a business?"
+field at checkout — if B2B-sized orders become common.
 
 ## Data-model / business-logic inconsistencies
 

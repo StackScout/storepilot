@@ -57,8 +57,10 @@ twelve.
   directly fetchable.
 - **`extension pg_trgm`** is enabled (`V1`) and backs `gin` trigram indexes
   used for substring/`ILIKE`-style search on `stores.name`/`tagline`/`city`
-  and `products.name`/`description` — this is real database-side search,
-  not an in-memory filter.
+  — this is real database-side search, not an in-memory filter. Store
+  search is still purely substring-matched today; **product** search
+  (`GET /api/products` with a `query` param) has since moved to real
+  relevance-ranked full-text search — see `products.search_vector` below.
 
 ---
 
@@ -216,11 +218,17 @@ still exists.
 ### `audit_logs` (`V9`)
 
 Write-once activity log — every row is a permanent record, never updated
-after insert. Covers **both** admin-initiated actions (store
-approve/reject, admin invited, payout/fee-collection marked settled,
-verification-change-request approve/reject) **and** seller-initiated
-changes to their own store (settings updated, verification change
-requested) — see `AuditAction.kt` for the full enumerated list.
+after insert. Covers admin-initiated actions (store approve/reject, admin
+invited, payout/fee-collection marked settled, verification-change-request
+approve/reject), seller-initiated changes to their own store/account
+(settings updated, verification change requested, store closed, seller
+account deleted), and buyer-initiated account deletion — see
+`AuditAction.kt` for the full enumerated list. `STORE_CLOSED`/
+`SELLER_ACCOUNT_DELETED`/`BUYER_ACCOUNT_DELETED` rows are written
+**before** the acting `Seller`/`Buyer` row is anonymized (see
+`SellerAccountService`/`BuyerAccountService`), so `actor_email`/
+`description` durably preserve the real pre-anonymization identity as the
+compliance evidence trail even though the source row no longer does.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -231,15 +239,20 @@ requested) — see `AuditAction.kt` for the full enumerated list.
 | `description` | text, not null | Pre-rendered human-readable summary — **not** reconstructed from the other fields at read time, so the log stays meaningful even after the target row is renamed or deleted |
 
 **Why `actor_id` has no FK constraint**: it's a polymorphic reference — the
-same column holds either an `Admin.id` or a `Seller.id`, whichever actually
-performed the action (which one it is isn't stored explicitly, but is
-always inferable from `action`, e.g. `STORE_APPROVED` is always an admin).
-A single FK can't point at two different tables, and it's also
-legitimately `null` for `ADMIN_LOGIN` rows recorded during the login
-request itself, before that admin's session/JWT — and thus their resolved
-`Admin` row — exists yet (see `AuditLogService.recordAdminLogin`'s doc
-comment). `actor_email` is what's actually relied on to identify the actor
-in the UI; `actor_id` is best-effort cross-referencing only.
+same column holds an `Admin.id`, `Seller.id`, or `Buyer.id`, whichever
+actually performed the action (which one it is isn't stored explicitly,
+but is always inferable from `action`, e.g. `STORE_APPROVED` is always an
+admin, `BUYER_ACCOUNT_DELETED` is always a buyer). A single FK can't point
+at three different tables. The column stays nullable at the schema level
+for this same reason (a future actor-less action is a legitimate
+possibility), even though every current write path
+(`record`/`recordAsSeller`/`recordAsBuyer`) always resolves a real actor.
+The lack of an FK is also what lets a `SELLER_ACCOUNT_DELETED`/
+`BUYER_ACCOUNT_DELETED` row
+outlive the source row being anonymized right after — a real FK would
+either block the anonymization or cascade into rewriting history.
+`actor_email` is what's actually relied on to identify the actor in the
+UI; `actor_id` is best-effort cross-referencing only.
 
 **Indexes**: `action`, `target_type`, `created_at desc` (for the admin
 audit-log page's default recent-first view).
@@ -282,7 +295,7 @@ The public storefront profile.
 | `rating`, `review_count` | double / integer, default 0 | No backing `Review` entity exists — see [`gaps-and-assumptions.md`](gaps-and-assumptions.md) and [`roadmap.md`](roadmap.md) |
 | `product_count`, `follower_count` | integer, default 0 | Denormalized display counters; no "follow" action exists in the product to actually increment `follower_count` |
 | `is_verified` | boolean, default false | Mirrors `verification_status == 'active'`, kept as a separate boolean for cheap frontend display |
-| `verification_status` | varchar, default `'pending'` | `"pending" \| "active" \| "rejected"` — gates every public read; set only by the admin approval workflow, never directly by the seller |
+| `verification_status` | varchar, default `'pending'` | `"pending" \| "active" \| "rejected" \| "closed"` — gates every public read; `pending`/`active`/`rejected` are set only by the admin approval workflow, but `closed` is seller-initiated and terminal (`POST /api/stores/{storeId}/close`, see `api-contracts.md#stores`) — a store is never reopened once closed |
 | `facebook_url`, `instagram_url`, `tiktok_url` | varchar, nullable | Public social links, seller-editable via `PATCH /api/stores/{storeId}/profile` — live here (public data) rather than `store_settings` (private data) |
 
 **Why address fields live directly on `stores`, not a joined table**: one
@@ -322,6 +335,7 @@ public store read never risks exposing bank details or identity documents.
 | `stripe_charges_enabled`, `stripe_payouts_enabled` | boolean, default false (`V5`) | Mirror the connected account's real status, synced only via the `account.updated` webhook or an explicit refresh — never inferred from "an account id exists" |
 | `stripe_enabled` | boolean, default false (`V5`) | The seller's own on/off preference for offering Stripe at checkout, independent of onboarding status — lets them pause it without disconnecting |
 | `bookings_enabled` | boolean, default false (`V13`) | Opt-in, off by default, same reasoning as `pickup_enabled` — gates whether the store's bookable-services section exists at all. Not itself Pro-gated; see [`## booking`](#booking-v13) |
+| `gst_registered` | boolean, default false (`V27`) | Self-declared, opt-in — GST registration is turnover-based (mandatory above A$75k/year, optional below it), never implied by `abn` presence alone. Read at order-creation time to decide whether to snapshot a tax invoice onto the order — see `orders.seller_abn`/`orders.gst_amount` below |
 
 **Why `@MapsId` instead of a separate `id` + unique FK**: `StoreSettings`
 shares `Store`'s primary key exactly (1:1, `store_id` is simultaneously
@@ -391,10 +405,13 @@ edits, since those haven't been approved against a claimed identity yet.
 | `status` | varchar, not null | `"active" \| "draft" \| "out-of-stock"` — auto-forced to `"out-of-stock"` whenever `track_stock` is true and `stock_quantity = 0`, enforced server-side in `ProductService`, not a DB constraint |
 | `sku` | varchar, nullable | **Not unique** — a deliberate, still-open product decision (see `roadmap.md`'s "Duplicate-SKU validation" item), not an oversight |
 | `rating`, `review_count` | double / integer, default 0 | Same "no backing `Review` entity" caveat as `stores` |
+| `search_vector` | `tsvector`, generated always as ... stored (`V29`) | `setweight(to_tsvector('english', name), 'A') \|\| setweight(to_tsvector('english', description), 'B')` — a name match ranks above the same term only in the description. Powers `GET /api/products`'s text-search path (`ProductRepository.searchFullText`) via `ts_rank`-ordered relevance, not the plain browse path (`ProductSpecifications`), which never touches this column |
 
 **Unique constraint**: `(store_id, slug)`.
 **Indexes**: `store_id`, `category`, `sku`; `gin` trigram on `lower(name)`,
-`lower(description)`.
+`lower(description)` (kept as an OR'd recall fallback for a search query
+that doesn't tokenize into a real lexeme match); `gin` on `search_vector`
+(`V29`) — the primary product-search index.
 
 **Business constraint**: a draft product is invisible to anyone but its
 owning seller — `GET /api/products/{id}` 404s (not 403s) a draft for a
@@ -439,6 +456,7 @@ later.
 | `tracking_number`, `courier_service_name` | varchar, nullable | Required together the moment a seller marks an order `shipped` |
 | `courier_receipt_url` | varchar, nullable | Optional proof-of-handover upload, same "shipped" transition |
 | `stripe_payment_intent_id` | varchar, nullable (`V5`) | Set once Stripe's `checkout.session.completed` arrives; needed to issue a refund against the right connected-account charge later |
+| `seller_abn`, `gst_amount` | varchar / integer, both nullable (`V27`) | Both set together, only when `store_settings.gst_registered` was `true` at order-creation time — an immutable tax-invoice snapshot, never re-derived from the store's current settings. `gst_amount` is cents, `total / 11`. See `store_settings.gst_registered` above |
 
 **Indexes**: `store_id`, `buyer_id`, `status`, `created_at`.
 
@@ -690,6 +708,53 @@ concept on this side; the whole `platform_fee` is what's owed).
 | `subtotal`, `platform_fee` | integer, not null | Snapshot at batch-creation time |
 
 **Index**: `fee_collection_id`, plus a partial index on `booking_id`.
+
+---
+
+## return_requests (`V26`)
+
+A buyer's post-delivery return/refund request against one order — own
+table rather than a field on `orders`, same "proposed change needing a
+decision" shape as `store_verification_change_requests`. `orders.status`
+is never touched by this feature; only `orders.payment_status` flips
+`paid` -> `refunded`, once money has actually moved (or, for Stripe,
+synchronously on seller approval).
+
+| Column | Type | Notes |
+|---|---|---|
+| `order_id` | uuid, FK → `orders`, not null | Direct FK, not a snapshot-UUID like `payout_order_refs.order_id` — this is a per-order relationship, not a cross-store batch |
+| `reason_category` | varchar, not null | `"defective" \| "wrong-item" \| "not-as-described" \| "changed-mind" \| "other"` |
+| `reason_note` | text, nullable | |
+| `status` | varchar, default `'requested'` | `"requested" \| "approved" \| "rejected" \| "refund-pending" \| "refunded"` — see [`api-contracts.md#returns--refunds`](api-contracts.md#returns--refunds) for the full transition table |
+| `seller_decision_note` | text, nullable | |
+| `refund_reference` | varchar, nullable | Set once `refunded`, by whichever actor confirmed it |
+| `settlement_reconciliation_note` | text, nullable | Snapshotted once, at seller-approval time, if the order was already in a `payouts`/`fee_collections` batch — see below |
+| `decided_at`, `refunded_at` | timestamptz, nullable | |
+
+**Index**: `order_id`, `status`.
+
+**Eligibility rule** (service-layer): a buyer may create a return when
+`orders.status = 'delivered'` AND `payment_status = 'paid'`, within
+`platform_settings.return_window_days` (added in the same `V26`
+migration, default `30`) of the order's *earliest* `delivered` timeline
+entry, and no existing request on that order with a status other than
+`rejected`.
+
+**Refund execution differs by `orders.payment_method`**: Stripe refunds
+synchronously on seller approval (reusing `StripeService.refundPayment`);
+PayHere/COD/bank-transfer have no live refund API, so they land on
+`refund-pending` until a human confirms the money actually moved —
+PayHere is admin-confirmed (the platform's own merchant account holds
+that money, same reasoning as `payouts`), COD/bank-transfer is
+seller-self-attested (the seller already holds that money directly, same
+trust model as `verifyBankTransfer`'s inbound receipt confirmation).
+
+**No automatic clawback**: if `settlement_reconciliation_note` is set
+because the order was already in a settled (`paid`/`collected`)
+`payouts`/`fee_collections` batch, real money already changed hands for
+that order before the return was approved — there's no line-item-removal
+mechanism for either ledger in this schema, so reconciling that overlap
+is a manual admin step, not something this table automates.
 
 ---
 

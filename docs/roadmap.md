@@ -207,9 +207,20 @@ and are now confirmed resolved; others are newly fixed as of this pass.
 
 ## Future scalability
 
-- **Real search** (full-text/trigram database index, or an external search
-  service like Algolia/Elasticsearch/Meilisearch) — current substring
-  matching over an in-memory array does not scale past demo-sized catalogs.
+- ~~**Real search**~~ **Implemented, Stage 1** — `GET /api/products`'s text-search
+  path now runs relevance-ranked Postgres full-text search (`tsvector`
+  generated column, weighted name > description, `ts_rank` ordering — see
+  `V29__product_full_text_search.sql` and `ProductRepository.searchFullText`),
+  not naive substring matching; the existing `pg_trgm` trigram index is kept
+  as an OR'd recall fallback for queries that don't tokenize into a real
+  lexeme match. This scales to hundreds of thousands of products on a single
+  Postgres instance with no new infrastructure. **Stage 2** (still future
+  work): move to a dedicated search engine (Meilisearch/Typesense over
+  Elasticsearch/OpenSearch — same relevance/facet/typo-tolerance value, far
+  less ops burden) once the catalog is large enough to need faceted filters
+  with live counts, typo-tolerant/instant search, or unified ranked search
+  across products+stores+services — none of which today's ~30-product seed
+  catalog gives any real signal on.
 - **Pagination/cursoring** on every list endpoint before catalog or order
   volume grows meaningfully.
 - ~~**A dedicated payout/settlement ledger**~~ **Implemented** — see

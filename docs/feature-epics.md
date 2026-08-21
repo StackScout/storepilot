@@ -266,8 +266,10 @@ premium booking analytics) shipped and now lives in
   prove the pipeline out end-to-end.
 
 ### Future scalability
-- **Real full-text/external search** (current matching doesn't scale
-  past a demo-sized catalog).
+- ~~**Real full-text search**~~ **Implemented, Stage 1** — see
+  [`roadmap.md`](roadmap.md#future-scalability) for the detail. **Stage 2**
+  (external search engine — Meilisearch/Typesense) remains future work,
+  triggered by real scale/faceting needs, not by a fixed date.
 - **Automated/scheduled payout and fee-collection runs** — today an
   admin manually clicks "create batch"; no cron/background job.
 - **CDN-backed image storage.**

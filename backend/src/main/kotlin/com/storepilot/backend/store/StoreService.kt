@@ -217,6 +217,37 @@ class StoreService(
             created
         }
 
+        // Idempotent retry, not a second store: the onboarding page's
+        // mutationFn calls this endpoint, then PATCHes /settings, then
+        // uploads documents, as separate HTTP requests — if any later step
+        // fails (e.g. a bad ABN checksum) the Store row from this step has
+        // already committed, and the user's natural next move is to fix the
+        // field and resubmit the whole form. Without this check, that retry
+        // called create() again and produced a second Store row for the
+        // same seller, which permanently breaks storeRepository
+        // .findBySellerId() (used by the dashboard) — it assumes at most
+        // one row and throws IncorrectResultSizeDataAccessException
+        // otherwise. An already-ACTIVE or CLOSED store is never touched
+        // here — reusing this path against a live store would silently
+        // overwrite its public listing from a stray resubmission.
+        val existing = storeRepository.findBySellerId(requireNotNull(seller.id))
+        if (existing != null) {
+            if (existing.verificationStatus != StoreVerificationStatus.PENDING &&
+                existing.verificationStatus != StoreVerificationStatus.REJECTED
+            ) {
+                throw ConflictException("You already have a store — manage it from your dashboard instead.")
+            }
+            if (existing.name != input.name) existing.slug = uniqueSlug(input.name)
+            existing.name = input.name
+            existing.tagline = input.tagline
+            existing.description = input.description
+            existing.category = wireValueOf(input.category)
+            existing.address = StoreAddress(city = input.city, state = input.state)
+            existing.whatsappNumber = input.whatsappNumber
+            existing.verificationStatus = StoreVerificationStatus.PENDING
+            return storeRepository.save(existing).toResponse(fileStorageService)
+        }
+
         val slug = uniqueSlug(input.name)
         val store = Store(
             seller = seller,

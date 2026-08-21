@@ -19,6 +19,17 @@ fun requireCountryVerificationFields(
     abn: String?,
     nicNumber: String?,
     businessRegistrationNumber: String?,
+    // Registering for GST with the ATO always issues an ABN, regardless of
+    // whether the registrant is a sole trader (sellerType INDIVIDUAL) or a
+    // company (BUSINESS) — so this check is independent of the
+    // sellerType == BUSINESS branch below, which only covers the
+    // business-registration-specific requirement. Without this, a GST-
+    // registered individual seller's order confirmations render as tax
+    // invoices with an "Includes GST" line but no ABN, which isn't a valid
+    // ATO tax invoice. Defaults to false for Sri Lanka's branch since GST
+    // tax invoices are an Australia-only feature (see StoreSettings
+    // .gstRegistered's doc comment).
+    gstRegistered: Boolean = false,
 ) {
     if (countryCode == "LK") {
         require(!nicNumber.isNullOrBlank()) { "NIC number is required" }
@@ -31,6 +42,9 @@ fun requireCountryVerificationFields(
         require(!driverLicenceNumber.isNullOrBlank()) { "Driver's licence number is required" }
         if (sellerType == SellerType.BUSINESS) {
             require(!abn.isNullOrBlank()) { "ABN is required for a registered business" }
+            require(isValidAbnChecksum(abn!!)) { "Enter a valid ABN" }
+        } else if (gstRegistered) {
+            require(!abn.isNullOrBlank()) { "An ABN is required to register for GST" }
             require(isValidAbnChecksum(abn!!)) { "Enter a valid ABN" }
         }
     }

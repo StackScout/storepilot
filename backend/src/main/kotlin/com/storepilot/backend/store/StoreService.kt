@@ -456,6 +456,7 @@ class StoreService(
             settings.abn,
             settings.nicNumber,
             settings.businessRegistrationNumber,
+            settings.gstRegistered,
         )
     }
 

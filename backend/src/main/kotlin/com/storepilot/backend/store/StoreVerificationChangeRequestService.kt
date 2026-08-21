@@ -86,6 +86,7 @@ class StoreVerificationChangeRequestService(
             input.abn ?: current.abn,
             input.nicNumber ?: current.nicNumber,
             input.businessRegistrationNumber ?: current.businessRegistrationNumber,
+            current.gstRegistered,
         )
 
         val request = StoreVerificationChangeRequest(
@@ -166,6 +167,7 @@ class StoreVerificationChangeRequestService(
             settings.abn,
             settings.nicNumber,
             settings.businessRegistrationNumber,
+            settings.gstRegistered,
         )
         val savedSettings = storeSettingsRepository.save(settings)
 

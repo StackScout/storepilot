@@ -52,4 +52,34 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
 
     /** GET /api/bookings/recurrence/{groupId} — every occurrence of a recurring series, in chronological order. */
     fun findByRecurrenceGroupIdOrderByScheduledStartAsc(recurrenceGroupId: UUID): List<Booking>
+
+    /**
+     * Seller dashboard trend cards — see StoreService.getStats, summed
+     * alongside OrderRepository.sumSubtotalForPaidOrders so a bookings-only
+     * seller doesn't see $0 revenue despite live business. servicePrice
+     * (pre-discount), not total, to mirror Order.subtotal's own
+     * pre-discount convention. Sums 0 (via coalesce) rather than null when
+     * nothing matches, same as the Order-side query.
+     */
+    @Query(
+        """
+        select coalesce(sum(b.servicePrice), 0) from Booking b
+        where b.store.id = :storeId
+          and b.paymentStatus = com.storepilot.backend.order.PaymentStatus.PAID
+          and b.status <> com.storepilot.backend.booking.BookingStatus.CANCELLED
+          and b.createdAt >= :from and b.createdAt < :to
+        """,
+    )
+    fun sumServicePriceForPaidBookings(storeId: UUID, from: Instant, to: Instant): Int
+
+    @Query(
+        """
+        select coalesce(sum(b.platformFee), 0) from Booking b
+        where b.store.id = :storeId
+          and b.paymentStatus = com.storepilot.backend.order.PaymentStatus.PAID
+          and b.status <> com.storepilot.backend.booking.BookingStatus.CANCELLED
+          and b.createdAt >= :from and b.createdAt < :to
+        """,
+    )
+    fun sumPlatformFeeForPaidBookings(storeId: UUID, from: Instant, to: Instant): Int
 }

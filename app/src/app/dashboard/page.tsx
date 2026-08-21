@@ -13,7 +13,7 @@ import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { ordersService, productsService, storesService } from "@/services";
+import { bookingsService, ordersService, productsService, storesService } from "@/services";
 
 /** "+12.4% vs last week" / "-8.2% vs last week" — undefined when there's nothing to compare (both periods zero). */
 function periodTrend(current: number, previous: number): { trend?: string; trendDirection?: "up" | "down" } {
@@ -40,6 +40,14 @@ export default function DashboardOverviewPage() {
     queryKey: ["orders", storeId, "overview"],
     queryFn: () => ordersService.listOrdersByStore(storeId, undefined, 0, 1000),
   });
+  // Bookings alongside orders below — a bookings-only seller with no
+  // products would otherwise see $0 revenue and 0 pending here regardless
+  // of how much booking business they're doing (see StoreService.getStats'
+  // matching backend-side fix).
+  const bookingsQuery = useQuery({
+    queryKey: ["bookings", storeId, "overview"],
+    queryFn: () => bookingsService.listBookingsByStore(storeId),
+  });
   const productsQuery = useQuery({
     queryKey: ["products", "store", storeId],
     queryFn: () => productsService.listProductsByStore(storeId),
@@ -50,15 +58,20 @@ export default function DashboardOverviewPage() {
   });
 
   const orders = ordersQuery.data?.content ?? [];
+  const bookings = bookingsQuery.data ?? [];
   const products = productsQuery.data ?? [];
 
   // "Paid" here matches the payouts page's own definition of earnings
   // (see /dashboard/payouts) — a non-cancelled-but-still-unpaid COD order
   // isn't money in hand yet, so it shouldn't count as revenue here either.
   const paidOrders = orders.filter((o) => o.status !== "cancelled" && o.paymentStatus === "paid");
-  const revenue = paidOrders.reduce((sum, o) => sum + o.subtotal, 0);
-  const platformFees = paidOrders.reduce((sum, o) => sum + o.platformFee, 0);
-  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const paidBookings = bookings.filter((b) => b.status !== "cancelled" && b.paymentStatus === "paid");
+  const revenue =
+    paidOrders.reduce((sum, o) => sum + o.subtotal, 0) + paidBookings.reduce((sum, b) => sum + b.servicePrice, 0);
+  const platformFees =
+    paidOrders.reduce((sum, o) => sum + o.platformFee, 0) + paidBookings.reduce((sum, b) => sum + b.platformFee, 0);
+  const pendingCount =
+    orders.filter((o) => o.status === "pending").length + bookings.filter((b) => b.status === "pending").length;
   const activeProducts = products.filter((p) => p.status === "active");
   const lowStockProducts = products.filter(
     (p) => p.trackStock && p.status !== "out-of-stock" && p.stockQuantity <= 5,
@@ -78,7 +91,7 @@ export default function DashboardOverviewPage() {
           icon={Wallet}
           {...(statsQuery.data ? periodTrend(statsQuery.data.revenueCurrentPeriod, statsQuery.data.revenuePreviousPeriod) : {})}
         />
-        <StatCard label="Pending orders" value={String(pendingCount)} icon={ClipboardList} />
+        <StatCard label="Pending orders & bookings" value={String(pendingCount)} icon={ClipboardList} />
         <StatCard label="Active products" value={String(activeProducts.length)} icon={Package} />
         <StatCard
           label={`Platform fees (${platformFeePercent}%)`}

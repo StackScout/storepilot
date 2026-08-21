@@ -123,8 +123,11 @@ class StoreService(
      * GET /api/stores/{storeId}/stats — dashboard trend cards. Rolling
      * windows rather than calendar weeks (simpler, no timezone-boundary
      * edge cases) — the last 7 days vs the 7 days before that, both ending
-     * "now". Revenue/fees only count PAID, non-cancelled orders — the same
-     * filter the dashboard's own client-side revenue reduce already uses.
+     * "now". Revenue/fees only count PAID, non-cancelled orders and
+     * bookings — the same filter the dashboard's own client-side revenue
+     * reduce already uses. Bookings are summed in alongside orders (not
+     * just orders alone) so a bookings-only seller with no products still
+     * sees their real revenue here, not $0.
      */
     fun getStats(storeId: UUID): StoreStatsResponse {
         requireOwnedStore(storeId)
@@ -132,10 +135,14 @@ class StoreService(
         val currentFrom = now.minus(7, java.time.temporal.ChronoUnit.DAYS)
         val previousFrom = now.minus(14, java.time.temporal.ChronoUnit.DAYS)
         return StoreStatsResponse(
-            revenueCurrentPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, currentFrom, now),
-            revenuePreviousPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, previousFrom, currentFrom),
-            platformFeeCurrentPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, currentFrom, now),
-            platformFeePreviousPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, previousFrom, currentFrom),
+            revenueCurrentPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, currentFrom, now) +
+                bookingRepository.sumServicePriceForPaidBookings(storeId, currentFrom, now),
+            revenuePreviousPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, previousFrom, currentFrom) +
+                bookingRepository.sumServicePriceForPaidBookings(storeId, previousFrom, currentFrom),
+            platformFeeCurrentPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, currentFrom, now) +
+                bookingRepository.sumPlatformFeeForPaidBookings(storeId, currentFrom, now),
+            platformFeePreviousPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, previousFrom, currentFrom) +
+                bookingRepository.sumPlatformFeeForPaidBookings(storeId, previousFrom, currentFrom),
         )
     }
 

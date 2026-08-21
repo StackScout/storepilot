@@ -8,6 +8,7 @@ import com.stripe.model.Customer
 import com.stripe.model.Subscription
 import com.stripe.model.checkout.Session
 import com.stripe.param.CustomerCreateParams
+import com.stripe.param.SubscriptionListParams
 import com.stripe.param.checkout.SessionCreateParams
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -110,11 +111,26 @@ class SellerBillingService(
         return seller.toPlanResponse(config.proMonthlyPriceCents, config.currencyCode)
     }
 
-    /** POST /api/me/seller/billing/refresh — fallback for when the webhook is misconfigured or drops an event, same "check again" pattern as StripeConnectService.refreshAccountStatus. */
+    /**
+     * POST /api/me/seller/billing/refresh — fallback for when the webhook is
+     * misconfigured or drops an event, same "check again" pattern as
+     * StripeConnectService.refreshAccountStatus. Falls back further to
+     * listing the Customer's subscriptions directly when stripeSubscriptionId
+     * itself was never recorded — that field is only ever written by the
+     * checkout.session.completed webhook (see handleCheckoutCompleted), so a
+     * seller whose webhook has never once fired successfully (not just
+     * dropped an event, but e.g. a missing/wrong signing secret) would
+     * otherwise have nothing here to refresh from at all.
+     */
     @Transactional
     fun refreshFromStripe(): SellerPlanResponse {
         val seller = currentActor.requireSeller()
-        seller.stripeSubscriptionId?.let { syncFromSubscription(seller, Subscription.retrieve(it)) }
+        val subscription = seller.stripeSubscriptionId?.let { Subscription.retrieve(it) }
+            ?: seller.stripeCustomerId?.let { customerId ->
+                Subscription.list(SubscriptionListParams.builder().setCustomer(customerId).setLimit(1L).build())
+                    .data.firstOrNull()
+            }
+        subscription?.let { syncFromSubscription(seller, it) }
         val config = platformConfigService.current()
         return seller.toPlanResponse(config.proMonthlyPriceCents, config.currencyCode)
     }

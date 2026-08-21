@@ -476,7 +476,9 @@ invited by an existing admin) and you are signed in as admin.
 | LEGAL-02 | Start buyer registration and submit without checking the terms/privacy agreement checkbox. | Blocked with an inline validation error; links to `/terms` and `/privacy` open correctly (new tab). |
 | LEGAL-03 | Check the agreement checkbox and complete buyer registration. | Succeeds. |
 | LEGAL-04 | Repeat LEGAL-02/03 for seller registration. | Same required-checkbox behavior on the seller registration form. |
-| LEGAL-05 | Complete a guest checkout (product or booking) with no signed-in account. | No separate consent checkbox is presented at checkout — confirm this is the intended design (consent is captured once, at account registration, not re-asked at every guest checkout) rather than assuming it's a missing gap. |
+| LEGAL-05 | On the product checkout page, attempt to submit with the "I agree to Terms of Service and Privacy Policy" checkbox unchecked. | Blocked with an inline validation error — checkout has its own required, linked consent checkbox, separate from the one-time registration consent. |
+| LEGAL-06 | Repeat LEGAL-05 on the **booking** checkout form. | Same required, linked checkbox and blocking behavior — booking checkout mirrors product checkout's consent gate exactly (previously it only showed unlinked, non-blocking text referencing the store's own undefined "terms"; both flows now use the same real Terms of Service/Privacy Policy checkbox). |
+| LEGAL-07 | Complete a guest checkout (product or booking) with no signed-in account. | The consent checkbox still applies and still gates submission — consent is captured at every checkout, guest or signed-in, not just once at registration. |
 
 ---
 

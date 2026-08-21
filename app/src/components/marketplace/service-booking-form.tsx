@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,15 +24,26 @@ import { submitPayHereCheckout } from "@/lib/payhere";
 import { availabilityService, bookingsService, buyersService, addressesService, storesService, couponsService } from "@/services";
 import type { Booking, BookableService, CouponPreviewResponse, PaymentMethod, SlotResponse, Store } from "@/types";
 
-const bookingSchema = z.object({
-  buyerName: z.string().min(2, "Enter your name"),
-  buyerEmail: z.string().email("Enter a valid email"),
-  buyerPhone: z
-    .string()
-    .min(9, "Enter a valid phone number")
-    .regex(/^[0-9+\s]+$/, "Digits only"),
-  paymentMethod: z.enum(["payhere", "cod", "bank-transfer", "stripe"]),
-});
+const bookingSchema = z
+  .object({
+    buyerName: z.string().min(2, "Enter your name"),
+    buyerEmail: z.string().email("Enter a valid email"),
+    buyerPhone: z
+      .string()
+      .min(9, "Enter a valid phone number")
+      .regex(/^[0-9+\s]+$/, "Digits only"),
+    paymentMethod: z.enum(["payhere", "cod", "bank-transfer", "stripe"]),
+    agreeToTerms: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.agreeToTerms) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["agreeToTerms"],
+        message: "You must agree to the Terms of Service and Privacy Policy to book",
+      });
+    }
+  });
 
 type BookingFormValues = z.infer<typeof bookingSchema>;
 
@@ -135,7 +147,7 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
     formState: { errors },
   } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingSchema),
-    defaultValues: { paymentMethod: "cod", buyerEmail: session.email ?? "" },
+    defaultValues: { paymentMethod: "cod", buyerEmail: session.email ?? "", agreeToTerms: false },
   });
 
   useEffect(() => {
@@ -145,10 +157,12 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
       buyerEmail: buyer.email,
       buyerPhone: defaultAddress?.shipping.phone ?? "",
       paymentMethod: "cod",
+      agreeToTerms: false,
     });
   }, [buyer, defaultAddress, reset]);
 
   const paymentMethod = watch("paymentMethod");
+  const agreeToTerms = watch("agreeToTerms");
 
   useEffect(() => {
     if (!storeSettings) return;
@@ -482,6 +496,24 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
               {formatCurrency(service.price - discountAmount, currency)} charged per session, not upfront
             </p>
           ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              checked={agreeToTerms}
+              onCheckedChange={(checked) => setValue("agreeToTerms", checked === true, { shouldValidate: true })}
+              className="mt-0.5"
+            />
+            <span className="text-muted-foreground text-xs">
+              I agree to {name}&apos;s{" "}
+              <Link href="/terms" target="_blank" className="text-primary underline-offset-4 hover:underline">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" target="_blank" className="text-primary underline-offset-4 hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
           <Button
             type="submit"
             size="lg"
@@ -491,9 +523,9 @@ export function ServiceBookingForm({ service, store }: { service: BookableServic
             {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
             {canRepeatWeekly && repeatWeekly ? `Request ${occurrenceCount} bookings` : "Request booking"}
           </Button>
-          <p className="text-muted-foreground text-center text-xs">
-            By requesting this booking you agree to {name}&apos;s terms.
-          </p>
+          {errors.agreeToTerms ? (
+            <p className="text-destructive text-center text-xs">{errors.agreeToTerms.message}</p>
+          ) : null}
         </CardContent>
       </Card>
     </form>

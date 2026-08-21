@@ -20,6 +20,7 @@ import com.storepilot.backend.product.ProductImage
 import com.storepilot.backend.product.ProductRepository
 import com.storepilot.backend.product.ProductStatus
 import com.storepilot.backend.seller.Seller
+import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.seller.SellerRepository
 import com.storepilot.backend.store.SellerType
 import com.storepilot.backend.store.Store
@@ -139,7 +140,7 @@ class DataSeeder(
 
         val sellers = seedSellers()
         val storeIds = seedStores(sellers)
-        seedStoreSettings(storeIds.getValue("store-01"))
+        seedStoreSettings(storeIds)
         val productIds = seedProducts(storeIds)
         seedBuyer()
         val orderIds = seedOrders(storeIds.getValue("store-01"), productIds)
@@ -207,7 +208,15 @@ class DataSeeder(
             SeedSeller("store-08", "seed-store-08", "seller-store-08@storepilot.test", "Coastal Home Co. Seller"),
         )
         return seeds.associate { s ->
-            s.storeKey to sellerRepository.save(Seller(cognitoSub = s.cognitoSub, email = s.email, name = s.name))
+            // Pro, not the Seller entity's own Free default — every seed
+            // store offers COD/bank-transfer (see seedStoreSettings below
+            // and this class's own doc comment on why), both Pro-gated
+            // features (see StoreService.upsertSettings). A Free-plan seed
+            // seller would make every demo store's checkout permanently
+            // 409 with "doesn't offer cod/bank-transfer payments" despite
+            // the storefront showing those options as available — a real
+            // bug this fix closes, not a hypothetical.
+            s.storeKey to sellerRepository.save(Seller(cognitoSub = s.cognitoSub, email = s.email, name = s.name, plan = SellerPlan.PRO))
         }
     }
 
@@ -251,25 +260,46 @@ class DataSeeder(
         return ids
     }
 
-    private fun seedStoreSettings(store01Id: UUID) {
-        val store = storeRepository.findById(store01Id).orElseThrow()
-        storeSettingsRepository.save(
-            StoreSettings(
-                store = store,
-                contactEmail = "hello@bluemountainsroasters.com.au",
-                contactPhone = "+61412345601",
-                bankAccountName = "Blue Mountains Roasters Pty Ltd",
-                bankAccountNumber = "BSB 062-000 Acc 1234 5678",
-                bankName = "Commonwealth Bank of Australia",
-                transactionFeePercent = BigDecimal("3.5"),
-                codEnabled = true,
-                onlinePaymentEnabled = false,
-                bankTransferEnabled = true,
-                sellerType = SellerType.BUSINESS,
-                driverLicenceNumber = "12345678",
-                abn = "51 824 753 556",
-            ),
+    /**
+     * One StoreSettings row per seed store, not just store-01 — every seed
+     * store must offer COD/bank-transfer per this class's own doc comment
+     * above (and now can, since seedSellers puts every seed seller on
+     * Pro). Previously only store-01 got a settings row at all, so the
+     * other 7 seed stores had none — StoreService.checkout rejects any
+     * order for a store with no settings row, making 7/8 of the demo
+     * catalogue permanently unpurchasable.
+     */
+    private fun seedStoreSettings(storeIds: Map<String, UUID>) {
+        val abns = mapOf(
+            "store-01" to "51 824 753 556",
+            "store-02" to "64 913 208 447",
+            "store-03" to "27 508 641 973",
+            "store-04" to "83 172 495 630",
+            "store-05" to "45 297 861 304",
+            "store-06" to "19 634 720 158",
+            "store-07" to "76 350 918 462",
+            "store-08" to "92 481 637 025",
         )
+        for ((key, id) in storeIds) {
+            val store = storeRepository.findById(id).orElseThrow()
+            storeSettingsRepository.save(
+                StoreSettings(
+                    store = store,
+                    contactEmail = "hello@${store.slug.replace("-", "")}.com.au",
+                    contactPhone = store.whatsappNumber,
+                    bankAccountName = "${store.name} Pty Ltd",
+                    bankAccountNumber = "BSB 062-000 Acc 1234 5678",
+                    bankName = "Commonwealth Bank of Australia",
+                    transactionFeePercent = BigDecimal("3.5"),
+                    codEnabled = true,
+                    onlinePaymentEnabled = false,
+                    bankTransferEnabled = true,
+                    sellerType = SellerType.BUSINESS,
+                    driverLicenceNumber = "12345678",
+                    abn = abns.getValue(key),
+                ),
+            )
+        }
     }
 
     private fun seedProducts(storeIds: Map<String, UUID>): Map<String, UUID> {

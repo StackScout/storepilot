@@ -7,6 +7,7 @@ import com.storepilot.backend.buyer.BuyerRepository
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
@@ -105,7 +106,21 @@ class CurrentActor(
             existingByEmail.cognitoSub = sub
             return buyerRepository.save(existingByEmail)
         }
-        return buyerRepository.save(Buyer(name = name, email = email, cognitoSub = sub))
+        return try {
+            // saveAndFlush, not save — forces the INSERT to execute (and any
+            // constraint violation to surface) synchronously right here,
+            // rather than deferred to this transaction's end-of-method
+            // commit, where this try/catch could no longer catch it.
+            buyerRepository.saveAndFlush(Buyer(name = name, email = email, cognitoSub = sub))
+        } catch (e: DataIntegrityViolationException) {
+            // Lost a race with another request also JIT-provisioning this
+            // same first-ever-login buyer — several API calls commonly fire
+            // in parallel on a page's initial load, and findByCognitoSub
+            // above returning null for more than one of them concurrently
+            // is not a hypothetical. The other request's insert already
+            // won; look up what it created instead of failing this request.
+            buyerRepository.findByCognitoSub(sub) ?: buyerRepository.findByEmailIgnoreCase(email) ?: throw e
+        }
     }
 
     fun requireBuyer(): Buyer = buyerOrNull() ?: throw ForbiddenException("A buyer account is required for this action")
@@ -145,7 +160,14 @@ class CurrentActor(
         adminRepository.findByCognitoSub(sub)?.let { return it }
 
         val (email, name) = fetchProfileFromCognito(jwt)
-        return adminRepository.save(Admin(cognitoSub = sub, email = email, name = name))
+        return try {
+            // See buyerOrNull's doc comment on why saveAndFlush + this
+            // same-race handling — identical JIT-provisioning shape, just
+            // for admins.
+            adminRepository.saveAndFlush(Admin(cognitoSub = sub, email = email, name = name))
+        } catch (e: DataIntegrityViolationException) {
+            adminRepository.findByCognitoSub(sub) ?: throw e
+        }
     }
 
     fun requireAdmin(): Admin = adminOrNull() ?: throw ForbiddenException("An admin account is required for this action")

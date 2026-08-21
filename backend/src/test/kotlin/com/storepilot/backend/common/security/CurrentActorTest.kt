@@ -103,6 +103,39 @@ class CurrentActorTest {
     }
 
     @Test
+    fun `buyerOrNull JIT-provisions a genuinely new row when no cognitoSub or email match exists`() {
+        authenticateAs("sub-1", "BUYER")
+        every { buyerRepository.findByCognitoSub("sub-1") } returns null
+        every { buyerRepository.findByEmailIgnoreCase("actor@example.com") } returns null
+        val slot = io.mockk.slot<Buyer>()
+        every { buyerRepository.saveAndFlush(capture(slot)) } answers { slot.captured }
+
+        val result = currentActor.buyerOrNull()
+
+        assertEquals("sub-1", result?.cognitoSub)
+        assertEquals("actor@example.com", result?.email)
+    }
+
+    @Test
+    fun `buyerOrNull recovers when it loses a JIT-provisioning race to a concurrent request`() {
+        // Two requests for the same brand-new buyer both see findByCognitoSub
+        // return null (neither row exists yet) and both attempt to insert —
+        // only one wins at the database level. This simulates the loser.
+        authenticateAs("sub-1", "BUYER")
+        every { buyerRepository.findByCognitoSub("sub-1") } returns null andThen Buyer(
+            name = "Actor Name", email = "actor@example.com", cognitoSub = "sub-1",
+        )
+        every { buyerRepository.findByEmailIgnoreCase("actor@example.com") } returns null
+        every { buyerRepository.saveAndFlush(any<Buyer>()) } throws
+            org.springframework.dao.DataIntegrityViolationException("duplicate key value violates unique constraint \"buyers_email_key\"")
+
+        val result = currentActor.buyerOrNull()
+
+        assertEquals("sub-1", result?.cognitoSub)
+        verify(exactly = 2) { buyerRepository.findByCognitoSub("sub-1") }
+    }
+
+    @Test
     fun `sellerOrNull never JIT-provisions — null until onboarding creates a row`() {
         authenticateAs("sub-1", "SELLER")
         every { sellerRepository.findByCognitoSub("sub-1") } returns null
@@ -124,7 +157,7 @@ class CurrentActorTest {
         authenticateAs("sub-1", "ADMIN")
         every { adminRepository.findByCognitoSub("sub-1") } returns null
         val slot = io.mockk.slot<Admin>()
-        every { adminRepository.save(capture(slot)) } answers { slot.captured }
+        every { adminRepository.saveAndFlush(capture(slot)) } answers { slot.captured }
 
         val result = currentActor.requireAdmin()
 

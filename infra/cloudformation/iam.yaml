@@ -129,6 +129,13 @@ Resources:
                   # SellerAccountService.deleteCurrentSeller(), called after
                   # AdminUserGlobalSignOut above.
                   - cognito-idp:AdminDeleteUser
+                  # GET /api/admin/admins — lists every Cognito user in the
+                  # admin group, including ones who haven't signed in yet
+                  # (so no corresponding Admin DB row exists to query
+                  # instead) — see AdminManagementService. Not an
+                  # Admin*-prefixed API name despite needing the same
+                  # backend-credential trust as the rest of this policy.
+                  - cognito-idp:ListUsersInGroup
                 Resource: !Sub "arn:aws:cognito-idp:${CognitoRegion}:${AWS::AccountId}:userpool/${CognitoUserPoolId}"
         - PolicyName: docker-awslogs-driver
           PolicyDocument:

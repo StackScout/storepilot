@@ -9,9 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ordersService } from "@/services";
 import { ApiRequestError } from "@/lib/api-client";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 export default function TrackOrderPage() {
   const router = useRouter();
+  const { countryCode } = usePlatformConfig();
+  const isSriLanka = countryCode === "LK";
   const [orderNumber, setOrderNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -70,7 +73,7 @@ export default function TrackOrderPage() {
                 <Label htmlFor="orderNumber">Order number</Label>
                 <Input
                   id="orderNumber"
-                  placeholder="e.g. SL-20260722-1001"
+                  placeholder={`e.g. ${countryCode}-20260722-1001`}
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
                   required
@@ -80,7 +83,7 @@ export default function TrackOrderPage() {
                 <Label htmlFor="phone">Phone number</Label>
                 <Input
                   id="phone"
-                  placeholder="07X XXX XXXX"
+                  placeholder={isSriLanka ? "07X XXX XXXX" : "04XX XXX XXX"}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required

@@ -176,17 +176,19 @@ export default function AdminStoresPage() {
       </div>
 
       <Tabs defaultValue="pending">
-        <TabsList>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="all">All stores</TabsTrigger>
-          <TabsTrigger value="changes">
-            Verification changes
-            {pendingChangeRequests && pendingChangeRequests.length > 0 ? (
-              <Badge className="ml-1.5 border-0 px-1.5">{pendingChangeRequests.length}</Badge>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="history">Decision history</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
+            <TabsTrigger value="all">All stores</TabsTrigger>
+            <TabsTrigger value="changes">
+              Verification changes
+              {pendingChangeRequests && pendingChangeRequests.length > 0 ? (
+                <Badge className="ml-1.5 border-0 px-1.5">{pendingChangeRequests.length}</Badge>
+              ) : null}
+            </TabsTrigger>
+            <TabsTrigger value="history">Decision history</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="pending">
           <Card>

@@ -243,22 +243,24 @@ export default function AdminAccountingPage() {
       </div>
 
       <Tabs defaultValue={showPayouts ? "payouts" : "stripe"}>
-        <TabsList>
-          {showPayouts ? (
-            <TabsTrigger value="payouts">
-              <Wallet className="size-3.5" /> Payouts
+        <div className="overflow-x-auto">
+          <TabsList>
+            {showPayouts ? (
+              <TabsTrigger value="payouts">
+                <Wallet className="size-3.5" /> Payouts
+              </TabsTrigger>
+            ) : null}
+            <TabsTrigger value="fee-collections">
+              <ReceiptText className="size-3.5" /> Fee collections
             </TabsTrigger>
-          ) : null}
-          <TabsTrigger value="fee-collections">
-            <ReceiptText className="size-3.5" /> Fee collections
-          </TabsTrigger>
-          <TabsTrigger value="stripe">
-            <CreditCard className="size-3.5" /> Stripe settlements
-          </TabsTrigger>
-          <TabsTrigger value="returns">
-            <RotateCcw className="size-3.5" /> Returns
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value="stripe">
+              <CreditCard className="size-3.5" /> Stripe settlements
+            </TabsTrigger>
+            <TabsTrigger value="returns">
+              <RotateCcw className="size-3.5" /> Returns
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {showPayouts ? (
           <TabsContent value="payouts">

@@ -104,7 +104,7 @@ export function StorePageContent({
               <p className="text-muted-foreground text-sm">{store.tagline}</p>
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex flex-wrap shrink-0 gap-2">
             <FollowStoreButton storeId={store.id} />
             <MessageSellerButton storeId={store.id} />
             <Button

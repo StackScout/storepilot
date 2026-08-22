@@ -70,14 +70,26 @@ class StoreVerificationChangeRequestService(
         if (changeRequestRepository.findByStoreIdAndStatus(storeId, StoreVerificationChangeRequestStatus.PENDING) != null) {
             throw ConflictException("A verification change request is already pending review for this store")
         }
-        val hasTextChange = input.sellerType != null || input.driverLicenceNumber != null || input.abn != null ||
-            input.nicNumber != null || input.businessRegistrationNumber != null
-        val hasFileChange = driverLicenceDocument != null || abnDocument != null || nicDocument != null || businessRegDocument != null
-        require(hasTextChange || hasFileChange) { "Include at least one changed field or document" }
-
         val current = storeSettingsRepository.findById(storeId).orElseThrow {
             NotFoundException("No settings for store $storeId yet")
         }
+        // Compared against current, not just checked for presence — the
+        // seller-facing form always resends every field (prefilled with
+        // its current value), so a plain non-null check here let a
+        // no-op resubmission through with nothing actually different.
+        // That produced a pending request an admin genuinely cannot
+        // review: every field in the diff view legitimately matches
+        // current, so nothing renders there at all. Blank counts the
+        // same as null on both sides — an empty-string ABN and a null
+        // one both mean "no ABN on file", not a real change.
+        val hasTextChange = (input.sellerType != null && wireValueOf<SellerType>(input.sellerType) != current.sellerType) ||
+            (!input.driverLicenceNumber.isNullOrBlank() && input.driverLicenceNumber != current.driverLicenceNumber) ||
+            (!input.abn.isNullOrBlank() && input.abn != current.abn) ||
+            (!input.nicNumber.isNullOrBlank() && input.nicNumber != current.nicNumber) ||
+            (!input.businessRegistrationNumber.isNullOrBlank() && input.businessRegistrationNumber != current.businessRegistrationNumber)
+        val hasFileChange = driverLicenceDocument != null || abnDocument != null || nicDocument != null || businessRegDocument != null
+        require(hasTextChange || hasFileChange) { "Include at least one changed field or document" }
+
         val proposedSellerType = input.sellerType?.let { wireValueOf<SellerType>(it) } ?: current.sellerType
         requireCountryVerificationFields(
             platformConfigService.current().countryCode,

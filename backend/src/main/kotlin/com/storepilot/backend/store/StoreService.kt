@@ -436,6 +436,8 @@ class StoreService(
             stockManagementEnabled = input.stockManagementEnabled ?: true,
             pickupEnabled = input.pickupEnabled ?: false,
             gstRegistered = input.gstRegistered ?: false,
+            bookingsEnabled = input.bookingsEnabled ?: false,
+            stripeEnabled = input.stripeEnabled ?: false,
         )
         requireCountryVerificationFields(created)
         return storeSettingsRepository.save(created).toResponse(fileStorageService)

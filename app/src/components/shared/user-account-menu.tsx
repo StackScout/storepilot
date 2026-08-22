@@ -73,7 +73,7 @@ export function UserAccountMenu({
         </span>
         {variant === "labeled" ? (
           <>
-            <span className="max-w-32 truncate text-sm font-medium">{name}</span>
+            <span className="max-w-20 truncate text-sm font-medium sm:max-w-32">{name}</span>
             <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
           </>
         ) : null}

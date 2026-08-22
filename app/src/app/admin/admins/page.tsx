@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Users } from "lucide-react";
+import { Loader2, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,7 +44,11 @@ export default function AdminAdminsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { data: admins, isLoading } = useQuery({
+  const {
+    data: admins,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["admin-admins"],
     queryFn: () => adminService.listAdmins(),
   });
@@ -90,6 +94,12 @@ export default function AdminAdminsPage() {
               <TableRowSkeleton columns={3} />
               <TableRowSkeleton columns={3} />
             </div>
+          ) : isError ? (
+            <EmptyState
+              icon={TriangleAlert}
+              title="Couldn't load admins"
+              description="Something went wrong fetching the admin list. Try refreshing the page."
+            />
           ) : !admins || admins.length === 0 ? (
             <EmptyState icon={Users} title="No admins found" />
           ) : (

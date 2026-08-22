@@ -599,7 +599,19 @@ class StoreService(
         storeRepository.save(store)
 
         if (status == StoreVerificationStatus.REJECTED && input.rejectionReason != null) {
-            upsertSettings(storeId, StoreSettingsInput(rejectionReason = input.rejectionReason))
+            // Stashes the reason directly rather than routing through
+            // upsertSettings — that method runs requireAtLeastOnePaymentMethod
+            // and the country-verification-fields checks meant for a
+            // seller's own edits, and a store can legitimately be pending
+            // review with no payment method configured yet (or any other
+            // incomplete state) — that's exactly the kind of application an
+            // admin needs to be *able* to reject, not blocked from
+            // rejecting by validation that has nothing to do with the
+            // decision being made.
+            storeSettingsRepository.findById(storeId).ifPresent {
+                it.rejectionReason = input.rejectionReason
+                storeSettingsRepository.save(it)
+            }
         }
 
         // The audit log is the durable history of this decision — unlike

@@ -1,5 +1,6 @@
 package com.storepilot.backend.common.security
 
+import com.storepilot.backend.common.EmailDeliveryException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.notification.EmailService
 import org.springframework.stereotype.Service
@@ -40,17 +41,21 @@ class EmailVerificationService(
         repository.save(record)
 
         val platformName = platformConfigService.current().name
-        emailService.send(
-            to = email,
-            subject = "Verify your $platformName email address",
-            body = buildString {
-                appendLine("Hi $name,")
-                appendLine()
-                appendLine("Your verification code is: $code")
-                appendLine()
-                appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
-            },
-        )
+        try {
+            emailService.send(
+                to = email,
+                subject = "Verify your $platformName email address",
+                body = buildString {
+                    appendLine("Hi $name,")
+                    appendLine()
+                    appendLine("Your verification code is: $code")
+                    appendLine()
+                    appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
+                },
+            )
+        } catch (e: Exception) {
+            throw EmailDeliveryException("Failed to send verification code email to $email", e)
+        }
     }
 
     /**

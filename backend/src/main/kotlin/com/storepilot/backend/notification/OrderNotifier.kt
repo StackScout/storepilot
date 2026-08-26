@@ -22,8 +22,43 @@ class OrderNotifier(
     private val storeSettingsRepository: StoreSettingsRepository,
     private val notificationProperties: NotificationProperties,
     private val platformConfigService: PlatformConfigService,
+    private val pushNotificationService: PushNotificationService,
+    private val pushTokenRepository: PushTokenRepository,
 ) {
     private val log = LoggerFactory.getLogger(OrderNotifier::class.java)
+
+    /** Fired the moment a buyer places an order — see OrderService.createOrder, alongside orderConfirmed. */
+    fun sellerOrderPlaced(order: Order) {
+        sendPushToSeller(
+            order,
+            title = "New order: ${order.orderNumber}",
+            body = "A new order from ${order.store.name}'s storefront just came in — ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}.",
+        )
+    }
+
+    /** Fulfillment/delivery-time reminders — see OrderFulfillmentReminderJob / OrderDeliveryReminderJob. */
+    fun fulfillmentDueSoon(order: Order) {
+        sendPushToSeller(order, title = "Ship soon: ${order.orderNumber}", body = "Order ${order.orderNumber} needs to ship soon to stay within your fulfillment window.")
+    }
+
+    fun fulfillmentOverdue(order: Order) {
+        sendPushToSeller(order, title = "Overdue: ${order.orderNumber}", body = "Order ${order.orderNumber} is past its fulfillment window and still hasn't shipped.")
+    }
+
+    fun deliveryDueReminder(order: Order) {
+        sendPushToSeller(order, title = "Check delivery: ${order.orderNumber}", body = "Order ${order.orderNumber} should have arrived by now — mark it delivered once it has.")
+    }
+
+    private fun sendPushToSeller(order: Order, title: String, body: String) {
+        val sellerId = order.store.seller.id ?: return
+        val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
+        if (tokens.isEmpty()) return
+        try {
+            pushNotificationService.send(tokens, title, body, data = mapOf("type" to "order", "id" to order.id.toString()))
+        } catch (e: Exception) {
+            log.warn("Failed to send order push to seller {} (title=\"{}\") — not failing the triggering operation", sellerId, title, e)
+        }
+    }
 
     /**
      * order.sellerAbn/gstAmount are both non-null only when the seller had
@@ -81,6 +116,7 @@ class OrderNotifier(
                 appendLine("Review and verify it from your seller dashboard.")
             },
         )
+        sendPushToSeller(order, title = "Receipt uploaded: ${order.orderNumber}", body = "A buyer uploaded a payment receipt — review it to confirm payment.")
     }
 
     fun bankTransferVerified(order: Order, approved: Boolean, note: String?) {
@@ -150,6 +186,7 @@ class OrderNotifier(
                 appendLine("Review and respond from your seller dashboard.")
             },
         )
+        sendPushToSeller(order, title = "Return requested: ${order.orderNumber}", body = "A buyer has requested a return for order ${order.orderNumber}.")
     }
 
     /** ReturnRequestService.decide — buyer notification, mirrors bankTransferVerified's approved/rejected shape. */

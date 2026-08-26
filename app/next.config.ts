@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   // Minimal self-contained server bundle (.next/standalone) for the Docker
   // image — see app/Dockerfile and infra/docker/docker-compose.prod.yml.
   output: "standalone",
+  // @storepilot/shared-api (npm workspace package, packages/shared-api) ships
+  // raw TypeScript with no build step — Next.js doesn't transpile anything
+  // under node_modules (including symlinked workspace packages) by default.
+  transpilePackages: ["@storepilot/shared-api"],
   images: {
     // Product/store images and documents come from the backend's own origin
     // (local disk) or an S3 presigned URL (aws profile) — both hosts are

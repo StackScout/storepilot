@@ -84,6 +84,9 @@ class Booking(
     /** Null means never reminded — same idempotency shape as Order.lastReminderSentAt, see BookingReminderJob. One-shot (not repeating) since a booking only has one upcoming appointment to remind about. */
     @Column(name = "last_reminder_sent_at")
     var lastReminderSentAt: Instant? = null,
+    /** Seller-facing counterpart to lastReminderSentAt (which is the buyer's email reminder) — see SellerBookingReminderJob. Independent one-shot flag since the two reminders fire at different offsets (StoreSettings.sellerBookingReminderMinutesBefore vs the buyer job's fixed global hours). */
+    @Column(name = "seller_reminder_sent_at")
+    var sellerReminderSentAt: Instant? = null,
     /** Shared by every occurrence of the same weekly-recurring series (see BookingService.createBooking's occurrenceCount branch) — null for a one-off booking. Each occurrence is otherwise a fully independent Booking row (own status/payment/timeline/cancellation). */
     @Column(name = "recurrence_group_id")
     var recurrenceGroupId: UUID? = null,

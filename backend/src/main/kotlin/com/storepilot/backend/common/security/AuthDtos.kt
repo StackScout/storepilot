@@ -28,6 +28,11 @@ data class LoginInput(
     val password: String,
 )
 
+/** POST /api/auth/refresh's optional body — only used when the caller has no refresh-token cookie (i.e. a mobile client), which sends back the refreshToken it captured from login/mfaChallenge instead. Ignored when the cookie is present. */
+data class RefreshInput(
+    val refreshToken: String? = null,
+)
+
 /** What register() returns now that it no longer signs the caller in — see AuthController.register()'s doc comment. */
 data class RegisterResponse(
     val email: String,
@@ -59,6 +64,15 @@ data class ResendVerificationInput(
  * false in that case, since no cookies have been set yet. The frontend
  * must prompt for a TOTP code and POST it (with `mfaSession`) to
  * /api/auth/mfa/challenge to actually complete sign-in.
+ *
+ * `accessToken`/`refreshToken` are only populated by completeLogin() (i.e.
+ * login()/mfaChallenge() on success) and refresh() — never by session()
+ * below, which just reflects state from the caller's existing credential.
+ * The web app has no use for these (it authenticates via the httpOnly
+ * cookies CookieBearerTokenResolver reads) and ignores them; a mobile
+ * client with no cookie jar captures them here and sends them back as an
+ * `Authorization: Bearer` header — see CookieBearerTokenResolver's doc
+ * comment on why both transports are supported.
  */
 data class AuthSessionResponse(
     val signedIn: Boolean,
@@ -67,6 +81,8 @@ data class AuthSessionResponse(
     val name: String? = null,
     val mfaRequired: Boolean = false,
     val mfaSession: String? = null,
+    val accessToken: String? = null,
+    val refreshToken: String? = null,
 )
 
 /** Completes a login that returned mfaRequired=true — see AuthSessionResponse's doc comment. */

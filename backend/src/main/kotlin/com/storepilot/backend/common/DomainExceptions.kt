@@ -14,3 +14,6 @@ class UnauthenticatedException(message: String) : RuntimeException(message)
 
 /** Thrown at login when the credentials are correct but the account's email hasn't been verified yet → 403, distinguishable from UnauthenticatedException so the frontend can route to /verify-email instead of just showing an error. */
 class EmailNotVerifiedException(message: String) : RuntimeException(message)
+
+/** Thrown when an outbound transactional email (e.g. a verification code) fails to send → 502, mirroring how StripeException is handled for the other third-party provider in this app. */
+class EmailDeliveryException(message: String, cause: Throwable) : RuntimeException(message, cause)

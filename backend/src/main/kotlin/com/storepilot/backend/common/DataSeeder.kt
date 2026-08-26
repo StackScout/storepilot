@@ -433,6 +433,10 @@ class DataSeeder(
                 paymentStatus = paymentStatus,
                 shipping = ShippingDetails(buyerName, phone, addressLine1, city, state, postalCode),
                 buyerEmail = buyerEmail,
+                // Seed data has no real fulfillment SLA — same defaults as
+                // a store that's never touched StoreSettings' equivalents.
+                fulfillmentTimeHours = 48,
+                deliveryTimeHours = 120,
             )
             items.forEach { (productKey, unitPrice, quantity) ->
                 val product = productRepository.findById(productIds.getValue(productKey)).orElseThrow()

@@ -11,6 +11,8 @@ class ProductNotifier(
     private val emailService: EmailService,
     private val storeSettingsRepository: StoreSettingsRepository,
     private val notificationProperties: NotificationProperties,
+    private val pushNotificationService: PushNotificationService,
+    private val pushTokenRepository: PushTokenRepository,
 ) {
     private val log = LoggerFactory.getLogger(ProductNotifier::class.java)
 
@@ -30,6 +32,18 @@ class ProductNotifier(
                 appendLine("Restock it from your seller dashboard: ${productUrl(product)}")
             },
         )
+        sendPushToSeller(product, title = "Low stock: ${product.name}", body = "Only ${product.stockQuantity} left in stock — restock it soon.")
+    }
+
+    private fun sendPushToSeller(product: Product, title: String, body: String) {
+        val sellerId = product.store.seller.id ?: return
+        val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
+        if (tokens.isEmpty()) return
+        try {
+            pushNotificationService.send(tokens, title, body, data = mapOf("type" to "product", "id" to product.id.toString()))
+        } catch (e: Exception) {
+            log.warn("Failed to send product push to seller {} (title=\"{}\") — not failing the triggering operation", sellerId, title, e)
+        }
     }
 
     /** Mirrors OrderNotifier.sendSafely — never fails the triggering operation. */

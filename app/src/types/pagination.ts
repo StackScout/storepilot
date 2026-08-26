@@ -1,8 +1,1 @@
-/** Matches the backend's PageResponse<T> wrapper. */
-export interface PageResponse<T> {
-  content: T[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-}
+export * from "@storepilot/shared-api/src/types/pagination";

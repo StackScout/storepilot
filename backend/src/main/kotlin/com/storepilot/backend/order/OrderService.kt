@@ -278,10 +278,23 @@ class OrderService(
         }
         val sellerAbn = if (storeSettings?.gstRegistered == true) storeSettings.abn else null
 
+        // The slowest item in the order sets the whole order's fulfillment/
+        // delivery promise — resolved once here, while every Product row is
+        // still guaranteed to exist, then snapshotted onto the Order (see
+        // its doc comment on why this can't be a live join later).
+        val fulfillmentTimeHours = resolvedItems.maxOf { (product, _, _) ->
+            product.fulfillmentTimeHours ?: (storeSettings?.defaultFulfillmentTimeHours ?: 48)
+        }
+        val deliveryTimeHours = resolvedItems.maxOf { (product, _, _) ->
+            product.deliveryTimeHours ?: (storeSettings?.defaultDeliveryTimeHours ?: 120)
+        }
+
         val order = Order(
             orderNumber = generateOrderNumber(now, platformConfig.countryCode),
             store = store,
             subtotal = subtotal,
+            fulfillmentTimeHours = fulfillmentTimeHours,
+            deliveryTimeHours = deliveryTimeHours,
             deliveryMethod = deliveryMethod,
             shippingFee = shippingFee,
             platformFee = platformFee,
@@ -327,6 +340,7 @@ class OrderService(
         couponResolution?.let { couponService.recordUse(it.couponId) }
 
         orderNotifier.orderConfirmed(saved)
+        orderNotifier.sellerOrderPlaced(saved)
 
         return publishOrderEvent(saved)
     }
@@ -353,6 +367,14 @@ class OrderService(
         if (status == OrderStatus.DELIVERED && order.paymentMethod == PaymentMethod.COD) {
             order.paymentStatus = PaymentStatus.PAID
         }
+        if (status == OrderStatus.CANCELLED) {
+            // Only PENDING/CONFIRMED ever reach CANCELLED (see
+            // ALLOWED_STATUS_TRANSITIONS) — the goods were never shipped,
+            // so the stock reserved at checkout (decrementStock) must come
+            // back, or every cancellation permanently understates real
+            // inventory.
+            productService.restoreStock(order.items.map { it.productId to it.quantity })
+        }
         if (status == OrderStatus.CANCELLED && order.paymentStatus == PaymentStatus.PAID) {
             // Stripe money actually has to move — refundPayment throws (and
             // rolls back this whole transaction) if the Stripe refund call
@@ -372,6 +394,8 @@ class OrderService(
             require(!courierServiceName.isNullOrBlank()) { "Courier service name is required to mark an order as shipped" }
             order.trackingNumber = trackingNumber
             order.courierServiceName = courierServiceName
+            // Starts the delivery-time clock — see Order.shippedAt's doc comment.
+            order.shippedAt = Instant.now()
             if (courierReceipt != null && !courierReceipt.isEmpty) {
                 order.courierReceiptUrl = fileStorageService.store(
                     "courier-receipts",

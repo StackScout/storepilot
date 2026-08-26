@@ -4,8 +4,11 @@
 
 Full documentation set lives in [`docs/`](docs). This file is the fast
 orientation + conventions reference; read the linked doc before making any
-non-trivial change in its area. **This is a frontend-only demo/prototype —
-there is no real backend.**
+non-trivial change in its area. **This app talks to a real backend** (the
+Spring Boot/Kotlin service in `../backend`) over HTTP — there is no mock
+data layer. Several docs under `docs/` still describe an earlier
+mock-only/`localStorage` architecture; treat those as historical unless
+verified against current source (see [General rules](#general-rules)).
 
 ## Project purpose
 
@@ -21,19 +24,32 @@ Next.js 16 App Router (note: `src/proxy.ts` is this version's renamed
 shadcn/ui on `@base-ui/react` · Zustand (cart only) · TanStack Query ·
 react-hook-form + zod.
 
-**The one thing to never forget**: there is no backend. Everything routes
-through `src/lib/mock-db.ts`, a `localStorage`-backed pseudo-database
-seeded from `src/mock/*.ts`, wrapped by REST-shaped functions in
-`src/services/*.service.ts`. Server Components can only see the static
-seed (not `localStorage`), which is why the dashboard and anything
-cart/order-related is client-rendered with React Query. Full breakdown:
-[`docs/frontend-architecture.md`](docs/frontend-architecture.md).
+**The one thing to never forget**: auth is real Cognito-backed JWT auth via
+httpOnly cookies, not a client-decodable session. `src/proxy.ts` (this
+version's renamed `middleware.ts`) verifies the access-token cookie's JWT
+signature edge-side (via `jose`) purely to gate which shell renders
+(buyer/seller/admin/signed-out) — the Spring backend re-validates the same
+JWT on every real API call, so proxy-side checks are optimistic routing,
+never the actual authorization boundary. Because there's no
+server-decodable session, a client component that needs to know "am I
+signed in, and as what" calls `useAuthSession()`
+(`src/hooks/use-auth-session.ts`, wrapping `GET /api/auth/session`) instead
+of receiving a session as a prop — this is also why the dashboard and
+anything cart/order-related is client-rendered with React Query rather than
+a Server Component. All HTTP calls go through the REST-shaped functions in
+`src/services/*.service.ts`, which call the shared `apiClient`
+(`src/lib/api-client.ts`) — that's the one file that knows the backend's
+base URL and error shape. Full breakdown:
+[`docs/frontend-architecture.md`](docs/frontend-architecture.md) (may still
+describe the earlier mock architecture in places — verify against source).
 
-To replace the mock backend with a real one: implement
-[`docs/api-contracts.md`](../docs/api-contracts.md) against the schema in
-[`docs/database-model.md`](../docs/database-model.md), then change only the
-bodies of functions in `src/services/*.service.ts` — call sites should not
-need to change.
+Domain types and the API-client error/parsing primitives (`ApiError`,
+`toApiError`, `parseBody`) are shared with the mobile app (`../mobile`) via
+the `@storepilot/shared-api` workspace package
+(`../packages/shared-api/src`) — `src/types/*.ts` here are thin
+re-exports of it. Add or change a shared DTO there, not by hand-duplicating
+it in both apps. Endpoint contracts: [`docs/api-contracts.md`](../docs/api-contracts.md);
+schema: [`docs/database-model.md`](../docs/database-model.md).
 
 Full feature list with pages/components/docs:
 [`docs/feature-index.md`](docs/feature-index.md). Per-feature deep dives
@@ -69,14 +85,17 @@ src/app/            Next.js routes: (marketplace) route group (public),
                      dashboard/ (seller, session-gated), login/, onboarding/
 src/components/      marketplace/ (buyer), dashboard/ (seller),
                      shared/ (both), ui/ (vendored shadcn primitives)
-src/hooks/           Custom hooks (currently just use-cart.ts)
-src/lib/             actions/ (Server Actions), mock-db.ts, session.ts,
-                     constants.ts, currency.ts, format.ts, delay.ts, utils.ts
-src/mock/            Seed data + categories config
-src/services/        REST-shaped async functions over mock-db (the
-                     boundary to replace when a real backend exists)
+src/hooks/           Custom hooks: cart, auth session, seller store
+                     resolution, live status polling, etc.
+src/lib/             api-client.ts (the one file that talks HTTP to the
+                     backend), constants.ts, currency.ts, format.ts,
+                     payhere.ts, platform-config.ts, utils.ts
+src/mock/            Category config only (categories.ts) — no seed data
+src/services/        REST-shaped async functions calling apiClient (the
+                     backend integration boundary)
 src/store/           Zustand stores (cart-store.ts)
-src/types/           Domain types, barrel-exported via index.ts
+src/types/           Domain types, re-exported from @storepilot/shared-api
+                     via index.ts
 ```
 
 Full table with descriptions: [`docs/frontend-architecture.md`](docs/frontend-architecture.md#folder-structure).
@@ -91,9 +110,9 @@ Full table with descriptions: [`docs/frontend-architecture.md`](docs/frontend-ar
   with a `/** METHOD /path */` comment above each one — keep this comment
   style when adding new service functions; it's what
   [`docs/api-contracts.md`](../docs/api-contracts.md) was derived from.
-- `localStorage` collection keys are prefixed `storepilot_` (e.g.
-  `storepilot_products`, `storepilot_cart`) — keep this prefix for any new
-  collection.
+- Client-side storage keys (cart persistence, the access-token cookie) are
+  prefixed `storepilot_` (e.g. `storepilot_cart`, `storepilot_access_token`)
+  — keep this prefix for any new one.
 
 ## Component conventions
 
@@ -113,8 +132,9 @@ Full table with descriptions: [`docs/frontend-architecture.md`](docs/frontend-ar
 
 Three deliberately separate mechanisms — don't blur them:
 1. **Zustand + `persist`** — only for the cart (`src/store/cart-store.ts`),
-   the one piece of state that must survive reloads without a backend.
-   Always go through `useCart()` (`src/hooks/use-cart.ts`), never
+   the one piece of state that must survive reloads client-side before
+   checkout creates anything server-side. Always go through `useCart()`
+   (`src/hooks/use-cart.ts`), never
    `useCartStore` directly, so the hydration guard (`isHydrated`) is
    applied — skipping it causes SSR/client mismatches.
 2. **TanStack Query** — all service-backed data. `staleTime: 30_000`,
@@ -127,49 +147,59 @@ Three deliberately separate mechanisms — don't blur them:
 3. **Local `useState`** — everything else (dialogs, steppers, local form
    UI state not covered by react-hook-form).
 
-No Redux, no global Context store, no general `useSession()` hook — the
-session is read server-side via `getSession()` and passed down as a prop
-wherever a specific page needs it. **One deliberate exception**: the site
-header's buyer-account link uses a client-side fetch
-(`useBuyerAccountLink`, hitting `GET /api/account/session`) instead of a
-server-side session read, specifically because `(marketplace)/layout.tsx`
-wraps every marketplace page — reading `getSession()` there would force
-the home page, search, and every store/product page out of static
-generation (verified via `next build`: `○` → `ƒ`). Don't "simplify" this
-back to a layout-level session read without re-checking the build output.
-See [`docs/features/buyer-accounts.md#technical-notes`](docs/features/buyer-accounts.md#technical-notes).
+No Redux, no global Context store. Auth is httpOnly-cookie-based, so there
+is no server-decodable session to read — every place that needs to know
+"am I signed in, and as what" calls the client-side `useAuthSession()` hook
+(`src/hooks/use-auth-session.ts`, backed by React Query + `GET
+/api/auth/session`), not a server-side session read. This is also why
+`(marketplace)/layout.tsx` and its pages stay Server Components that render
+the same regardless of auth state — a marketplace page needing per-user
+auth state (e.g. the header's buyer-account link, via
+`useBuyerAccountLink`) reads it client-side rather than forcing the layout
+itself into dynamic rendering, which would undo static generation for the
+home page, search, and every store/product page beneath it (verified via
+`next build`: `○` → `ƒ`). The dashboard, by contrast, resolves the signed-in
+seller's store via `SellerStoreProvider`/`useSellerStoreId()`
+(`src/hooks/use-seller-store.tsx`, `GET /api/me/store`) rather than a
+hardcoded store id.
 
 ## Important business rules
 
 - **Cart is single-store-only.** Adding a product from a different store
   than what's already in the cart is rejected client-side and must prompt
   the buyer to explicitly replace the cart — never silently merge two
-  stores' items. Must also be re-enforced server-side once a real backend
-  exists (a client can bypass the Zustand check).
+  stores' items. This is a client-side UX affordance only; checkout itself
+  is server-validated per order regardless (price/stock are re-checked
+  against the live `Product`, never trusted from the client cart).
 - **Buyer total = subtotal + flat shipping (350 LKR). Platform fee (3.5%)
   is deducted from the seller's payout, not added to the buyer's charge.**
   Full monetization model: [`docs/overview.md#monetization-model`](../docs/overview.md#monetization-model).
 - **Order status is a state machine**: `pending → confirmed/cancelled`,
   `confirmed → shipped/cancelled`, `shipped → delivered`, `delivered` and
-  `cancelled` are terminal. Currently enforced only in
-  `components/dashboard/order-status-select.tsx` — **not** in the service
-  layer. Any new code path that changes order status must respect this.
+  `cancelled` are terminal. Enforced server-side in
+  `OrderService.ALLOWED_STATUS_TRANSITIONS` (`../backend`), mirrored
+  client-side in `components/dashboard/order-status-select.tsx` so the UI
+  doesn't offer an illegal transition — keep both in sync if this changes.
+  Bookings have their own parallel state machine in `BookingService`.
 - **Product `status` auto-forces to `"out-of-stock"` whenever
   `stockQuantity === 0`**, regardless of what status was submitted.
 - **`OrderItem` fields are immutable snapshots** taken at order-creation
   time — never join back to the live `Product` to render historical order
   data, and never let editing/deleting a product retroactively change a
   past order.
-- **The single mock seller is `CURRENT_SELLER_STORE_ID = "store-01"`**
-  (`src/mock/stores.ts`) — every dashboard page keys off this constant.
-  There is no real per-seller store association yet.
+- **A seller's store is resolved from their signed-in identity**
+  (`GET /api/me/store`, see `useSellerStoreId()` above) — there is no
+  hardcoded demo store id. A seller who onboards can sign back into their
+  own store normally.
 
 ## Design principles
 
 - Public/SEO-relevant marketplace pages are Server Components fetching
   directly from services; anything mutable or session-scoped is a client
-  component using React Query — this split is forced by the
-  `localStorage`-as-backend architecture, not just a style preference. See
+  component using React Query — this split is forced by auth being
+  httpOnly-cookie-based with no server-decodable session (see
+  [State management conventions](#state-management-conventions)), not just
+  a style preference. See
   [`docs/frontend-architecture.md#application-architecture`](docs/frontend-architecture.md#application-architecture).
 - Filter/search state on `/search` lives in the URL, not client state, so
   it works without JS and is linkable — preserve this pattern for any new
@@ -181,31 +211,19 @@ See [`docs/features/buyer-accounts.md#technical-notes`](docs/features/buyer-acco
 
 ## Things future Claude sessions should know before making changes
 
-- **Read [`docs/gaps-and-assumptions.md`](../docs/gaps-and-assumptions.md)
-  before implementing any backend endpoint or touching auth/checkout/order
-  status.** It lists known security gaps (no ownership checks, no stock
-  re-validation, unsigned session cookie), data-model inconsistencies
-  (platform fee computed globally despite a per-store field existing,
-  `codEnabled`/`onlinePaymentEnabled` saved but never read at checkout),
-  and missing entities (no real `Seller`/`User`, `Review`, or
-  `Payout`/`Settlement` records exist). Don't port these gaps into a real
-  backend as if they were intended behavior — most are explicitly flagged
-  as needing a fix or a product decision, not a faithful mock-to-real port.
-- **Onboarding creates a real store, but `/login` doesn't know about it** —
-  `/onboarding` persists a real `Store` + `StoreSettings` row (status
-  `"pending"` until approved via `/admin`) and signs the session into it.
-  There's still no `User`/`Seller` entity, so `/login` always signs into
-  the hardcoded `CURRENT_SELLER_STORE_ID` demo store regardless of email —
-  a returning seller who onboarded and signed out cannot sign back into
-  their own store via `/login` today. See
-  [`docs/gaps-and-assumptions.md`](../docs/gaps-and-assumptions.md).
-- **No ownership/ownership checks exist in the mock service layer at
-  all** — invisible with one seller, critical to add for a real
-  multi-tenant backend. See
-  [`docs/api-contracts.md#authorization`](../docs/api-contracts.md#authorization).
-- **No tests exist in this repository** (no test files, no test script).
-  Don't assume `npm test` does anything meaningful without checking
-  `package.json` first.
+- **[`docs/gaps-and-assumptions.md`](../docs/gaps-and-assumptions.md) and
+  other docs under `docs/` may still describe the pre-backend
+  `localStorage`/mock-seller era** (e.g. "no ownership checks," "unsigned
+  session cookie," "hardcoded demo store," "no stock re-validation") — the
+  real backend (`../backend`) has since added Cognito auth, JWT cookies,
+  per-seller store resolution (`GET /api/me/store`), and server-side stock
+  re-validation at checkout (see `OrderService`). Verify a doc's claim
+  against current backend/frontend source before trusting it; don't port a
+  documented "gap" into new code as if it were still true without checking.
+- **No tests exist in this repository** (`app/`; no test files, no test
+  script) — the backend does have a real Kotlin/Gradle test suite
+  (`../backend`, run via `./gradlew test`). Don't assume `npm test` here
+  does anything meaningful without checking `package.json` first.
 - Before editing `src/components/ui/*`, check whether the change should
   instead be a new component composed on top — these are vendored shadcn
   primitives.

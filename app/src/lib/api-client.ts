@@ -11,49 +11,11 @@
  * (localhost:3000 -> localhost:8080) and needs it explicitly.
  */
 
+import { ApiError, parseBody, toApiError } from "@storepilot/shared-api";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-interface ApiErrorBody {
-  error: {
-    code: string;
-    message: string;
-    fields?: Record<string, string>;
-  };
-}
-
-export class ApiRequestError extends Error {
-  status: number;
-  code?: string;
-  fields?: Record<string, string>;
-
-  constructor(message: string, status: number, code?: string, fields?: Record<string, string>) {
-    super(message);
-    this.name = "ApiRequestError";
-    this.status = status;
-    this.code = code;
-    this.fields = fields;
-  }
-}
-
-async function toApiError(res: Response): Promise<ApiRequestError> {
-  try {
-    const body = (await res.json()) as ApiErrorBody;
-    return new ApiRequestError(
-      body.error?.message ?? `Request failed with status ${res.status}`,
-      res.status,
-      body.error?.code,
-      body.error?.fields,
-    );
-  } catch {
-    return new ApiRequestError(`Request failed with status ${res.status}`, res.status);
-  }
-}
-
-async function parseBody<T>(res: Response): Promise<T> {
-  if (res.status === 204) return undefined as T;
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+export { ApiError as ApiRequestError };
 
 /**
  * A 401 usually just means the short-lived access-token cookie expired —

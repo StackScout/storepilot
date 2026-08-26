@@ -3,10 +3,13 @@ package com.storepilot.backend.messaging
 import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.notification.MessagingNotifier
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreRepository
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -22,8 +25,9 @@ class MessagingServiceTest {
     private val messageRepository = mockk<MessageRepository>()
     private val storeRepository = mockk<StoreRepository>()
     private val currentActor = mockk<CurrentActor>()
+    private val messagingNotifier = mockk<MessagingNotifier>()
 
-    private val service = MessagingService(conversationRepository, messageRepository, storeRepository, currentActor)
+    private val service = MessagingService(conversationRepository, messageRepository, storeRepository, currentActor, messagingNotifier)
 
     private val storeId: UUID = UUID.randomUUID()
     private val sellerId: UUID = UUID.randomUUID()
@@ -55,6 +59,8 @@ class MessagingServiceTest {
             createdAt = Instant.now()
         }
         conversationId = requireNotNull(conversation.id)
+
+        every { messagingNotifier.sellerMessageReceived(any(), any()) } just Runs
     }
 
     @Test

@@ -7,3 +7,7 @@
 
 # Real values for AWS deploys — never committed, see infra/README.md.
 /infra/.env.deploy
+
+# npm workspace root install — app/, mobile/, and packages/* each keep
+# their own .gitignore for their nested node_modules.
+/node_modules

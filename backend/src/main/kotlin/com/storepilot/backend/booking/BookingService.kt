@@ -248,6 +248,7 @@ class BookingService(
         val saved = bookingRepository.saveAll(bookings)
         couponResolution?.let { couponService.recordUse(it.couponId) }
         saved.forEach { bookingNotifier.bookingCreated(it) }
+        saved.forEach { bookingNotifier.sellerBookingCreated(it) }
         saved.forEach { publishBookingEvent(it) }
         return saved.first().toResponse(receiptStorageService)
     }

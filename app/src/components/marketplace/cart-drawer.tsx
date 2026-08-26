@@ -67,19 +67,43 @@ export function CartDrawer() {
                   key={item.productId}
                   className={cn("flex gap-3", item.isUnavailable && "opacity-50")}
                 >
-                  <div className="bg-muted relative size-16 shrink-0 overflow-hidden rounded-md">
-                    <Image
-                      src={item.productImageUrl}
-                      alt={item.productName}
-                      fill
-                      sizes="64px"
-                      className={cn("object-cover", item.isUnavailable && "grayscale")}
-                    />
-                  </div>
+                  {item.isUnavailable ? (
+                    <div className="bg-muted relative size-16 shrink-0 overflow-hidden rounded-md">
+                      <Image
+                        src={item.productImageUrl}
+                        alt={item.productName}
+                        fill
+                        sizes="64px"
+                        className="object-cover grayscale"
+                      />
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/stores/${cart.storeSlug}/products/${item.productSlug}`}
+                      className="bg-muted relative size-16 shrink-0 overflow-hidden rounded-md"
+                    >
+                      <Image
+                        src={item.productImageUrl}
+                        alt={item.productName}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    </Link>
+                  )}
                   <div className="min-w-0 flex-1 space-y-1.5">
-                    <p className="line-clamp-2 text-sm leading-snug font-medium">
-                      {item.productName}
-                    </p>
+                    {item.isUnavailable ? (
+                      <p className="line-clamp-2 text-sm leading-snug font-medium">
+                        {item.productName}
+                      </p>
+                    ) : (
+                      <Link
+                        href={`/stores/${cart.storeSlug}/products/${item.productSlug}`}
+                        className="line-clamp-2 block text-sm leading-snug font-medium hover:underline"
+                      >
+                        {item.productName}
+                      </Link>
+                    )}
                     {item.isUnavailable ? (
                       <Badge variant="destructive">No longer available</Badge>
                     ) : (

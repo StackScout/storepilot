@@ -50,6 +50,24 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
     )
     fun findDueForReminder(@Param("windowStart") windowStart: Instant, @Param("windowEnd") windowEnd: Instant): List<Booking>
 
+    /**
+     * Candidate pool for SellerBookingReminderJob — every seller offset is
+     * different (StoreSettings.sellerBookingReminderMinutesBefore), so
+     * unlike findDueForReminder this can't filter to an exact window in
+     * SQL; the job itself checks each booking's own store's offset. Capped
+     * at maxLookahead (job passes now+30 days) purely to keep this bounded,
+     * mirroring AvailabilityService's own 30-day slot-computation window.
+     */
+    @Query(
+        """
+        select b from Booking b
+        where b.status in (com.storepilot.backend.booking.BookingStatus.PENDING, com.storepilot.backend.booking.BookingStatus.CONFIRMED)
+          and b.sellerReminderSentAt is null
+          and b.scheduledStart > :now and b.scheduledStart < :maxLookahead
+        """,
+    )
+    fun findCandidatesForSellerReminder(@Param("now") now: Instant, @Param("maxLookahead") maxLookahead: Instant): List<Booking>
+
     /** GET /api/bookings/recurrence/{groupId} — every occurrence of a recurring series, in chronological order. */
     fun findByRecurrenceGroupIdOrderByScheduledStartAsc(recurrenceGroupId: UUID): List<Booking>
 

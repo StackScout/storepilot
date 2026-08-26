@@ -141,6 +141,31 @@ class ProductService(
     }
 
     /**
+     * Reverses decrementStock — called when a cancelled order's stock was
+     * never actually shipped (see OrderService.updateStatus's CANCELLED
+     * branch). Flips OUT_OF_STOCK back to ACTIVE once restored quantity is
+     * positive, mirroring decrementStock's forced OUT_OF_STOCK the other
+     * way; DRAFT is left alone since that's an independent seller choice,
+     * not a stock-derived state (see this class's doc comment). Also clears
+     * any pending low-stock alert, same as a manual restock via update()
+     * below — otherwise LowStockAlertJob's `lastLowStockAlertSentAt is null`
+     * gate would never re-arm after a cancellation pushed stock back up.
+     */
+    @Transactional
+    fun restoreStock(items: List<Pair<UUID, Int>>) {
+        for ((productId, quantity) in items) {
+            val product = productRepository.findById(productId).orElse(null) ?: continue
+            if (!product.trackStock) continue
+            product.stockQuantity += quantity
+            product.lastLowStockAlertSentAt = null
+            if (product.status == ProductStatus.OUT_OF_STOCK && product.stockQuantity > 0) {
+                product.status = ProductStatus.ACTIVE
+            }
+            productRepository.save(product)
+        }
+    }
+
+    /**
      * Shared by the seller's own product list (needs every status,
      * including drafts) and the public storefront's per-store product grid
      * (must never show a draft) — same endpoint, so the response depends on

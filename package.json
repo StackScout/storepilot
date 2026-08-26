@@ -1,0 +1,12 @@
+{
+  "name": "storepilot",
+  "private": true,
+  "workspaces": [
+    "app",
+    "mobile",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@types/react": "~19.2.2"
+  }
+}

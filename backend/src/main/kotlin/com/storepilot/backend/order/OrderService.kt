@@ -353,6 +353,14 @@ class OrderService(
         if (status == OrderStatus.DELIVERED && order.paymentMethod == PaymentMethod.COD) {
             order.paymentStatus = PaymentStatus.PAID
         }
+        if (status == OrderStatus.CANCELLED) {
+            // Only PENDING/CONFIRMED ever reach CANCELLED (see
+            // ALLOWED_STATUS_TRANSITIONS) — the goods were never shipped,
+            // so the stock reserved at checkout (decrementStock) must come
+            // back, or every cancellation permanently understates real
+            // inventory.
+            productService.restoreStock(order.items.map { it.productId to it.quantity })
+        }
         if (status == OrderStatus.CANCELLED && order.paymentStatus == PaymentStatus.PAID) {
             // Stripe money actually has to move — refundPayment throws (and
             // rolls back this whole transaction) if the Stripe refund call

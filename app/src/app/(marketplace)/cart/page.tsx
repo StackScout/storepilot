@@ -61,20 +61,44 @@ export default function CartPage() {
               key={item.productId}
               className={cn("flex gap-4 p-4", item.isUnavailable && "opacity-50")}
             >
-              <div className="bg-muted relative size-20 shrink-0 overflow-hidden rounded-md sm:size-24">
-                <Image
-                  src={item.productImageUrl}
-                  alt={item.productName}
-                  fill
-                  sizes="96px"
-                  className={cn("object-cover", item.isUnavailable && "grayscale")}
-                />
-              </div>
+              {item.isUnavailable ? (
+                <div className="bg-muted relative size-20 shrink-0 overflow-hidden rounded-md sm:size-24">
+                  <Image
+                    src={item.productImageUrl}
+                    alt={item.productName}
+                    fill
+                    sizes="96px"
+                    className="object-cover grayscale"
+                  />
+                </div>
+              ) : (
+                <Link
+                  href={`/stores/${cart.storeSlug}/products/${item.productSlug}`}
+                  className="bg-muted relative size-20 shrink-0 overflow-hidden rounded-md sm:size-24"
+                >
+                  <Image
+                    src={item.productImageUrl}
+                    alt={item.productName}
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                  />
+                </Link>
+              )}
               <div className="flex min-w-0 flex-1 flex-col justify-between">
                 <div>
-                  <p className="line-clamp-2 text-sm font-medium sm:text-base">
-                    {item.productName}
-                  </p>
+                  {item.isUnavailable ? (
+                    <p className="line-clamp-2 text-sm font-medium sm:text-base">
+                      {item.productName}
+                    </p>
+                  ) : (
+                    <Link
+                      href={`/stores/${cart.storeSlug}/products/${item.productSlug}`}
+                      className="line-clamp-2 text-sm font-medium hover:underline sm:text-base"
+                    >
+                      {item.productName}
+                    </Link>
+                  )}
                   {item.isUnavailable ? (
                     <Badge variant="destructive" className="mt-1.5">
                       No longer available

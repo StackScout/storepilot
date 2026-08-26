@@ -44,6 +44,7 @@ put "$PREFIX/stripe-webhook-secret" "$STRIPE_WEBHOOK_SECRET"
 put "$PREFIX/stripe-billing-webhook-secret" "$STRIPE_BILLING_WEBHOOK_SECRET"
 put "$PREFIX/abr-guid" "$ABR_GUID"
 put "$PREFIX/ses-sender-email" "$SES_SENDER_EMAIL"
+put "$PREFIX/expo-access-token" "$EXPO_ACCESS_TOKEN"
 put "$PREFIX/cognito-oauth-client-id" "$COGNITO_OAUTH_CLIENT_ID"
 put "$PREFIX/cognito-oauth-client-secret" "$COGNITO_OAUTH_CLIENT_SECRET"
 

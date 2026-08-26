@@ -12,6 +12,7 @@ import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
+import com.storepilot.backend.notification.PayoutNotifier
 import com.storepilot.backend.order.Order
 import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.order.OrderResponse
@@ -37,6 +38,7 @@ class PayoutService(
     private val fileStorageService: FileStorageService,
     private val currentActor: CurrentActor,
     private val auditLogService: AuditLogService,
+    private val payoutNotifier: PayoutNotifier,
 ) {
     fun listByStore(storeId: UUID): List<PayoutResponse> {
         requireSellerOwnsStore(storeId)
@@ -177,6 +179,7 @@ class PayoutService(
             payoutId.toString(),
             "Marked payout for \"${payout.store.name}\" (net ${payout.net}) as paid$referenceSuffix",
         )
+        payoutNotifier.payoutMarkedPaid(saved)
         return saved.toResponse()
     }
 

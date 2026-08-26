@@ -198,6 +198,7 @@ Resources:
           STRIPE_BILLING_CANCEL_URL_BASE=$SITE_ADDRESS/dashboard/settings
           ABR_GUID=$(get_param $SSM_PREFIX/abr-guid)
           SES_SENDER_EMAIL=$(get_param $SSM_PREFIX/ses-sender-email)
+          NOTIFICATIONS_EXPO_ACCESS_TOKEN=$(get_param $SSM_PREFIX/expo-access-token)
           AWS_REGION=${AWS::Region}
           ENVIRONMENT_NAME=${EnvironmentName}
           RECEIPTS_S3_BUCKET_NAME=${EnvironmentName}-receipts

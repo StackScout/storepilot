@@ -36,6 +36,34 @@ interface OrderRepository : JpaRepository<Order, UUID> {
 
     fun findByOrderNumberIgnoreCase(orderNumber: String): Order?
 
+    /**
+     * Candidate pool for OrderFulfillmentReminderJob — every not-yet-shipped
+     * order that hasn't had both its due-soon and overdue reminder fired
+     * yet. The job itself computes each order's own deadline
+     * (createdAt + fulfillmentTimeHours) and decides which (if either)
+     * reminder is actually due — can't push that into SQL cleanly since
+     * "due soon" also depends on notifications.fulfillment-due-soon-lead-hours.
+     */
+    @Query(
+        """
+        select o from Order o
+        where o.status in (com.storepilot.backend.order.OrderStatus.PENDING, com.storepilot.backend.order.OrderStatus.CONFIRMED)
+          and (o.fulfillmentReminderSentAt is null or o.fulfillmentOverdueReminderSentAt is null)
+        """,
+    )
+    fun findCandidatesForFulfillmentReminder(): List<Order>
+
+    /** Candidate pool for OrderDeliveryReminderJob — see its doc comment for why shippedAt (not createdAt) is the delivery clock's start. */
+    @Query(
+        """
+        select o from Order o
+        where o.status = com.storepilot.backend.order.OrderStatus.SHIPPED
+          and o.deliveryReminderSentAt is null
+          and o.shippedAt is not null
+        """,
+    )
+    fun findCandidatesForDeliveryReminder(): List<Order>
+
     /** Seller dashboard trend cards — see StoreService.getStats. Sums 0 (via coalesce) rather than null when nothing matches, so callers never null-check. */
     @Query(
         """

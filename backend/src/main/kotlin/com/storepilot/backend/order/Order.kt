@@ -98,6 +98,33 @@ class Order(
     /** Cents, same convention as every other money field — see Product.price's doc comment. Computed as total / 11 at order-creation time (AU retail prices are GST-inclusive by convention), never recomputed later. */
     @Column(name = "gst_amount")
     var gstAmount: Int? = null,
+    /**
+     * Resolved once at order-creation time from the slowest item's
+     * Product.fulfillmentTimeHours (or the store's
+     * StoreSettings.defaultFulfillmentTimeHours where a product has no
+     * override) — see OrderService.createOrder. Snapshotted rather than
+     * joined live at reminder-time for the same reason OrderItem's fields
+     * are snapshots: a product can be deleted or its fulfillment promise
+     * changed without silently altering an order already placed under the
+     * old promise. The fulfillment deadline itself is createdAt +
+     * this value, computed on read by OrderFulfillmentReminderJob — no
+     * separate deadline column needed.
+     */
+    @Column(name = "fulfillment_time_hours", nullable = false)
+    var fulfillmentTimeHours: Int,
+    /** Same resolution/snapshot reasoning as fulfillmentTimeHours, but the matching deadline is shippedAt + this value (see OrderDeliveryReminderJob) — delivery can't be measured from createdAt since it hasn't shipped yet. */
+    @Column(name = "delivery_time_hours", nullable = false)
+    var deliveryTimeHours: Int,
+    /** Set once, at the PENDING/CONFIRMED -> SHIPPED transition — see OrderService.updateStatus. Null until then; the delivery-time clock (deliveryTimeHours above) starts here, not at order creation. */
+    @Column(name = "shipped_at")
+    var shippedAt: Instant? = null,
+    /** One-shot flags, same idempotency shape as lastReminderSentAt — see OrderFulfillmentReminderJob/OrderDeliveryReminderJob. */
+    @Column(name = "fulfillment_reminder_sent_at")
+    var fulfillmentReminderSentAt: Instant? = null,
+    @Column(name = "fulfillment_overdue_reminder_sent_at")
+    var fulfillmentOverdueReminderSentAt: Instant? = null,
+    @Column(name = "delivery_reminder_sent_at")
+    var deliveryReminderSentAt: Instant? = null,
 ) : BaseEntity()
 
 /**

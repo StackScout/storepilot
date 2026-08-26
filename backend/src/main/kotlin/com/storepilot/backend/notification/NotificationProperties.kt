@@ -22,4 +22,8 @@ data class NotificationProperties(
     val bookingReminderBeforeHours: Long = 24,
     /** A product gets one low-stock alert email once trackStock stock drops to/below this quantity (but above zero — out-of-stock already has its own visible status) — see LowStockAlertJob. */
     val lowStockThreshold: Int = 5,
+    /** Optional — restricts push sends to this Expo project (see ExpoPushNotificationService). Blank is fine: Expo's push API accepts unauthenticated requests too, this just stops anyone else sending through your project. Sourced from SSM Parameter Store in the aws profile, same as sesSenderEmail. */
+    val expoAccessToken: String = "",
+    /** How long before an order's fulfillment deadline (createdAt + Order.fulfillmentTimeHours) the seller gets a "ship soon" push — see OrderFulfillmentReminderJob. Global, unlike the per-store booking reminder offset, since there's no existing per-store config surface for this yet. */
+    val fulfillmentDueSoonLeadHours: Long = 6,
 )

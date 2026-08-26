@@ -67,6 +67,11 @@ class Product(
     /** Null means not currently alerted. Set by LowStockAlertJob, reset back to null on any restock (see ProductService.update) so the alert can re-fire the next time stock drops low again. */
     @Column(name = "last_low_stock_alert_sent_at")
     var lastLowStockAlertSentAt: Instant? = null,
+    /** Null means inherit the store's StoreSettings.defaultFulfillmentTimeHours/defaultDeliveryTimeHours — see OrderService.createOrder's resolution, which snapshots the resolved value onto Order.fulfillmentTimeHours/deliveryTimeHours at checkout time (never joined back to this row afterward, same "no live Product join for order data" rule OrderItem's doc comment already establishes — a product can be deleted without breaking a past order's reminder schedule). */
+    @Column(name = "fulfillment_time_hours")
+    var fulfillmentTimeHours: Int? = null,
+    @Column(name = "delivery_time_hours")
+    var deliveryTimeHours: Int? = null,
     @OneToMany(mappedBy = "product", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("sortOrder asc")
     var images: MutableList<ProductImage> = mutableListOf(),

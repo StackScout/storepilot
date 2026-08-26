@@ -3,6 +3,7 @@ package com.storepilot.backend.messaging
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.notification.MessagingNotifier
 import com.storepilot.backend.store.StoreRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,6 +25,7 @@ class MessagingService(
     private val messageRepository: MessageRepository,
     private val storeRepository: StoreRepository,
     private val currentActor: CurrentActor,
+    private val messagingNotifier: MessagingNotifier,
 ) {
     /**
      * POST /api/stores/{storeId}/conversations — buyer-only, get-or-create.
@@ -81,6 +83,7 @@ class MessagingService(
         conversation.lastMessageAt = now
         if (side == SenderType.BUYER) conversation.sellerUnreadCount += 1 else conversation.buyerUnreadCount += 1
         conversationRepository.save(conversation)
+        if (side == SenderType.BUYER) messagingNotifier.sellerMessageReceived(conversation, message)
         return message.toResponse()
     }
 

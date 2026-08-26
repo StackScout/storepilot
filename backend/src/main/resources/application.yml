@@ -166,6 +166,8 @@ notifications:
   admin-notification-email: ${NOTIFICATIONS_ADMIN_EMAIL:admin@storepilot.test}
   booking-reminder-before-hours: ${NOTIFICATIONS_BOOKING_REMINDER_BEFORE_HOURS:24}
   low-stock-threshold: ${NOTIFICATIONS_LOW_STOCK_THRESHOLD:5}
+  expo-access-token: ${NOTIFICATIONS_EXPO_ACCESS_TOKEN:}
+  fulfillment-due-soon-lead-hours: ${NOTIFICATIONS_FULFILLMENT_DUE_SOON_LEAD_HOURS:6}
 
 management:
   endpoints:

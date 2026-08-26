@@ -19,8 +19,39 @@ class BookingNotifier(
     private val emailService: EmailService,
     private val notificationProperties: NotificationProperties,
     private val platformConfigService: PlatformConfigService,
+    private val pushNotificationService: PushNotificationService,
+    private val pushTokenRepository: PushTokenRepository,
 ) {
     private val log = LoggerFactory.getLogger(BookingNotifier::class.java)
+
+    /** Fired the moment a buyer books a slot — see BookingService.createBooking. */
+    fun sellerBookingCreated(booking: Booking) {
+        sendPushToSeller(
+            booking,
+            title = "New booking: ${booking.serviceName}",
+            body = "${booking.buyerName} booked ${booking.serviceName} for ${formatScheduledTime(booking)}.",
+        )
+    }
+
+    /** Fired by SellerBookingReminderJob, StoreSettings.sellerBookingReminderMinutesBefore before scheduledStart. */
+    fun sellerBookingReminder(booking: Booking) {
+        sendPushToSeller(
+            booking,
+            title = "Upcoming booking: ${booking.serviceName}",
+            body = "${booking.serviceName} with ${booking.buyerName} is coming up at ${formatScheduledTime(booking)}.",
+        )
+    }
+
+    private fun sendPushToSeller(booking: Booking, title: String, body: String) {
+        val sellerId = booking.store.seller.id ?: return
+        val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
+        if (tokens.isEmpty()) return
+        try {
+            pushNotificationService.send(tokens, title, body, data = mapOf("type" to "booking", "id" to booking.id.toString()))
+        } catch (e: Exception) {
+            log.warn("Failed to send booking push to seller {} (title=\"{}\") — not failing the triggering operation", sellerId, title, e)
+        }
+    }
 
     fun bookingCreated(booking: Booking) {
         val platformConfig = platformConfigService.current()

@@ -113,4 +113,12 @@ class StoreSettings(
      */
     @Column(name = "gst_registered", nullable = false)
     var gstRegistered: Boolean = false,
+    /** How long before a booking's scheduledStart the seller gets a push reminder — see SellerBookingReminderJob. Not yet seller-configurable from a settings screen (defaults only for now); the column exists so that UI can land later without another migration. */
+    @Column(name = "seller_booking_reminder_minutes_before", nullable = false)
+    var sellerBookingReminderMinutesBefore: Int = 60,
+    /** Store-wide fallback when a Product doesn't set its own fulfillmentTimeHours/deliveryTimeHours override — see OrderService.createOrder's resolution and OrderFulfillmentReminderJob/OrderDeliveryReminderJob. Not yet seller-configurable from a settings screen, same "defaults now, UI later" posture as sellerBookingReminderMinutesBefore. */
+    @Column(name = "default_fulfillment_time_hours", nullable = false)
+    var defaultFulfillmentTimeHours: Int = 48,
+    @Column(name = "default_delivery_time_hours", nullable = false)
+    var defaultDeliveryTimeHours: Int = 120,
 ) : BaseEntity()

@@ -87,6 +87,8 @@ class ReturnRequestServiceTest {
             paymentStatus = PaymentStatus.PAID,
             shipping = ShippingDetails(fullName = "Buyer", phone = "+61400000000"),
             buyerEmail = "buyer@example.com",
+            fulfillmentTimeHours = 48,
+            deliveryTimeHours = 120,
         ).apply {
             id = UUID.randomUUID()
             createdAt = deliveredAt

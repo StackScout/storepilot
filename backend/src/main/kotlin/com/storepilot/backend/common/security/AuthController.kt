@@ -315,6 +315,8 @@ class AuthController(
             role = role,
             email = attributes["email"] ?: email,
             name = attributes["name"],
+            accessToken = authResult.accessToken(),
+            refreshToken = authResult.refreshToken(),
         )
     }
 
@@ -390,8 +392,13 @@ class AuthController(
     }
 
     @PostMapping("/api/auth/refresh")
-    fun refresh(request: HttpServletRequest, response: HttpServletResponse): AuthSessionResponse {
+    fun refresh(
+        @RequestBody(required = false) input: RefreshInput?,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): AuthSessionResponse {
         val refreshToken = request.cookies?.firstOrNull { it.name == AuthCookies.REFRESH_TOKEN }?.value
+            ?: input?.refreshToken
             ?: throw UnauthenticatedException("No refresh token present")
 
         // Refresh tokens are bound to the app client that issued them.
@@ -417,15 +424,18 @@ class AuthController(
             } catch (oauthError: Exception) {
                 throw UnauthenticatedException("Refresh token is invalid or expired")
             }
-            setAccessTokenCookie(response, request.isSecure, refreshed["access_token"] as String, (refreshed["expires_in"] as Number).toLong())
-            return AuthSessionResponse(signedIn = true)
+            val newAccessToken = refreshed["access_token"] as String
+            setAccessTokenCookie(response, request.isSecure, newAccessToken, (refreshed["expires_in"] as Number).toLong())
+            return AuthSessionResponse(signedIn = true, accessToken = newAccessToken)
         }
 
         // REFRESH_TOKEN_AUTH doesn't return a new refresh token — only the
         // access (+ID) token is refreshed; the original refresh token cookie
-        // is left untouched until it naturally expires.
+        // (or, for a mobile caller, the refreshToken it already holds) stays
+        // valid until it naturally expires, so there's nothing new to hand
+        // back beyond the refreshed access token.
         setAccessTokenCookie(response, request.isSecure, authResult)
-        return AuthSessionResponse(signedIn = true)
+        return AuthSessionResponse(signedIn = true, accessToken = authResult.accessToken())
     }
 
     /**

@@ -2,6 +2,7 @@ package com.storepilot.backend.common.security
 
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver
 
 /** Cookie names shared between this resolver and AuthController (which sets/clears them). */
 object AuthCookies {
@@ -31,8 +32,17 @@ object AuthCookies {
  * corrupted cookie value is the only case left affected — not fixed here
  * since a full fix needs a custom AuthenticationEntryPoint that inspects
  * the request path, which is real complexity for a narrow edge case.
+ *
+ * Falls back to the standard `Authorization: Bearer <token>` header (via
+ * Spring's own DefaultBearerTokenResolver) when no cookie is present — the
+ * mobile app has no cookie jar to rely on, so it sends the access token it
+ * captured at login/refresh as a header instead. The cookie path stays the
+ * primary mechanism for the web app; this is purely additive.
  */
 class CookieBearerTokenResolver : BearerTokenResolver {
+    private val headerResolver = DefaultBearerTokenResolver()
+
     override fun resolve(request: HttpServletRequest): String? =
         request.cookies?.firstOrNull { it.name == AuthCookies.ACCESS_TOKEN }?.value?.takeIf { it.isNotBlank() }
+            ?: headerResolver.resolve(request)
 }

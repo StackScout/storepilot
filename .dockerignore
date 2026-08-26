@@ -1,0 +1,22 @@
+# Applies to the frontend image build only (docker-compose.prod.yml's
+# frontend service uses the repo root as its context, not app/, since
+# app/ depends on the sibling packages/shared-api workspace member — see
+# app/Dockerfile). The backend image still uses its own context/.dockerignore
+# under backend/.
+
+node_modules
+.git
+.claude
+docs
+
+app/.next
+
+# mobile/'s own package.json must stay (npm ci needs every workspace
+# member's manifest present to validate against package-lock.json), but
+# nothing else from it is needed to build the frontend image.
+mobile/*
+!mobile/package.json
+
+backend
+
+infra/.env.deploy

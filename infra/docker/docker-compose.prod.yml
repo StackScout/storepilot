@@ -96,7 +96,11 @@ services:
 
   frontend:
     build:
-      context: ../../app
+      # Repo root, not app/ — app/ now depends on the sibling
+      # packages/shared-api workspace member, which a context scoped to
+      # app/ alone can't see. See app/Dockerfile's own comment.
+      context: ../..
+      dockerfile: app/Dockerfile
       args:
         # Country content (platform name, currency, states, fees, ...) comes
         # from the backend's platform_settings/states tables at runtime, via

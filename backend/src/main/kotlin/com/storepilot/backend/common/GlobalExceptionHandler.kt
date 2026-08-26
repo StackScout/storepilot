@@ -4,6 +4,7 @@ import com.stripe.exception.StripeException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -57,6 +58,12 @@ class GlobalExceptionHandler {
             .body(ApiError.of("VALIDATION_ERROR", "Validation failed", fields))
     }
 
+    /** Malformed/incomplete JSON body (missing required field, wrong type, unparseable) — a client bug, not a server error. Previously fell through to handleUnexpected below as an opaque 500. */
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleUnreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiError> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ApiError.of("VALIDATION_ERROR", "The request body is missing a required field or is malformed"))
+
     /**
      * Every Stripe SDK call (Connect onboarding/checkout, buyer Stripe
      * checkout, refunds, seller Pro billing) previously had no dedicated
@@ -74,6 +81,14 @@ class GlobalExceptionHandler {
         log.error("Stripe API call failed (code={}, requestId={})", ex.code, ex.requestId, ex)
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
             .body(ApiError.of("PAYMENT_PROVIDER_ERROR", "The payment provider couldn't complete this request. Please try again shortly."))
+    }
+
+    /** Mirrors handleStripeException below — an outbound SES call failing (unverified sender, sandbox recipient restriction, throttling) previously fell through as an opaque 500. */
+    @ExceptionHandler(EmailDeliveryException::class)
+    fun handleEmailDelivery(ex: EmailDeliveryException): ResponseEntity<ApiError> {
+        log.error(ex.message, ex.cause)
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .body(ApiError.of("EMAIL_DELIVERY_ERROR", "We couldn't send that email right now. Please try again shortly."))
     }
 
     @ExceptionHandler(Exception::class)

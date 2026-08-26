@@ -116,6 +116,9 @@ Resources:
                   - cognito-idp:AdminGetUser
                   - cognito-idp:AdminListGroupsForUser
                   - cognito-idp:AdminUserGlobalSignOut
+                  # Flips email_verified to true once EmailVerificationService's
+                  # 6-digit code checks out — see AuthController.verifyEmail().
+                  - cognito-idp:AdminUpdateUserAttributes
                   # Completes the SOFTWARE_TOKEN_MFA challenge AdminInitiateAuth
                   # returns for a user who's enrolled TOTP — see AuthController
                   # .mfaChallenge(). AssociateSoftwareToken/VerifySoftwareToken/

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException
 
 /**
  * Resolves the current request's authenticated identity to the matching
@@ -60,15 +61,26 @@ class CurrentActor(
      * token's own "username" claim always carries the real Username
      * regardless of pool config — same claim googleCallback() already
      * reads for the same reason.
+     *
+     * Null (not thrown) when the Cognito user is gone — a still-valid,
+     * unexpired JWT for an identity that's since been deleted (an admin
+     * deleting the account, or the account deleting itself elsewhere) is a
+     * real scenario, not a hypothetical: JWT validation is signature-based
+     * and never re-checks Cognito, so this is the first point in the
+     * request that can notice. Every caller below treats this exactly like
+     * "no such identity" — same as if the JWT had never been presented.
      */
-    private fun fetchProfileFromCognito(jwt: Jwt): Pair<String, String> {
+    private fun fetchProfileFromCognito(jwt: Jwt): Pair<String, String>? {
         val username = requireNotNull(jwt.getClaimAsString("username")) { "JWT has no username claim" }
         val request = AdminGetUserRequest.builder()
             .userPoolId(cognitoProperties.userPoolId)
             .username(username)
             .build()
-        val attributes = cognitoClient.adminGetUser(request).userAttributes()
-            .associate { it.name() to it.value() }
+        val attributes = try {
+            cognitoClient.adminGetUser(request).userAttributes()
+        } catch (e: UserNotFoundException) {
+            return null
+        }.associate { it.name() to it.value() }
         val email = requireNotNull(attributes["email"]) { "Cognito user $username has no email attribute" }
         val name = attributes["name"] ?: email
         return email to name
@@ -97,7 +109,7 @@ class CurrentActor(
         val sub = requireNotNull(jwt.subject) { "JWT has no sub claim" }
         buyerRepository.findByCognitoSub(sub)?.let { return it }
 
-        val (email, name) = fetchProfileFromCognito(jwt)
+        val (email, name) = fetchProfileFromCognito(jwt) ?: return null
         // Link an existing guest-checkout row by email if one exists (same
         // person checked out as a guest before creating an account) instead
         // of creating a duplicate.
@@ -147,7 +159,7 @@ class CurrentActor(
         val jwt = jwtOrNull() ?: return null
         val sub = requireNotNull(jwt.subject) { "JWT has no sub claim" }
         val username = requireNotNull(jwt.getClaimAsString("username")) { "JWT has no username claim" }
-        val (email, name) = fetchProfileFromCognito(jwt)
+        val (email, name) = fetchProfileFromCognito(jwt) ?: return null
         return CognitoIdentity(sub = sub, username = username, email = email, name = name)
     }
 
@@ -159,7 +171,7 @@ class CurrentActor(
         val sub = requireNotNull(jwt.subject) { "JWT has no sub claim" }
         adminRepository.findByCognitoSub(sub)?.let { return it }
 
-        val (email, name) = fetchProfileFromCognito(jwt)
+        val (email, name) = fetchProfileFromCognito(jwt) ?: return null
         return try {
             // See buyerOrNull's doc comment on why saveAndFlush + this
             // same-race handling — identical JIT-provisioning shape, just

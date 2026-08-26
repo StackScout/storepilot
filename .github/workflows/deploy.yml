@@ -85,7 +85,8 @@ jobs:
               "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env build backend",
               "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env build frontend",
               "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env up -d",
-              "docker image prune -f"
+              "docker image prune -f",
+              "docker builder prune -f --filter unused-for=24h"
             ]
           }
           EOF

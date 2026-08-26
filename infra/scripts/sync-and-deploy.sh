@@ -33,6 +33,14 @@ echo "==> Starting the stack"
 ssh -i "${SSH_KEY_PATH}" "ec2-user@${INSTANCE_IP}" \
   "cd /opt/storepilot/infra/docker && docker compose -f docker-compose.prod.yml --env-file .env up -d"
 
+# BuildKit's build cache is a SEPARATE store from images (`docker image
+# prune` never touches it) and grows unbounded across builds — it
+# silently filled this instance's 20GB disk to 92% full (13GB of it
+# reclaimable) and starved a later `npm install` of disk space entirely.
+echo "==> Pruning old images/build cache"
+ssh -i "${SSH_KEY_PATH}" "ec2-user@${INSTANCE_IP}" \
+  "docker image prune -f && docker builder prune -f --filter unused-for=24h"
+
 SITE_ADDRESS=$(aws cloudformation describe-stacks --stack-name "${ENV_NAME}-compute" \
   --query "Stacks[0].Outputs[?OutputKey=='SiteAddress'].OutputValue" --output text --region "$REGION")
 echo "==> Done. App should be reachable at: $SITE_ADDRESS"

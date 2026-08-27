@@ -4,9 +4,11 @@ import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.sse.SseHub
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.coupon.CouponKind
 import com.storepilot.backend.coupon.CouponService
@@ -18,6 +20,7 @@ import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.stripe.StripeService
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -32,6 +35,9 @@ import kotlin.random.Random
 
 /** Cap on how many weekly occurrences a single recurring-series checkout can create — see BookingService.createBooking. */
 private const val MAX_RECURRING_OCCURRENCES = 12
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 private val BOOKING_NUMBER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatterBuilder()
     .appendValue(ChronoField.YEAR, 4)
@@ -81,6 +87,7 @@ class BookingService(
         return response
     }
 
+    /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/bookings uses the paged overload below. */
     fun listByStore(storeId: UUID, status: String?): List<BookingResponse> {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
@@ -91,11 +98,34 @@ class BookingService(
             .map { it.toResponse(receiptStorageService) }
     }
 
-    /** Explicitly @Transactional (not readOnly) — requireBuyer() may JIT-provision a row, same reasoning as OrderService.listByCurrentBuyer. */
+    /** Paged sibling of the above — GET /api/stores/{storeId}/bookings itself. Pushes the optional status filter into SQL (unlike the unpaged version above) so pagination is correct against the filtered set, not the full one. */
+    fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<BookingResponse> {
+        val seller = currentActor.requireSeller()
+        val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
+        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        val statusEnum = status?.let { wireValueOf<BookingStatus>(it) }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        val bookings = if (statusEnum != null) {
+            bookingRepository.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, statusEnum, pageable)
+        } else {
+            bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable)
+        }
+        return bookings.toPageResponse { it.toResponse(receiptStorageService) }
+    }
+
+    /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/me/bookings uses the paged overload below. Explicitly @Transactional (not readOnly) — requireBuyer() may JIT-provision a row, same reasoning as OrderService.listByCurrentBuyer. */
     @Transactional
     fun listByCurrentBuyer(): List<BookingResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         return bookingRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.toResponse(receiptStorageService) }
+    }
+
+    /** Paged sibling of the above — GET /api/me/bookings itself. */
+    @Transactional
+    fun listByCurrentBuyer(page: Int, size: Int): PageResponse<BookingResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return bookingRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.toResponse(receiptStorageService) }
     }
 
     fun getById(id: UUID): BookingResponse =

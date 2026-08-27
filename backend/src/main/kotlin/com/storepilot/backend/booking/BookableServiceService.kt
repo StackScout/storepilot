@@ -4,19 +4,25 @@ import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.requireCategory
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreRepository
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 private val TERMINAL_STATUSES = setOf(BookingStatus.CANCELLED, BookingStatus.NO_SHOW)
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 /** CRUD for bookable services — mirrors ProductService exactly (category-lock, ownership, image upload, slug uniqueness), minus every stock/SKU concept that doesn't apply to a service. */
 @Service
@@ -41,13 +47,14 @@ class BookableServiceService(
     fun findEntity(id: UUID): BookableService? = serviceRepository.findById(id).orElse(null)
 
     /** Same owner-vs-public split as ProductService.listByStore. */
-    fun listByStore(storeId: UUID): List<BookableServiceResponse> {
+    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<BookableServiceResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         val services = if (isOwnedByCurrentSeller(storeId)) {
-            serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId)
+            serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
         } else {
-            serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT)
+            serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT, pageable)
         }
-        return services.map { it.toResponse(fileStorageService) }
+        return services.toPageResponse { it.toResponse(fileStorageService) }
     }
 
     /** Whether a store has any publicly-visible bookable service — drives the derived 3-mode storefront UI, see docs/features/bookings.md. */

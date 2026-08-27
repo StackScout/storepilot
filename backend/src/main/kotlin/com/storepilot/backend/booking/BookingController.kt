@@ -1,5 +1,6 @@
 package com.storepilot.backend.booking
 
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.sse.SseHub
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -25,15 +26,22 @@ class BookingController(
     private val sseHub: SseHub,
 ) {
     @GetMapping("/api/stores/{storeId}/bookings")
-    fun listByStore(@PathVariable storeId: UUID, @RequestParam status: String?): List<BookingResponse> =
-        bookingService.listByStore(storeId, status)
+    fun listByStore(
+        @PathVariable storeId: UUID,
+        @RequestParam status: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<BookingResponse> = bookingService.listByStore(storeId, status, page, size)
 
     /** Pro-only — see BookingAnalyticsService's doc comment. */
     @GetMapping("/api/stores/{storeId}/booking-analytics")
     fun getAnalytics(@PathVariable storeId: UUID): BookingAnalyticsResponse = bookingAnalyticsService.getAnalytics(storeId)
 
     @GetMapping("/api/me/bookings")
-    fun listByCurrentBuyer(): List<BookingResponse> = bookingService.listByCurrentBuyer()
+    fun listByCurrentBuyer(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<BookingResponse> = bookingService.listByCurrentBuyer(page, size)
 
     /** First step of guest lookup — see BookingService.requestLookupCode's doc comment. Always 204. */
     @PostMapping("/api/bookings/lookup/request-code")

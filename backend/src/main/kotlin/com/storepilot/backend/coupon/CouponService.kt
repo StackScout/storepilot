@@ -3,15 +3,21 @@ package com.storepilot.backend.coupon
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.store.StoreRepository
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 data class CouponResolution(val couponId: UUID, val code: String, val discountAmount: Int)
 
@@ -34,9 +40,17 @@ class CouponService(
 ) {
     // --- Seller-scoped (store-specific coupons) ---
 
+    /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/coupons uses the paged overload below. */
     fun listForStore(storeId: UUID): List<CouponResponse> {
         requireOwnedStore(storeId)
         return couponRepository.findByStoreIdOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+    }
+
+    /** Paged sibling of the above — GET /api/stores/{storeId}/coupons itself. */
+    fun listForStore(storeId: UUID, page: Int, size: Int): PageResponse<CouponResponse> {
+        requireOwnedStore(storeId)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return couponRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
     }
 
     @Transactional
@@ -76,7 +90,10 @@ class CouponService(
 
     // --- Admin-scoped (platform-wide coupons) ---
 
-    fun listPlatformWide(): List<CouponResponse> = couponRepository.findByStoreIdIsNullOrderByCreatedAtDesc().map { it.toResponse() }
+    fun listPlatformWide(page: Int, size: Int): PageResponse<CouponResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return couponRepository.findByStoreIdIsNullOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
+    }
 
     @Transactional
     fun createPlatformWide(input: CouponInput): CouponResponse {

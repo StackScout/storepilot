@@ -1,13 +1,15 @@
 package com.storepilot.backend.booking
 
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
 interface BookableServiceRepository : JpaRepository<BookableService, UUID> {
-    fun findByStoreIdOrderByUpdatedAtDesc(storeId: UUID): List<BookableService>
+    fun findByStoreIdOrderByUpdatedAtDesc(storeId: UUID, pageable: Pageable): Page<BookableService>
 
     /** Public/non-owner view of a store's services — see BookableServiceService.listByStore. */
-    fun findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId: UUID, status: ServiceStatus): List<BookableService>
+    fun findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId: UUID, status: ServiceStatus, pageable: Pageable): Page<BookableService>
 
     fun findByStoreIdAndSlug(storeId: UUID, slug: String): BookableService?
 

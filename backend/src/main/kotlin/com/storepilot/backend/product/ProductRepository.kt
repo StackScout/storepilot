@@ -22,10 +22,15 @@ private const val PRODUCT_SEARCH_FILTERS = """
 """
 
 interface ProductRepository : JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
+    /** Unpaged — internal use only (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/products uses the paged overload below. */
     fun findByStoreIdOrderByUpdatedAtDesc(storeId: UUID): List<Product>
 
-    /** Public/non-owner view of a store's products — see ProductService.listByStore. */
+    fun findByStoreIdOrderByUpdatedAtDesc(storeId: UUID, pageable: Pageable): Page<Product>
+
+    /** Public/non-owner view of a store's products — see ProductService.listByStore. Unpaged variant for the same internal-export reason as above. */
     fun findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId: UUID, status: ProductStatus): List<Product>
+
+    fun findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId: UUID, status: ProductStatus, pageable: Pageable): Page<Product>
 
     fun findByStoreIdAndSlug(storeId: UUID, slug: String): Product?
 

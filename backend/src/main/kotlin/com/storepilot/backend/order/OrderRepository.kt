@@ -18,7 +18,10 @@ interface OrderRepository : JpaRepository<Order, UUID> {
 
     fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus, pageable: Pageable): Page<Order>
 
+    /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/me/orders uses the paged overload below. */
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Order>
+
+    fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID, pageable: Pageable): Page<Order>
 
     /** Close-store precondition check — see StoreService.closeStore. */
     fun existsByStoreIdAndStatusIn(storeId: UUID, statuses: Collection<OrderStatus>): Boolean
@@ -30,9 +33,12 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     fun existsByBuyerIdAndStoreIdAndStatus(buyerId: UUID, storeId: UUID, status: OrderStatus): Boolean
 
     /** Stripe Connect direct charges auto-settle at charge time (see PaymentMethod.STRIPE's doc comment) — this is a read-only reconciliation view, not a ledger like Payout/FeeCollection. */
-    fun findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId: UUID, paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): List<Order>
+    fun findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId: UUID, paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, pageable: Pageable): Page<Order>
 
+    /** Unpaged — internal cross-service use (AccountingService.summary() needs every settled order to sum correctly). GET /api/admin/stripe-settlements uses the paged overload below. */
     fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): List<Order>
+
+    fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, pageable: Pageable): Page<Order>
 
     fun findByOrderNumberIgnoreCase(orderNumber: String): Order?
 

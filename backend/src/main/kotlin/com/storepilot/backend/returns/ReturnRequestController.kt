@@ -1,5 +1,6 @@
 package com.storepilot.backend.returns
 
+import com.storepilot.backend.common.PageResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -41,12 +42,20 @@ class ReturnRequestController(
     ): ReturnRequestResponse = returnRequestService.markRefundedBySeller(orderId, returnId, input)
 
     @GetMapping("/api/stores/{storeId}/returns")
-    fun listForStore(@PathVariable storeId: UUID): List<ReturnRequestResponse> = returnRequestService.listForStore(storeId)
+    fun listForStore(
+        @PathVariable storeId: UUID,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<ReturnRequestResponse> = returnRequestService.listForStore(storeId, page, size)
 
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
     @GetMapping("/api/admin/returns")
-    fun adminList(@RequestParam status: String?): List<ReturnRequestResponse> = returnRequestService.adminList(status)
+    fun adminList(
+        @RequestParam status: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<ReturnRequestResponse> = returnRequestService.adminList(status, page, size)
 
     @PatchMapping("/api/admin/returns/{returnId}")
     fun adminMarkRefunded(

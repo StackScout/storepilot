@@ -1,5 +1,6 @@
 package com.storepilot.backend.booking
 
+import com.storepilot.backend.common.PageResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
@@ -21,7 +23,11 @@ class BookableServiceController(
     fun getById(@PathVariable id: UUID): BookableServiceResponse = bookableServiceService.getById(id)
 
     @GetMapping("/api/stores/{storeId}/bookable-services")
-    fun listByStore(@PathVariable storeId: UUID): List<BookableServiceResponse> = bookableServiceService.listByStore(storeId)
+    fun listByStore(
+        @PathVariable storeId: UUID,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "24") size: Int,
+    ): PageResponse<BookableServiceResponse> = bookableServiceService.listByStore(storeId, page, size)
 
     @PostMapping("/api/stores/{storeId}/bookable-services", consumes = ["multipart/form-data"])
     fun create(

@@ -167,13 +167,7 @@ class ProductService(
         }
     }
 
-    /**
-     * Shared by the seller's own product list (needs every status,
-     * including drafts) and the public storefront's per-store product grid
-     * (must never show a draft) — same endpoint, so the response depends on
-     * whether the caller owns this store, not on a query param a public
-     * caller could just set themselves.
-     */
+    /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/products uses the paged overload below. */
     fun listByStore(storeId: UUID): List<ProductResponse> {
         val products = if (isOwnedByCurrentSeller(storeId)) {
             productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId)
@@ -181,6 +175,23 @@ class ProductService(
             productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT)
         }
         return products.map { it.toResponse(fileStorageService) }
+    }
+
+    /**
+     * Shared by the seller's own product list (needs every status,
+     * including drafts) and the public storefront's per-store product grid
+     * (must never show a draft) — same endpoint, so the response depends on
+     * whether the caller owns this store, not on a query param a public
+     * caller could just set themselves.
+     */
+    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<ProductResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        val products = if (isOwnedByCurrentSeller(storeId)) {
+            productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
+        } else {
+            productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT, pageable)
+        }
+        return products.toPageResponse { it.toResponse(fileStorageService) }
     }
 
     @Transactional
@@ -297,11 +308,19 @@ class ProductService(
         wishlistItemRepository.delete(item)
     }
 
-    /** GET /api/me/wishlist — mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
+    /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/me/wishlist uses the paged overload below. Mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
     @Transactional
     fun listWishlist(): List<ProductResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.product.toResponse(fileStorageService) }
+    }
+
+    /** GET /api/me/wishlist — mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
+    @Transactional
+    fun listWishlist(page: Int, size: Int): PageResponse<ProductResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.product.toResponse(fileStorageService) }
     }
 
     private fun resolveStatus(input: ProductFormInput, trackStock: Boolean): ProductStatus =

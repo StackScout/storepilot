@@ -1,5 +1,7 @@
 package com.storepilot.backend.booking
 
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -7,9 +9,17 @@ import java.time.Instant
 import java.util.UUID
 
 interface BookingRepository : JpaRepository<Booking, UUID> {
+    /** Unpaged — internal cross-service use (BookingAnalyticsService needs every booking to compute stats; SellerExportService's full data-export bundle). GET /api/stores/{storeId}/bookings uses the paged overloads below. */
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<Booking>
 
+    fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Booking>
+
+    fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: BookingStatus, pageable: Pageable): Page<Booking>
+
+    /** Unpaged — internal cross-service use (e.g. BuyerAccountService's account-deletion sweep). GET /api/me/bookings uses the paged overload below. */
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Booking>
+
+    fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID, pageable: Pageable): Page<Booking>
 
     /** Close-store precondition check — see StoreService.closeStore. */
     fun existsByStoreIdAndStatusIn(storeId: UUID, statuses: Collection<BookingStatus>): Boolean

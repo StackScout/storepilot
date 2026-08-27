@@ -1,6 +1,5 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { apiFetch } from './api-client';
@@ -22,27 +21,49 @@ import { apiFetch } from './api-client';
  * but a dev build is still the reliable way to test this end to end).
  */
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+/**
+ * Remote push notifications are unavailable in Expo Go on Android since
+ * SDK 53 — merely *importing* expo-notifications throws there outright
+ * (confirmed live: expo-notifications' own module-init code checks for
+ * Expo Go on Android and throws, which crashed every route in the app
+ * since this file is imported unconditionally via auth-store.ts). So the
+ * module itself must not be `import`ed statically — it's `require`d
+ * lazily below, only when not running inside Expo Go. A real development
+ * build doesn't have this restriction at all.
+ */
+export const isExpoGo = Constants.appOwnership === 'expo';
+
+type NotificationsModule = typeof import('expo-notifications');
+export const NotificationsApi: NotificationsModule | null = isExpoGo ? null : (require('expo-notifications') as NotificationsModule);
+
+if (NotificationsApi) {
+  NotificationsApi.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 const ANDROID_CHANNEL_ID = 'default';
 
 async function ensureAndroidChannel() {
-  if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+  if (Platform.OS !== 'android' || !NotificationsApi) return;
+  await NotificationsApi.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
     name: 'StorePilot',
-    importance: Notifications.AndroidImportance.HIGH,
+    importance: NotificationsApi.AndroidImportance.HIGH,
   });
 }
 
-/** Requests permission and returns a real Expo push token, or null if unavailable (simulator, permission denied, or no EAS projectId configured — see this file's doc comment). */
+/** Requests permission and returns a real Expo push token, or null if unavailable (Expo Go on Android, simulator, permission denied, or no EAS projectId configured — see this file's doc comment). */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  if (!NotificationsApi) {
+    console.warn('[push] Remote push notifications are unavailable in Expo Go — skipping (works fine in a real development build).');
+    return null;
+  }
+
   await ensureAndroidChannel();
 
   if (!Device.isDevice) {
@@ -50,10 +71,10 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null;
   }
 
-  const existing = await Notifications.getPermissionsAsync();
+  const existing = await NotificationsApi.getPermissionsAsync();
   let status = existing.status;
   if (status !== 'granted') {
-    status = (await Notifications.requestPermissionsAsync()).status;
+    status = (await NotificationsApi.requestPermissionsAsync()).status;
   }
   if (status !== 'granted') {
     console.warn('[push] Notification permission not granted.');
@@ -67,7 +88,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   try {
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    const { data: token } = await NotificationsApi.getExpoPushTokenAsync({ projectId });
     return token;
   } catch (e) {
     console.warn('[push] Failed to get an Expo push token', e);

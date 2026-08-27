@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 const ACCESS_TOKEN_KEY = 'storepilot_access_token';
 const REFRESH_TOKEN_KEY = 'storepilot_refresh_token';
+const BIOMETRIC_LOCK_KEY = 'storepilot_biometric_lock_enabled';
 
 // expo-secure-store has no real Keychain/Keystore equivalent on web (its web
 // shim throws — SecureStore.getValueWithKeyAsync is not a function). This
@@ -43,5 +44,15 @@ export const tokenStorage = {
   async clear(): Promise<void> {
     await backend.deleteItemAsync(ACCESS_TOKEN_KEY);
     await backend.deleteItemAsync(REFRESH_TOKEN_KEY);
+  },
+};
+
+/** A device-level preference, not tied to any one account — deliberately survives sign-out so re-signing in on the same device keeps the lock enabled. */
+export const biometricPreference = {
+  async isEnabled(): Promise<boolean> {
+    return (await backend.getItemAsync(BIOMETRIC_LOCK_KEY)) === 'true';
+  },
+  async setEnabled(enabled: boolean): Promise<void> {
+    await backend.setItemAsync(BIOMETRIC_LOCK_KEY, enabled ? 'true' : 'false');
   },
 };

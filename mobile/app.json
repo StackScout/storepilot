@@ -8,7 +8,10 @@
     "scheme": "storepilot-seller",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "StorePilot uses Face ID to quickly and securely sign you back in."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -44,7 +47,7 @@
       "expo-notifications"
     ],
     "experiments": {
-      "typedRoutes": true,
+      "typedRoutes": false,
       "reactCompiler": true
     }
   }

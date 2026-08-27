@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { tokenStorage } from '@/lib/secure-storage';
+import { biometricPreference, tokenStorage } from '@/lib/secure-storage';
 import { clearPushToken, syncPushToken } from '@/lib/push-notifications';
 
 type AuthState = {
@@ -10,11 +10,18 @@ type AuthState = {
   role: string | null;
   email: string | null;
   name: string | null;
+  /** Device-level preference: prompt for Face ID/fingerprint before trusting a stored session. */
+  biometricLockEnabled: boolean;
+  /** True while a signed-in session exists but hasn't cleared the biometric prompt yet (cold start with a stored token, or returning from the background) — the root layout shows a lock screen instead of the app while this is true. */
+  isLocked: boolean;
   hydrate: () => Promise<void>;
   signIn: (params: { accessToken: string; refreshToken: string; role: string | null; email: string | null; name: string | null }) => Promise<void>;
   updateAccessToken: (accessToken: string) => Promise<void>;
   updateProfile: (params: { role: string | null; email: string | null; name: string | null }) => void;
   signOut: () => Promise<void>;
+  setBiometricLockEnabled: (enabled: boolean) => Promise<void>;
+  lock: () => void;
+  unlock: () => void;
 };
 
 /**
@@ -29,10 +36,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   role: null,
   email: null,
   name: null,
+  biometricLockEnabled: false,
+  isLocked: false,
 
   hydrate: async () => {
-    const accessToken = await tokenStorage.getAccessToken();
-    set({ isSignedIn: !!accessToken, isHydrated: true });
+    const [accessToken, biometricLockEnabled] = await Promise.all([tokenStorage.getAccessToken(), biometricPreference.isEnabled()]);
+    const isSignedIn = !!accessToken;
+    // Locks immediately on cold start when a session already exists — a fresh signIn() below never sets this, since the user just authenticated a moment ago.
+    set({ isSignedIn, isHydrated: true, biometricLockEnabled, isLocked: isSignedIn && biometricLockEnabled });
   },
 
   signIn: async ({ accessToken, refreshToken, role, email, name }) => {
@@ -53,6 +64,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     // still-valid session to authenticate the DELETE call.
     await clearPushToken();
     await tokenStorage.clear();
-    set({ isSignedIn: false, role: null, email: null, name: null });
+    set({ isSignedIn: false, role: null, email: null, name: null, isLocked: false });
   },
+
+  setBiometricLockEnabled: async (enabled: boolean) => {
+    await biometricPreference.setEnabled(enabled);
+    set({ biometricLockEnabled: enabled });
+  },
+
+  // Only takes effect when there's an active session and the preference is on — locking a signed-out or preference-off app would show a lock screen with nothing to unlock into.
+  lock: () => set((s) => (s.isSignedIn && s.biometricLockEnabled ? { isLocked: true } : {})),
+  unlock: () => set({ isLocked: false }),
 }));

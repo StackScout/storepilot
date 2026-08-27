@@ -122,7 +122,7 @@ class AuthControllerTest {
         val urlSlot = slot<String>()
         every { response.sendRedirect(capture(urlSlot)) } returns Unit
 
-        controller.googleStart(intent = "buyer", response = response)
+        controller.googleStart(intent = "buyer", response = response, platform = "web")
 
         assertTrue(urlSlot.captured.startsWith("https://storepilot-dev.auth.ap-southeast-2.amazoncognito.com/oauth2/authorize"))
         assertTrue(urlSlot.captured.contains("&identity_provider=Google"))
@@ -135,7 +135,7 @@ class AuthControllerTest {
         val urlSlot = slot<String>()
         every { response.sendRedirect(capture(urlSlot)) } returns Unit
 
-        controller.googleStart(intent = "seller", response = response)
+        controller.googleStart(intent = "seller", response = response, platform = "web")
 
         assertTrue(urlSlot.captured.contains("&state=seller"))
     }
@@ -144,7 +144,7 @@ class AuthControllerTest {
     fun `googleStart rejects an invalid intent`() {
         val response = mockk<HttpServletResponse>(relaxed = true)
         assertThrows(IllegalArgumentException::class.java) {
-            controller.googleStart(intent = "admin", response = response)
+            controller.googleStart(intent = "admin", response = response, platform = "web")
         }
     }
 }

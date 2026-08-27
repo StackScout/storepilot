@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { deleteSellerAccount, exportSellerData } from '@/api/seller-account';
 import { closeStore, getMyStore } from '@/api/stores';
+import { BiometricLockToggle } from '@/components/biometric-lock-toggle';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -86,6 +87,11 @@ export default function SellerAccountScreen() {
             </TouchableOpacity>
           </>
         ) : null}
+
+        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+          SECURITY
+        </ThemedText>
+        <BiometricLockToggle />
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
           YOUR DATA

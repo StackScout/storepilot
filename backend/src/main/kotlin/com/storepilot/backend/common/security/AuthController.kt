@@ -449,8 +449,10 @@ class AuthController(
     fun googleStart(
         @RequestParam(required = false, defaultValue = "buyer") intent: String,
         response: HttpServletResponse,
+        @RequestParam(required = false, defaultValue = "web") platform: String,
     ) {
         require(intent == "buyer" || intent == "seller") { "intent must be \"buyer\" or \"seller\"" }
+        require(platform == "web" || platform == "mobile") { "platform must be \"web\" or \"mobile\"" }
         val redirectUri = URLEncoder.encode(cognitoProperties.oauthRedirectUri, StandardCharsets.UTF_8)
         response.sendRedirect(
             "https://${cognitoProperties.oauthDomain}/oauth2/authorize" +
@@ -459,7 +461,7 @@ class AuthController(
                 "&scope=openid+email+profile" +
                 "&redirect_uri=$redirectUri" +
                 "&identity_provider=Google" +
-                "&state=$intent",
+                "&state=$intent:$platform",
         )
     }
 
@@ -488,9 +490,14 @@ class AuthController(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ) {
-        val intent = if (state == "seller") "seller" else "buyer"
+        // state is "intent:platform" (see googleStart) — split defensively
+        // so an old/bookmarked callback link with just "buyer"/"seller" (no
+        // platform suffix) still parses as a web sign-in, not a crash.
+        val stateParts = state?.split(":") ?: emptyList()
+        val intent = if (stateParts.getOrNull(0) == "seller") "seller" else "buyer"
+        val platform = if (stateParts.getOrNull(1) == "mobile") "mobile" else "web"
         if (code == null) {
-            response.sendRedirect("${notificationProperties.frontendBaseUrl}${loginPathFor(intent)}?error=google_auth_failed")
+            response.sendRedirect(finalRedirectUrl(platform, intent, loginPathFor(intent) + "?error=google_auth_failed"))
             return
         }
         try {
@@ -507,7 +514,7 @@ class AuthController(
 
             val outcome = resolveGoogleSignInOutcome(intent, resolveAppRole(groups))
             if (outcome.rejected) {
-                response.sendRedirect("${notificationProperties.frontendBaseUrl}${outcome.redirectPath}")
+                response.sendRedirect(finalRedirectUrl(platform, intent, outcome.redirectPath))
                 return
             }
 
@@ -518,16 +525,47 @@ class AuthController(
                 expiresIn = (refreshed["expires_in"] as Number).toLong()
             }
 
+            if (platform == "mobile") {
+                // Mobile has no cookie jar shared with the backend — hand the
+                // tokens to the app directly via its own deep-link scheme
+                // instead (same accessToken/refreshToken shape login()/
+                // refresh() already return in their JSON body for mobile).
+                val role = resolveAppRole(groups) ?: outcome.groupToAssign
+                val params = listOfNotNull(
+                    "accessToken" to accessToken,
+                    "refreshToken" to refreshToken,
+                    role?.let { "role" to it },
+                ).joinToString("&") { (k, v) -> "$k=${URLEncoder.encode(v, StandardCharsets.UTF_8)}" }
+                response.sendRedirect("${cognitoProperties.mobileAppScheme}://auth-callback?$params")
+                return
+            }
+
             setAccessTokenCookie(response, request.isSecure, accessToken, expiresIn)
             val refreshCookie = ResponseCookie.from(AuthCookies.REFRESH_TOKEN, refreshToken)
                 .httpOnly(true).secure(request.isSecure).sameSite("Lax").path("/").maxAge(REFRESH_TOKEN_MAX_AGE_SECONDS).build()
             response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-            response.sendRedirect("${notificationProperties.frontendBaseUrl}${outcome.redirectPath}")
+            response.sendRedirect(finalRedirectUrl(platform, intent, outcome.redirectPath))
         } catch (e: Exception) {
             log.warn("Google sign-in failed", e)
-            response.sendRedirect("${notificationProperties.frontendBaseUrl}${loginPathFor(intent)}?error=google_auth_failed")
+            response.sendRedirect(finalRedirectUrl(platform, intent, loginPathFor(intent) + "?error=google_auth_failed"))
         }
     }
+
+    /**
+     * Web keeps redirecting to a frontendBaseUrl path (auth already landed
+     * in cookies by the time this is called). Mobile has no meaningful
+     * "path to redirect to" for a rejected/failed sign-in — a deep link
+     * with an error code is the closest equivalent, since the app itself
+     * (not a web route) decides what UI to show for it.
+     */
+    private fun finalRedirectUrl(platform: String, intent: String, webPath: String): String =
+        if (platform == "mobile") {
+            val errorMatch = Regex("error=([^&]+)").find(webPath)
+            if (errorMatch != null) "${cognitoProperties.mobileAppScheme}://auth-callback?error=${errorMatch.groupValues[1]}"
+            else "${cognitoProperties.mobileAppScheme}://auth-callback"
+        } else {
+            "${notificationProperties.frontendBaseUrl}$webPath"
+        }
 
     /** POSTs to the Hosted UI's /oauth2/token endpoint — shared by the authorization_code exchange and both refresh_token paths above. */
     private fun exchangeOAuthToken(params: Map<String, String>): Map<String, Any> {

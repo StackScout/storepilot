@@ -104,6 +104,8 @@ class StoreServiceTest {
             }
         }
         every { platformConfigService.current() } returns australiaSettings()
+        // The response mapper re-resolves logoUrl/bannerUrl/document URLs through this on every read — without a passthrough, the relaxed mock's default (empty string) would silently mask what was actually stored.
+        every { fileStorageService.resolveUrl(any()) } answers { firstArg() }
     }
 
     private fun australiaSettings() = PlatformSettings(
@@ -505,5 +507,238 @@ class StoreServiceTest {
     fun `getMyStore returns null when the seller hasn't onboarded yet`() {
         every { storeRepository.findBySellerId(seller.id!!) } returns null
         assertNull(service.getMyStore())
+    }
+
+    @Test
+    fun `getById returns any store regardless of verification status`() {
+        store.verificationStatus = StoreVerificationStatus.PENDING
+        val result = service.getById(storeId)
+        assertEquals(storeId, result.id)
+    }
+
+    @Test
+    fun `getById throws for a missing store`() {
+        val id = UUID.randomUUID()
+        every { storeRepository.findById(id) } returns Optional.empty()
+        assertThrows(NotFoundException::class.java) { service.getById(id) }
+    }
+
+    @Test
+    fun `getSettings rejects a non-owning seller`() {
+        val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns otherSeller
+        assertThrows(ForbiddenException::class.java) { service.getSettings(storeId) }
+    }
+
+    @Test
+    fun `getSettings returns null when no settings exist yet`() {
+        every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
+        assertNull(service.getSettings(storeId))
+    }
+
+    @Test
+    fun `getSettings returns the owner's settings`() {
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(storeSettings())
+        val result = service.getSettings(storeId)
+        assertEquals("store@example.com", result?.contactEmail)
+    }
+
+    @Test
+    fun `getPublicSettings never requires ownership`() {
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(storeSettings())
+        assertEquals(true, service.getPublicSettings(storeId)?.codEnabled)
+    }
+
+    @Test
+    fun `isFollowing is false for a guest`() {
+        every { currentActor.buyerOrNull() } returns null
+        assertFalse(service.isFollowing(storeId))
+    }
+
+    @Test
+    fun `isFollowing reflects the buyer's actual follow state`() {
+        val buyer = Buyer(name = "Jane", email = "buyer@example.com").apply { id = UUID.randomUUID() }
+        every { currentActor.buyerOrNull() } returns buyer
+        every { followRepository.existsByBuyerIdAndStoreId(buyer.id!!, storeId) } returns true
+        assertTrue(service.isFollowing(storeId))
+    }
+
+    // ---- updateProfileAsSeller ----
+
+    @Test
+    fun `updateProfileAsSeller trims blank social links down to null`() {
+        every { storeRepository.save(any()) } answers {
+            (firstArg() as Store).apply { if (createdAt == null) createdAt = java.time.Instant.now() }
+        }
+
+        val result = service.updateProfileAsSeller(storeId, StoreProfileInput(facebookUrl = "   "))
+
+        assertNull(result.facebookUrl)
+    }
+
+    @Test
+    fun `updateProfileAsSeller sets a real link`() {
+        every { storeRepository.save(any()) } answers {
+            (firstArg() as Store).apply { if (createdAt == null) createdAt = java.time.Instant.now() }
+        }
+
+        val result = service.updateProfileAsSeller(storeId, StoreProfileInput(instagramUrl = "https://instagram.com/store"))
+
+        assertEquals("https://instagram.com/store", result.instagramUrl)
+    }
+
+    @Test
+    fun `updateProfileAsSeller rejects a non-owning seller`() {
+        val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns otherSeller
+        assertThrows(ForbiddenException::class.java) { service.updateProfileAsSeller(storeId, StoreProfileInput()) }
+    }
+
+    // ---- document uploads ----
+
+    private val file = org.springframework.mock.web.MockMultipartFile("file", "id.jpg", "image/jpeg", byteArrayOf(1))
+
+    @Test
+    fun `uploadDriverLicenceDocument rejects a store that's already active`() {
+        store.verificationStatus = StoreVerificationStatus.ACTIVE
+        assertThrows(ConflictException::class.java) { service.uploadDriverLicenceDocument(storeId, file) }
+    }
+
+    @Test
+    fun `uploadDriverLicenceDocument stores the file and updates settings`() {
+        every { fileStorageService.store("seller-documents", file, any(), any()) } returns "seller-documents/dl.jpg"
+        val existing = storeSettings()
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(existing)
+        every { storeSettingsRepository.save(any()) } answers { firstArg() }
+
+        val result = service.uploadDriverLicenceDocument(storeId, file)
+
+        assertEquals("seller-documents/dl.jpg", existing.driverLicenceDocumentUrl)
+    }
+
+    @Test
+    fun `uploadDriverLicenceDocument throws when settings don't exist yet`() {
+        every { fileStorageService.store("seller-documents", file, any(), any()) } returns "seller-documents/dl.jpg"
+        every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
+        assertThrows(NotFoundException::class.java) { service.uploadDriverLicenceDocument(storeId, file) }
+    }
+
+    @Test
+    fun `uploadAbnDocument rejects a store that's already active`() {
+        store.verificationStatus = StoreVerificationStatus.ACTIVE
+        assertThrows(ConflictException::class.java) { service.uploadAbnDocument(storeId, file) }
+    }
+
+    @Test
+    fun `uploadAbnDocument stores the file`() {
+        every { fileStorageService.store("seller-documents", file, any(), any()) } returns "seller-documents/abn.jpg"
+        val existing = storeSettings()
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(existing)
+        every { storeSettingsRepository.save(any()) } answers { firstArg() }
+
+        service.uploadAbnDocument(storeId, file)
+
+        assertEquals("seller-documents/abn.jpg", existing.abnDocumentUrl)
+    }
+
+    @Test
+    fun `uploadNicDocument stores the file`() {
+        every { fileStorageService.store("seller-documents", file, any(), any()) } returns "seller-documents/nic.jpg"
+        val existing = storeSettings()
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(existing)
+        every { storeSettingsRepository.save(any()) } answers { firstArg() }
+
+        service.uploadNicDocument(storeId, file)
+
+        assertEquals("seller-documents/nic.jpg", existing.nicDocumentUrl)
+    }
+
+    @Test
+    fun `uploadBusinessRegDocument stores the file`() {
+        every { fileStorageService.store("seller-documents", file, any(), any()) } returns "seller-documents/reg.jpg"
+        val existing = storeSettings()
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(existing)
+        every { storeSettingsRepository.save(any()) } answers { firstArg() }
+
+        service.uploadBusinessRegDocument(storeId, file)
+
+        assertEquals("seller-documents/reg.jpg", existing.businessRegDocumentUrl)
+    }
+
+    @Test
+    fun `uploadLogo stores the image and doesn't gate on verification status`() {
+        store.verificationStatus = StoreVerificationStatus.ACTIVE
+        every { fileStorageService.store("store-images", file, any(), any()) } returns "store-images/logo.jpg"
+
+        val result = service.uploadLogo(storeId, file)
+
+        assertEquals("store-images/logo.jpg", result.logoUrl)
+    }
+
+    @Test
+    fun `uploadBanner stores the image`() {
+        every { fileStorageService.store("store-images", file, any(), any()) } returns "store-images/banner.jpg"
+
+        val result = service.uploadBanner(storeId, file)
+
+        assertEquals("store-images/banner.jpg", result.bannerUrl)
+    }
+
+    // ---- admin ----
+
+    @Test
+    fun `adminList returns every store when no status filter is given`() {
+        every { storeRepository.findAll() } returns listOf(store)
+        val result = service.adminList(null)
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `adminList filters by verification status`() {
+        every { storeRepository.findByVerificationStatus(StoreVerificationStatus.PENDING) } returns listOf(store)
+        val result = service.adminList("pending")
+        assertEquals(1, result.size)
+        verify(exactly = 0) { storeRepository.findAll() }
+    }
+
+    @Test
+    fun `adminGetSettings isn't ownership-gated`() {
+        every { storeSettingsRepository.findById(storeId) } returns Optional.of(storeSettings())
+        assertEquals("store@example.com", service.adminGetSettings(storeId)?.contactEmail)
+        verify(exactly = 0) { currentActor.requireSeller() }
+    }
+
+    // ---- search ----
+
+    @Test
+    fun `search returns a page of active stores`() {
+        every { storeRepository.findAll(any<org.springframework.data.jpa.domain.Specification<Store>>(), any<org.springframework.data.domain.Pageable>()) } returns
+            org.springframework.data.domain.PageImpl(listOf(store))
+
+        val result = service.search(category = null, query = null, page = 0, size = 20)
+
+        assertEquals(1, result.content.size)
+    }
+
+    // ---- getStats ----
+
+    @Test
+    fun `getStats rejects a non-owning seller`() {
+        val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns otherSeller
+        assertThrows(ForbiddenException::class.java) { service.getStats(storeId) }
+    }
+
+    @Test
+    fun `getStats sums order and booking revenue together`() {
+        every { orderRepository.sumSubtotalForPaidOrders(any(), any(), any()) } returns 1000
+        every { bookingRepository.sumServicePriceForPaidBookings(any(), any(), any()) } returns 500
+        every { orderRepository.sumPlatformFeeForPaidOrders(any(), any(), any()) } returns 50
+        every { bookingRepository.sumPlatformFeeForPaidBookings(any(), any(), any()) } returns 25
+
+        val result = service.getStats(storeId)
+
+        assertEquals(1500, result.revenueCurrentPeriod)
+        assertEquals(75, result.platformFeeCurrentPeriod)
     }
 }

@@ -1,15 +1,24 @@
 package com.storepilot.backend.coupon
 
 import com.storepilot.backend.common.ConflictException
+import com.storepilot.backend.common.ForbiddenException
+import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAddress
+import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
+import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import java.util.Optional
 import java.util.UUID
 
 class CouponServiceTest {
@@ -148,5 +157,169 @@ class CouponServiceTest {
         val result = service.preview(CouponPreviewInput(code = "SAVE10", storeId = storeId, kind = "order", amount = 1000))
         assertEquals(true, result.valid)
         assertEquals(100, result.discountAmount)
+    }
+
+    // ---- seller-scoped CRUD ----
+
+    private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
+    private lateinit var store: Store
+
+    @BeforeEach
+    fun setUpStore() {
+        store = Store(
+            seller = seller, slug = "store", name = "Store", tagline = "tagline", description = "description",
+            category = StoreCategory.HANDICRAFTS, address = StoreAddress(city = "Sydney", state = "NSW"),
+            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
+        ).apply { id = storeId }
+        every { currentActor.requireSeller() } returns seller
+        every { storeRepository.findById(storeId) } returns Optional.of(store)
+    }
+
+    private fun couponInput(code: String = "NEW20") = CouponInput(
+        code = code,
+        discountType = "percent",
+        discountValue = 20,
+        appliesToOrders = true,
+        appliesToBookings = true,
+    )
+
+    @Test
+    fun `createForStore rejects a seller who doesn't own the store`() {
+        val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns otherSeller
+
+        assertThrows(ForbiddenException::class.java) { service.createForStore(storeId, couponInput()) }
+    }
+
+    @Test
+    fun `createForStore normalizes the code to uppercase and scopes it to the store`() {
+        val slot = io.mockk.slot<Coupon>()
+        every { couponRepository.save(capture(slot)) } answers { slot.captured.apply { id = UUID.randomUUID(); createdAt = Instant.now() } }
+
+        val result = service.createForStore(storeId, couponInput(code = "  new20  "))
+
+        assertEquals("NEW20", result.code)
+        assertEquals(storeId, slot.captured.store?.id)
+    }
+
+    @Test
+    fun `createForStore surfaces a duplicate code as a conflict`() {
+        every { couponRepository.save(any()) } throws org.springframework.dao.DataIntegrityViolationException("duplicate key")
+
+        assertThrows(ConflictException::class.java) { service.createForStore(storeId, couponInput()) }
+    }
+
+    @Test
+    fun `updateForStore rejects a coupon belonging to another store`() {
+        val otherStore = mockk<Store> { every { id } returns otherStoreId }
+        val existing = coupon(storeScoped = true).apply { this.store = otherStore }
+        every { couponRepository.findById(existing.id!!) } returns Optional.of(existing)
+        val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns otherSeller
+        every { storeRepository.findById(otherStoreId) } returns Optional.empty()
+
+        assertThrows(NotFoundException::class.java) { service.updateForStore(existing.id!!, couponInput()) }
+    }
+
+    @Test
+    fun `updateForStore applies every input field`() {
+        val existing = coupon(storeScoped = true).apply { this.store = store }
+        every { couponRepository.findById(existing.id!!) } returns Optional.of(existing)
+        every { couponRepository.save(any()) } answers { firstArg() }
+
+        val result = service.updateForStore(existing.id!!, couponInput(code = "UPDATED"))
+
+        assertEquals("UPDATED", result.code)
+        assertEquals(20, result.discountValue)
+    }
+
+    @Test
+    fun `deleteForStore removes the owner's own coupon`() {
+        val existing = coupon(storeScoped = true).apply { this.store = store }
+        every { couponRepository.findById(existing.id!!) } returns Optional.of(existing)
+        every { couponRepository.delete(existing) } returns Unit
+
+        service.deleteForStore(existing.id!!)
+
+        verify { couponRepository.delete(existing) }
+    }
+
+    @Test
+    fun `listForStore rejects a non-owning seller`() {
+        val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns otherSeller
+
+        assertThrows(ForbiddenException::class.java) { service.listForStore(storeId) }
+    }
+
+    // ---- admin-scoped (platform-wide) ----
+
+    @Test
+    fun `createPlatformWide requires an admin`() {
+        every { currentActor.requireAdmin() } returns mockk()
+        every { couponRepository.save(any()) } answers {
+            (firstArg() as Coupon).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        }
+
+        val result = service.createPlatformWide(couponInput())
+
+        assertEquals(null, result.storeId)
+        verify { currentActor.requireAdmin() }
+    }
+
+    @Test
+    fun `updatePlatformWide rejects a store-scoped coupon`() {
+        every { currentActor.requireAdmin() } returns mockk()
+        val storeScoped = coupon(storeScoped = true).apply { this.store = store }
+        every { couponRepository.findById(storeScoped.id!!) } returns Optional.of(storeScoped)
+
+        assertThrows(NotFoundException::class.java) { service.updatePlatformWide(storeScoped.id!!, couponInput()) }
+    }
+
+    @Test
+    fun `updatePlatformWide updates a genuinely platform-wide coupon`() {
+        every { currentActor.requireAdmin() } returns mockk()
+        val platformWide = coupon(storeScoped = false)
+        every { couponRepository.findById(platformWide.id!!) } returns Optional.of(platformWide)
+        every { couponRepository.save(any()) } answers { firstArg() }
+
+        val result = service.updatePlatformWide(platformWide.id!!, couponInput(code = "PLATFORM20"))
+
+        assertEquals("PLATFORM20", result.code)
+    }
+
+    @Test
+    fun `deletePlatformWide rejects a store-scoped coupon`() {
+        every { currentActor.requireAdmin() } returns mockk()
+        val storeScoped = coupon(storeScoped = true).apply { this.store = store }
+        every { couponRepository.findById(storeScoped.id!!) } returns Optional.of(storeScoped)
+
+        assertThrows(NotFoundException::class.java) { service.deletePlatformWide(storeScoped.id!!) }
+    }
+
+    @Test
+    fun `listPlatformWide returns only coupons with no owning store`() {
+        every { couponRepository.findByStoreIdIsNullOrderByCreatedAtDesc() } returns listOf(coupon(storeScoped = false))
+        assertEquals(1, service.listPlatformWide().size)
+    }
+
+    // ---- recordUse ----
+
+    @Test
+    fun `recordUse increments the coupon's used count`() {
+        val existing = coupon(usedCount = 2)
+        every { couponRepository.findById(existing.id!!) } returns Optional.of(existing)
+        every { couponRepository.save(existing) } returns existing
+
+        service.recordUse(existing.id!!)
+
+        assertEquals(3, existing.usedCount)
+    }
+
+    @Test
+    fun `recordUse throws for a missing coupon`() {
+        val id = UUID.randomUUID()
+        every { couponRepository.findById(id) } returns Optional.empty()
+        assertThrows(NotFoundException::class.java) { service.recordUse(id) }
     }
 }

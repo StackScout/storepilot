@@ -32,6 +32,7 @@ import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import org.slf4j.LoggerFactory
 import org.springframework.boot.CommandLineRunner
+import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -90,8 +91,21 @@ private data class SeedProduct(
 
 /**
  * Translates demo marketplace content into real rows on first boot (only runs
- * against an empty `stores` table, so it's safe to leave enabled — restarts
- * against an already-seeded database are a no-op).
+ * against an empty `stores` table, so it's safe to leave enabled in a local/dev
+ * profile — restarts against an already-seeded database are a no-op).
+ *
+ * `@Profile("!aws")` is the real safety net, not the row-count check above —
+ * the row-count guard only protects against re-seeding an *already-seeded*
+ * database; it does nothing to stop this from populating a fresh *production*
+ * database with fake demo content (fictional stores, ABNs, bank details, a
+ * `test-seller@storepilot.test` Cognito binding) on its very first boot. This
+ * mirrors every other local-only `@Component` in this codebase (e.g.
+ * LoggingEmailService/LocalFileStorageService vs their `@Profile("aws")`
+ * counterparts) — demo seeding simply has no production counterpart to pair
+ * with, so it's disabled outright under the `aws` profile instead. The single
+ * genuinely production-needed seed step (the `platform_settings` bootstrap
+ * row) is deliberately NOT part of this class — see PlatformSettingsSeeder,
+ * which runs in every profile.
  *
  * Demo content is Australian — AU is the near-term deployment target while
  * the Sri Lanka launch sits on hold pending business registration (see
@@ -113,6 +127,7 @@ private data class SeedProduct(
  * where each entity is constructed, not here.
  */
 @Component
+@Profile("!aws")
 class DataSeeder(
     private val storeRepository: StoreRepository,
     private val storeSettingsRepository: StoreSettingsRepository,
@@ -124,14 +139,11 @@ class DataSeeder(
     private val sellerRepository: SellerRepository,
     private val jdbcTemplate: JdbcTemplate,
     private val platformProperties: PlatformProperties,
-    private val platformSettingsRepository: PlatformSettingsRepository,
 ) : CommandLineRunner {
     private val log = LoggerFactory.getLogger(DataSeeder::class.java)
 
     @Transactional
     override fun run(vararg args: String) {
-        seedPlatformSettingsIfMissing()
-
         if (storeRepository.count() > 0) {
             log.info("Seed skipped — stores table already has data.")
             return
@@ -152,39 +164,6 @@ class DataSeeder(
             productIds.size,
             orderIds.size,
         )
-    }
-
-    /**
-     * The single platform_settings row — inserted once from PlatformProperties'
-     * bootstrap env-var values (see its doc comment); a no-op on every later
-     * boot. This is what makes the DB (not application.yml) the running
-     * app's actual config source, and what an operator would edit directly
-     * to reconfigure a deployment without rebuilding/redeploying.
-     */
-    private fun seedPlatformSettingsIfMissing() {
-        if (platformSettingsRepository.count() > 0) return
-        platformSettingsRepository.save(
-            PlatformSettings(
-                name = platformProperties.name,
-                tagline = platformProperties.tagline,
-                countryName = platformProperties.countryName,
-                countryCode = platformProperties.countryCode,
-                currencyCode = platformProperties.currencyCode,
-                currencySymbol = platformProperties.currencySymbol,
-                currencyLocale = platformProperties.currencyLocale,
-                platformFeePercent = platformProperties.platformFeePercent,
-                flatShippingFee = platformProperties.flatShippingFee,
-                proMonthlyPriceCents = platformProperties.proMonthlyPriceCents,
-                defaultCodEnabled = platformProperties.defaultCodEnabled,
-                defaultOnlinePaymentEnabled = platformProperties.defaultOnlinePaymentEnabled,
-                defaultBankTransferEnabled = platformProperties.defaultBankTransferEnabled,
-                supportEmail = platformProperties.supportEmail,
-                companyLocation = platformProperties.companyLocation,
-                timezone = platformProperties.timezone,
-                returnWindowDays = platformProperties.returnWindowDays,
-            ),
-        )
-        log.info("Seeded platform_settings from bootstrap PlatformProperties (name={}).", platformProperties.name)
     }
 
     /**

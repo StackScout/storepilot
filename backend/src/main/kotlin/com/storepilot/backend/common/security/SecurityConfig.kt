@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.configurers.AuthorizeH
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.security.web.SecurityFilterChain
 
 /**
@@ -32,6 +33,7 @@ import org.springframework.security.web.SecurityFilterChain
 @EnableWebSecurity
 class SecurityConfig(
     private val endpointPermissionsProperties: EndpointPermissionsProperties,
+    private val rateLimitFilter: RateLimitFilter,
 ) {
     @Bean
     fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
@@ -72,6 +74,10 @@ class SecurityConfig(
                     .bearerTokenResolver(CookieBearerTokenResolver())
                     .jwt { jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter) }
             }
+            // Ahead of bearer-token resolution so it also throttles PUBLIC/
+            // permitAll endpoints (login, register, guest-lookup) — see
+            // RateLimitFilter's doc comment.
+            .addFilterBefore(rateLimitFilter, BearerTokenAuthenticationFilter::class.java)
         return http.build()
     }
 

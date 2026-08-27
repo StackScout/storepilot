@@ -1,15 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import * as Notifications from 'expo-notifications';
-import { DarkTheme, DefaultTheme, type Href, router, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, type Href, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AppState, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-import { LoginScreen } from '@/components/login-screen';
+import { BiometricLockScreen } from '@/components/biometric-lock-screen';
 import { queryClient } from '@/lib/query-client';
-import { syncPushToken } from '@/lib/push-notifications';
+import { NotificationsApi, syncPushToken } from '@/lib/push-notifications';
 import { useAuthStore } from '@/store/auth-store';
 
 SplashScreen.preventAutoHideAsync();
@@ -37,9 +35,9 @@ function routeForNotification(data: Record<string, unknown>): Href | null {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const isHydrated = useAuthStore((s) => s.isHydrated);
-  const isSignedIn = useAuthStore((s) => s.isSignedIn);
   const hydrate = useAuthStore((s) => s.hydrate);
+  const isHydrated = useAuthStore((s) => s.isHydrated);
+  const isLocked = useAuthStore((s) => s.isLocked);
 
   useEffect(() => {
     hydrate();
@@ -47,18 +45,27 @@ export default function RootLayout() {
 
   // Re-registers on every foreground (not just sign-in) — a token can go
   // stale (app reinstall, OS-level rotation) and this is the cheapest way
-  // to keep it fresh without a dedicated background task.
+  // to keep it fresh without a dedicated background task. Backgrounding
+  // re-locks immediately (no grace period) whenever the biometric
+  // preference is on — lock() itself is a no-op otherwise.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && useAuthStore.getState().isSignedIn) {
         void syncPushToken();
+      } else if (state === 'background') {
+        useAuthStore.getState().lock();
       }
     });
     return () => subscription.remove();
   }, []);
 
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    // Same Expo-Go-on-Android restriction as push-notifications.ts — this
+    // listener is meaningless there anyway (no remote pushes to tap), and
+    // expo-notifications isn't even loaded (NotificationsApi is null) in
+    // that environment.
+    if (!NotificationsApi) return;
+    const subscription = NotificationsApi.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
       const route = routeForNotification(data);
       if (route) router.push(route);
@@ -70,8 +77,13 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AnimatedSplashOverlay />
-        {/* Hold the previous splash overlay up until auth state is known, so we never flash the login screen for an already-signed-in seller. */}
-        {isHydrated ? isSignedIn ? <AppTabs /> : <LoginScreen /> : null}
+        {/* `stores` is a sibling of the tab group, not nested inside it, so it presents as a full-screen stack push layered over the tab bar — Native Tabs only makes routes navigable when they live inside a trigger's own directory tree, and store/product/service detail pages are reached from both the Home and Search tabs, so they can't belong to just one. */}
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="stores" />
+        </Stack>
+        {/* Drawn as an overlay (like AnimatedSplashOverlay above), never swapped in for the Stack — unmounting the whole navigator on every lock/unlock caused "state update on a component that hasn't mounted yet" from its in-flight async init, and would also reset in-app navigation state on every background/foreground cycle. */}
+        {isHydrated && isLocked ? <BiometricLockScreen /> : null}
       </ThemeProvider>
     </QueryClientProvider>
   );

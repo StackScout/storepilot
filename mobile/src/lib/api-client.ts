@@ -93,6 +93,26 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return parseBody<T>(res);
 }
 
+/** Prefixes a backend-relative path (e.g. a stored image path) with the API base URL — mirrors the web app's toApiUrl. */
+export function toApiUrl(path: string): string {
+  return `${BASE_URL}${path}`;
+}
+
+/** Safe to call on a value that might already be absolute — product images can be either a backend-relative path (FileStorageService, local dev) or an already-full URL (S3 presigned, or a picsum.photos seed placeholder). Mirrors the web app's resolveAssetUrl. */
+export function resolveAssetUrl(url: string): string {
+  return url.startsWith('http') ? url : toApiUrl(url);
+}
+
+/** Builds a query string from an object, skipping undefined/empty values — mirrors the web app's toQueryString. */
+export function toQueryString(params: Record<string, string | number | undefined>): string {
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') usp.set(key, String(value));
+  }
+  const qs = usp.toString();
+  return qs ? `?${qs}` : '';
+}
+
 /** For multipart/form-data requests (product/image uploads) — the browser/RN runtime sets the correct boundary header itself, so Content-Type must NOT be set manually here. */
 export async function apiFetchForm<T>(path: string, form: FormData, method: 'POST' | 'PATCH' = 'POST'): Promise<T> {
   const doFetch = async (): Promise<Response> => {

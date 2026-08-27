@@ -17,7 +17,24 @@
       "Bash(mv src/hooks/use-seller-store.ts src/hooks/use-seller-store.tsx)",
       "Bash(xargs -I{} echo {})",
       "Bash(xargs -I{} wc -l {})",
-      "Bash(aws cognito-idp *)"
+      "Bash(aws cognito-idp *)",
+      "Bash(./gradlew compileKotlin --console=plain)",
+      "Bash(grep -v -E '^\\\\S+:[0-9]+:\\\\s*\\(/\\\\*\\\\*|\\\\* /\\\\*\\\\*\\)\\\\s*$')",
+      "Bash(grep -v '^\\\\S+:[0-9]+: */\\\\*\\\\* [^/]*\\\\*/$')",
+      "Bash(./gradlew compileTestKotlin --console=plain)",
+      "Bash(./gradlew test *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(lsof -i :8080 -sTCP:LISTEN)",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(lsof -i :5433 -sTCP:LISTEN)",
+      "Bash(kill 2663)",
+      "Bash(AWS_PROFILE=storepilot-dev SPRING_PROFILES_ACTIVE=local nohup ./gradlew bootRun)",
+      "Bash(echo \"started with PID $!\")",
+      "Bash(PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d storepilot -t -c \"select id, order_number, status, payment_method, payment_status from orders where order_number = 'AU-20260715-1004';\")",
+      "Bash(PGPASSWORD= psql -h localhost -p 5433 -U storepilot -d storepilot -t -c \"select id, order_number, status, payment_method, payment_status from orders where order_number = 'AU-20260715-1004';\")",
+      "Bash(curl -s http://localhost:8080/api/orders/498b8f9d-56ed-4527-b982-b3cc6b7c7932/returns)",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }

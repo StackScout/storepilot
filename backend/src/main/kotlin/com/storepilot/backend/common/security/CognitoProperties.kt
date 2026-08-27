@@ -22,4 +22,6 @@ data class CognitoProperties(
     val oauthClientId: String = "",
     val oauthClientSecret: String = "",
     val oauthRedirectUri: String = "http://localhost:8080/api/auth/google/callback",
+    /** The mobile app's own URL scheme (app.json's "scheme") — googleCallback redirects here with tokens as query params for a platform=mobile sign-in, since mobile has no cookie jar to land tokens in. */
+    val mobileAppScheme: String = "storepilot-seller",
 )

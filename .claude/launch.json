@@ -10,6 +10,15 @@
         "/Users/nilangavirajith/Documents/Projects/Claude Workspace/app"
       ],
       "port": 3000
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd \"/Users/nilangavirajith/Documents/Projects/Claude Workspace/mobile\" && npx expo start --web --port 8082"
+      ],
+      "port": 8082
     }
   ]
 }

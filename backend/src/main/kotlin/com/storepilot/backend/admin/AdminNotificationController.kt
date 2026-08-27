@@ -1,8 +1,10 @@
 package com.storepilot.backend.admin
 
+import com.storepilot.backend.common.PageResponse
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -12,7 +14,10 @@ class AdminNotificationController(
     private val adminNotificationService: AdminNotificationService,
 ) {
     @GetMapping("/api/admin/notifications")
-    fun list(): List<AdminNotificationResponse> = adminNotificationService.list()
+    fun list(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<AdminNotificationResponse> = adminNotificationService.list(page, size)
 
     @GetMapping("/api/admin/notifications/summary")
     fun summary(): AdminNotificationSummaryResponse = adminNotificationService.summary()

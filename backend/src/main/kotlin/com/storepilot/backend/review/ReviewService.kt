@@ -5,14 +5,20 @@ import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.order.OrderStatus
 import com.storepilot.backend.product.ProductRepository
 import com.storepilot.backend.store.StoreRepository
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 @Service
 @Transactional(readOnly = true)
@@ -24,11 +30,15 @@ class ReviewService(
     private val bookingRepository: BookingRepository,
     private val currentActor: CurrentActor,
 ) {
-    fun listByProduct(productId: UUID): List<ReviewResponse> =
-        reviewRepository.findByProductIdOrderByCreatedAtDesc(productId).map { it.toResponse() }
+    fun listByProduct(productId: UUID, page: Int, size: Int): PageResponse<ReviewResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return reviewRepository.findByProductIdOrderByCreatedAtDesc(productId, pageable).toPageResponse { it.toResponse() }
+    }
 
-    fun listByStore(storeId: UUID): List<ReviewResponse> =
-        reviewRepository.findByStoreIdAndProductIdIsNullOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<ReviewResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return reviewRepository.findByStoreIdAndProductIdIsNullOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
+    }
 
     /**
      * "Verified purchase" for a product means the reviewing buyer has a

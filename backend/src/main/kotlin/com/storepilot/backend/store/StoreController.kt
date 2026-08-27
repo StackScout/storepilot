@@ -131,7 +131,11 @@ class StoreController(
     fun closeStore(@PathVariable storeId: UUID): StoreResponse = storeService.closeStore(storeId)
 
     @GetMapping("/api/admin/stores")
-    fun adminList(@RequestParam status: String?): List<StoreResponse> = storeService.adminList(status)
+    fun adminList(
+        @RequestParam status: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "24") size: Int,
+    ): PageResponse<StoreResponse> = storeService.adminList(status, page, size)
 
     @GetMapping("/api/admin/stores/{storeId}/settings")
     fun adminGetSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {

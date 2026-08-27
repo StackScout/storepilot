@@ -6,16 +6,22 @@ import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import java.time.Instant
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 /**
  * Handles the post-approval verification-change-request workflow (task
@@ -143,14 +149,15 @@ class StoreVerificationChangeRequestService(
 
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
-    fun adminList(status: String?): List<StoreVerificationChangeRequestResponse> {
+    fun adminList(status: String?, page: Int, size: Int): PageResponse<StoreVerificationChangeRequestResponse> {
         val statusEnum = status?.let { wireValueOf<StoreVerificationChangeRequestStatus>(it) }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         val requests = if (statusEnum != null) {
-            changeRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum)
+            changeRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum, pageable)
         } else {
-            changeRequestRepository.findAllByOrderByCreatedAtDesc()
+            changeRequestRepository.findAllByOrderByCreatedAtDesc(pageable)
         }
-        return requests.map { it.toResponse(storeSettingsRepository.findById(requireNotNull(it.store.id)).orElse(null), fileStorageService) }
+        return requests.toPageResponse { it.toResponse(storeSettingsRepository.findById(requireNotNull(it.store.id)).orElse(null), fileStorageService) }
     }
 
     /** Applies every proposed field/document onto the real StoreSettings row, then closes the request. */

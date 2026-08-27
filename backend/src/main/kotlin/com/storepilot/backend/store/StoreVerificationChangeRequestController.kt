@@ -1,5 +1,6 @@
 package com.storepilot.backend.store
 
+import com.storepilot.backend.common.PageResponse
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -36,7 +37,11 @@ class StoreVerificationChangeRequestController(
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
     @GetMapping("/api/admin/verification-change-requests")
-    fun adminList(@RequestParam status: String?): List<StoreVerificationChangeRequestResponse> = changeRequestService.adminList(status)
+    fun adminList(
+        @RequestParam status: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<StoreVerificationChangeRequestResponse> = changeRequestService.adminList(status, page, size)
 
     @PostMapping("/api/admin/verification-change-requests/{id}/approve")
     fun adminApprove(@PathVariable id: UUID): StoreSettingsResponse = changeRequestService.adminApprove(id)

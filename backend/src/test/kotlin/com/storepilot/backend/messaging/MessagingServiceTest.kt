@@ -162,7 +162,7 @@ class MessagingServiceTest {
         every { currentActor.requireSeller() } returns otherSeller
 
         assertThrows(com.storepilot.backend.common.ForbiddenException::class.java) {
-            service.listStoreConversations(storeId)
+            service.listStoreConversations(storeId, 0, 20)
         }
     }
 }

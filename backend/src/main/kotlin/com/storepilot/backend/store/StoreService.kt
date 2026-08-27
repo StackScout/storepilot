@@ -575,13 +575,12 @@ class StoreService(
 
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
-    fun adminList(status: String?): List<StoreResponse> {
-        val results = if (status != null) {
-            storeRepository.findByVerificationStatus(wireValueOf(status))
-        } else {
-            storeRepository.findAll()
-        }
-        return results.sortedByDescending { it.createdAt }.map { it.toResponse(fileStorageService) }
+    fun adminList(status: String?, page: Int, size: Int): PageResponse<StoreResponse> {
+        val statusEnum = status?.let { wireValueOf<StoreVerificationStatus>(it) }
+        val spec = statusEnum?.let { s -> Specification<Store> { root, _, cb -> cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), s) } }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE), Sort.by("createdAt").descending())
+        val results = if (spec != null) storeRepository.findAll(spec, pageable) else storeRepository.findAll(pageable)
+        return results.toPageResponse { it.toResponse(fileStorageService) }
     }
 
     /**

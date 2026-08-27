@@ -87,6 +87,9 @@ endpoint-permissions:
     - method: GET
       path: "/api/states"
       access: PUBLIC
+    - method: GET
+      path: "/api/categories"
+      access: PUBLIC
 
     # Public ABR register data (see AbnLookupController) — used by the
     # onboarding form (no session yet) and by /admin (already authenticated,

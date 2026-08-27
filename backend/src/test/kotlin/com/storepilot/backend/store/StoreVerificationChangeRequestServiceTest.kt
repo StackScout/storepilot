@@ -58,7 +58,7 @@ class StoreVerificationChangeRequestServiceTest {
             name = "Test Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,

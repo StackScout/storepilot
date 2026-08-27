@@ -1,14 +1,15 @@
 package com.storepilot.backend.booking
 
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.requireCategory
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.store.Store
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +27,7 @@ class BookableServiceService(
     private val storeRepository: StoreRepository,
     private val currentActor: CurrentActor,
     private val fileStorageService: FileStorageService,
+    private val categoryRepository: CategoryRepository,
 ) {
     fun getById(id: UUID): BookableServiceResponse {
         val service = serviceRepository.findById(id).orElseThrow { NotFoundException("Service $id not found") }
@@ -55,7 +57,7 @@ class BookableServiceService(
     fun create(storeId: UUID, input: BookableServiceFormInput, images: List<MultipartFile>): BookableServiceResponse {
         val store = requireStore(storeId)
         requireOwnership(store)
-        val category = wireValueOf<StoreCategory>(input.category)
+        val category = categoryRepository.requireCategory(input.category)
         requireCategoryMatchesStore(store, category)
         val service = BookableService(
             store = store,
@@ -77,7 +79,7 @@ class BookableServiceService(
     fun update(id: UUID, input: BookableServiceFormInput, images: List<MultipartFile>): BookableServiceResponse {
         val service = serviceRepository.findById(id).orElseThrow { NotFoundException("Service $id not found") }
         requireOwnership(service.store)
-        val category = wireValueOf<StoreCategory>(input.category)
+        val category = categoryRepository.requireCategory(input.category)
         requireCategoryMatchesStore(service.store, category)
         service.name = input.name
         service.description = input.description
@@ -125,9 +127,9 @@ class BookableServiceService(
     }
 
     /** A service's category is locked to the store's own approved category — identical rule to ProductService. */
-    private fun requireCategoryMatchesStore(store: Store, category: StoreCategory) {
+    private fun requireCategoryMatchesStore(store: Store, category: String) {
         if (category != store.category) {
-            throw ConflictException("Services must be listed under this store's category (${store.category.wireValue})")
+            throw ConflictException("Services must be listed under this store's category (${store.category})")
         }
     }
 

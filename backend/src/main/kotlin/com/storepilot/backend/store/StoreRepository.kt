@@ -10,6 +10,9 @@ interface StoreRepository : JpaRepository<Store, UUID>, JpaSpecificationExecutor
     fun findByVerificationStatus(status: StoreVerificationStatus): List<Store>
 
     fun findBySellerId(sellerId: UUID): Store?
+
+    /** Guards CategoryController's delete — see its doc comment. */
+    fun existsByCategory(category: String): Boolean
 }
 
 interface StoreSettingsRepository : JpaRepository<StoreSettings, UUID> {

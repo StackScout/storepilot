@@ -13,4 +13,7 @@ interface BookableServiceRepository : JpaRepository<BookableService, UUID> {
 
     /** Used by store-page-content to decide whether the Services section has anything to show — see docs/features/bookings.md's derived-3-mode-UI rule. */
     fun existsByStoreIdAndStatus(storeId: UUID, status: ServiceStatus): Boolean
+
+    /** Guards CategoryController's delete — see its doc comment. */
+    fun existsByCategory(category: String): Boolean
 }

@@ -1,5 +1,6 @@
 package com.storepilot.backend.product
 
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.security.CurrentActor
@@ -7,7 +8,6 @@ import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.store.StoreVerificationStatus
@@ -28,8 +28,9 @@ class ProductServiceTest {
     private val currentActor = mockk<CurrentActor>()
     private val fileStorageService = mockk<FileStorageService>(relaxed = true)
     private val wishlistItemRepository = mockk<WishlistItemRepository>()
+    private val categoryRepository = mockk<CategoryRepository>()
 
-    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService, wishlistItemRepository)
+    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService, wishlistItemRepository, categoryRepository)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -44,7 +45,7 @@ class ProductServiceTest {
             name = "Handicrafts Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -53,6 +54,7 @@ class ProductServiceTest {
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
         every { productRepository.findByStoreIdAndSlug(storeId, any()) } returns null
+        every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
     private fun formInput(category: String) = ProductFormInput(
@@ -109,7 +111,7 @@ class ProductServiceTest {
             name = "Existing",
             slug = "existing",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             price = 500,
             stockQuantity = 1,
             status = ProductStatus.ACTIVE,

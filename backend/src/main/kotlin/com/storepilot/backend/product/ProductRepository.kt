@@ -32,6 +32,9 @@ interface ProductRepository : JpaRepository<Product, UUID>, JpaSpecificationExec
     /** Case-insensitive — see ProductService's duplicate-SKU check. Blank/null SKUs are never passed in, so no products-without-a-SKU false positive. */
     fun findByStoreIdAndSkuIgnoreCase(storeId: UUID, sku: String): Product?
 
+    /** Guards CategoryController's delete — see its doc comment. */
+    fun existsByCategory(category: String): Boolean
+
     /**
      * Tracked-stock, active products that have dropped to/below [threshold]
      * but aren't fully out of stock (that's already visible via status) and

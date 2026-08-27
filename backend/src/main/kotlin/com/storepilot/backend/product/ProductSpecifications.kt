@@ -1,7 +1,6 @@
 package com.storepilot.backend.product
 
 import com.storepilot.backend.store.Store
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreVerificationStatus
 import org.springframework.data.jpa.domain.Specification
 
@@ -38,9 +37,9 @@ object ProductSpecifications {
     fun notDraft(): Specification<Product> =
         Specification { root, _, cb -> cb.notEqual(root.get<ProductStatus>("status"), ProductStatus.DRAFT) }
 
-    fun hasCategory(category: StoreCategory?): Specification<Product> =
+    fun hasCategory(category: String?): Specification<Product> =
         Specification { root, _, cb ->
-            if (category == null) null else cb.equal(root.get<StoreCategory>("category"), category)
+            if (category == null) null else cb.equal(root.get<String>("category"), category)
         }
 
     fun priceBetween(minPrice: Int?, maxPrice: Int?): Specification<Product> =

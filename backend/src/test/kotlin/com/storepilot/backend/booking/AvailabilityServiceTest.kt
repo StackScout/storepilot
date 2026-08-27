@@ -6,7 +6,6 @@ import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -61,7 +60,7 @@ class AvailabilityServiceTest {
             name = "Test Salon",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.BEAUTY,
+            category = "beauty",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
         ).apply { id = storeId }
@@ -70,7 +69,7 @@ class AvailabilityServiceTest {
             name = "Haircut",
             slug = "haircut",
             description = "A haircut",
-            category = StoreCategory.BEAUTY,
+            category = "beauty",
             price = 5000,
             durationMinutes = 60,
             status = ServiceStatus.ACTIVE,

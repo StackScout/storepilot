@@ -13,7 +13,7 @@ fun BookableService.toResponse(fileStorageService: FileStorageService): Bookable
         slug = slug,
         description = description,
         images = images.map { BookableServiceImageResponse(requireNotNull(it.id), fileStorageService.resolveUrl(it.url), it.alt) },
-        category = category.wireValue,
+        category = category,
         price = price,
         durationMinutes = durationMinutes,
         bufferMinutes = bufferMinutes,

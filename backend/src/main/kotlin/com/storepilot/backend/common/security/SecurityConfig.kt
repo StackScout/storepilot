@@ -6,6 +6,7 @@ import org.springframework.http.HttpMethod
 import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
@@ -13,8 +14,10 @@ import org.springframework.security.web.SecurityFilterChain
 
 /**
  * Authorization matrix, two layers deep:
- *  1. Coarse, filter-chain-level role gates below (hasRole checks) — "is
- *     this caller a seller/admin at all".
+ *  1. Coarse, filter-chain-level role gates from permissions.yml (hasRole
+ *     checks) — "is this caller a seller/admin at all". See that file's
+ *     header comment for its schema and the first-match-wins ordering
+ *     [applyRule] relies on when it folds `rules` in list order.
  *  2. Fine, service-layer ownership checks via CurrentActor (e.g. "does
  *     this seller own THIS specific store") — Spring's URL matchers can't
  *     express per-resource ownership, only role.
@@ -27,7 +30,9 @@ import org.springframework.security.web.SecurityFilterChain
  */
 @Configuration
 @EnableWebSecurity
-class SecurityConfig {
+class SecurityConfig(
+    private val endpointPermissionsProperties: EndpointPermissionsProperties,
+) {
     @Bean
     fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
         val converter = JwtAuthenticationConverter()
@@ -53,156 +58,13 @@ class SecurityConfig {
                 it.accessDeniedHandler(JsonAccessDeniedHandler())
             }
             .authorizeHttpRequests { auth ->
-                auth
-                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/actuator/**").permitAll()
-                    .requestMatchers("/api/auth/**").permitAll()
-                    // Full store settings (bank details, NIC/ABN, contact
-                    // info, verification documents) is owner-only — must be
-                    // matched before the broader GET /api/stores/** permitAll
-                    // below, since Spring Security's authorizeHttpRequests is
-                    // first-match-wins. Buyer-facing checkout/order pages use
-                    // GET /api/stores/*/public-settings instead, which stays
-                    // covered by that broader permitAll rule.
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/settings").hasRole("SELLER")
-                    // Same first-match-wins reasoning — revenue/fee trend
-                    // data isn't public.
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/stats").hasRole("SELLER")
-                    // Reading follow status stays public (permitAll below
-                    // via the broader GET /api/stores/** rule) — only
-                    // toggling it requires a buyer.
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/follow").hasRole("BUYER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/stores/*/follow").hasRole("BUYER")
-                    // Same pattern for wishlisting a product.
-                    .requestMatchers(HttpMethod.POST, "/api/products/*/wishlist").hasRole("BUYER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/products/*/wishlist").hasRole("BUYER")
-                    // Same first-match-wins reasoning as /settings above —
-                    // a seller's own pending verification-change-request
-                    // status is not public.
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/verification-change-requests/current").hasRole("SELLER")
-                    // Public marketplace browsing.
-                    .requestMatchers(HttpMethod.GET, "/api/stores/**", "/api/products/**", "/api/bookable-services/**").permitAll()
-                    // DB-backed platform config + address state/province options
-                    // — the frontend fetches these instead of baking country
-                    // content into NEXT_PUBLIC_* build args (see PlatformConfigController).
-                    .requestMatchers(HttpMethod.GET, "/api/platform-config", "/api/states").permitAll()
-                    // Public ABR register data (see AbnLookupController) —
-                    // used by the onboarding form (no session yet) and by
-                    // /admin (already authenticated, but no extra gate needed).
-                    .requestMatchers(HttpMethod.GET, "/api/abn-lookup/**").permitAll()
-                    // Locally-served uploaded files (product images, receipts,
-                    // seller verification documents under the !aws profile) —
-                    // plain static-asset fetches, not API calls; product
-                    // images specifically must be reachable by anonymous
-                    // marketplace browsing. Under the aws profile this
-                    // handler doesn't exist (S3 presigned URLs instead), so
-                    // this rule is a no-op there.
-                    .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
-                    // Guest checkout — "possession of the order ID (+ phone
-                    // for lookup) is the credential" model; buyerId is
-                    // always derived server-side from CurrentActor, never a
-                    // client-supplied field (see OrderDtos.kt).
-                    .requestMatchers(HttpMethod.POST, "/api/orders").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/orders/*").permitAll()
-                    // Same "order ID is proof enough" model as the GET above — see OrderController.subscribeToEvents.
-                    .requestMatchers(HttpMethod.GET, "/api/orders/*/events").permitAll()
-                    // Guest lookup is now a two-step, code-verified flow —
-                    // see OrderService.requestLookupCode's doc comment —
-                    // rather than a single GET keyed on phone alone.
-                    .requestMatchers(HttpMethod.POST, "/api/orders/lookup/request-code", "/api/orders/lookup/verify").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/orders/*/receipt", "/api/orders/*/cancel", "/api/orders/*/payhere-checkout", "/api/orders/*/stripe-checkout").permitAll()
-                    // Same "order ID is proof enough" model — a buyer
-                    // request and its history are both reachable
-                    // unauthenticated; only the seller-only decision/refund
-                    // actions below are gated.
-                    .requestMatchers(HttpMethod.POST, "/api/orders/*/returns").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/orders/*/returns").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/orders/*/returns/*/decision", "/api/orders/*/returns/*/mark-refunded").hasRole("SELLER")
-                    // Same "booking ID (+ phone for lookup) is the
-                    // credential" guest model as orders above.
-                    .requestMatchers(HttpMethod.POST, "/api/bookings").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/bookings/*").permitAll()
-                    // Same "booking ID is proof enough" model as the GET above — see BookingController.subscribeToEvents.
-                    .requestMatchers(HttpMethod.GET, "/api/bookings/*/events").permitAll()
-                    // Same model again — a recurrence group id is equally unguessable, see BookingController.listByRecurrenceGroup.
-                    .requestMatchers(HttpMethod.GET, "/api/bookings/recurrence/*").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/bookings/lookup/request-code", "/api/bookings/lookup/verify").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/bookings/*/receipt", "/api/bookings/*/cancel", "/api/bookings/*/payhere-checkout", "/api/bookings/*/stripe-checkout").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/payments/payhere/notify").permitAll()
-                    // Signature-verified inside StripeWebhookService, not by auth here — see its doc comment.
-                    .requestMatchers(HttpMethod.POST, "/api/payments/stripe/webhook").permitAll()
-                    // Signature-verified inside SellerBillingWebhookService — see its doc comment.
-                    .requestMatchers(HttpMethod.POST, "/api/billing/stripe/webhook").permitAll()
-                    // Side-effect-free dry run — see CouponService.preview's doc comment.
-                    .requestMatchers(HttpMethod.POST, "/api/coupons/preview").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/coupons").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/coupons").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.PATCH, "/api/coupons/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/coupons/*").hasRole("SELLER")
-                    // /api/conversations/** (get, list messages, send) is
-                    // deliberately left to the anyRequest().authenticated()
-                    // catch-all below — buyer or seller can both be a valid
-                    // participant, and MessagingService.requireParticipant
-                    // is the actual gate (unlike order/booking's public
-                    // "ID is proof enough" model, a conversation is private).
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/conversations").hasRole("BUYER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/conversations").hasRole("SELLER")
-                    // Seller's own store/plan — must come before the broader
-                    // /api/me/** buyer rule below (first-match-wins).
-                    .requestMatchers(HttpMethod.GET, "/api/me/store").hasRole("SELLER")
-                    .requestMatchers("/api/me/seller/**").hasRole("SELLER")
-                    // Buyer's own profile/orders.
-                    .requestMatchers("/api/me/**").hasRole("BUYER")
-                    // Submitting a review requires a buyer account (see
-                    // ReviewService's verified-purchase gate); reading
-                    // reviews stays public under the broader GET
-                    // /api/products/**, /api/stores/** permitAll above.
-                    .requestMatchers(HttpMethod.POST, "/api/products/*/reviews", "/api/stores/*/reviews").hasRole("BUYER")
-                    // Seller onboarding — any authenticated Cognito user;
-                    // this call is what grants ROLE_SELLER (see
-                    // StoreService.create / task "Seller onboarding").
-                    .requestMatchers(HttpMethod.POST, "/api/stores").authenticated()
-                    .requestMatchers(HttpMethod.PATCH, "/api/stores/*/settings", "/api/stores/*/profile").hasRole("SELLER")
-                    .requestMatchers(
-                        HttpMethod.POST,
-                        "/api/stores/*/driver-licence-document",
-                        "/api/stores/*/abn-document",
-                        "/api/stores/*/nic-document",
-                        "/api/stores/*/business-reg-document",
-                        "/api/stores/*/logo",
-                        "/api/stores/*/banner",
-                        "/api/stores/*/verification-change-requests",
-                    ).hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/stripe-connect/onboard", "/api/stores/*/stripe-connect/refresh").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/close").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/products").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.PATCH, "/api/products/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/products/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/bookable-services").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.PATCH, "/api/bookable-services/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/bookable-services/*").hasRole("SELLER")
-                    // /availability (weekly template + exceptions + computed
-                    // slots) is covered by the broader GET /api/stores/**
-                    // permitAll rule above for reads; only the seller-facing
-                    // writes below need gating.
-                    .requestMatchers(HttpMethod.PUT, "/api/stores/*/availability/weekly-rules").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/stores/*/availability/exceptions").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/stores/*/availability/exceptions/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.PUT, "/api/stores/*/bookable-services/*/availability-override").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.DELETE, "/api/stores/*/bookable-services/*/availability-override").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/orders").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/payouts", "/api/stores/*/payouts/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/fee-collections", "/api/stores/*/fee-collections/*").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/returns").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/stripe-settlements").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/orders/*/verify-bank-transfer").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/bookings").hasRole("SELLER")
-                    // Pro-plan gate is enforced inside BookingAnalyticsService, not here — this matcher just documents intent.
-                    .requestMatchers(HttpMethod.GET, "/api/stores/*/booking-analytics").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.PATCH, "/api/bookings/*/status").hasRole("SELLER")
-                    .requestMatchers(HttpMethod.POST, "/api/bookings/*/verify-bank-transfer").hasRole("SELLER")
-                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                endpointPermissionsProperties.rules
+                    .fold(auth) { registry, rule -> applyRule(registry, rule) }
+                    // Everything not matched by a permissions.yml rule above
+                    // (e.g. /api/conversations/** — buyer or seller can both
+                    // be a valid participant, so MessagingService.requireParticipant
+                    // is the actual gate). Not expressible in permissions.yml
+                    // since it's anyRequest(), not a path-pattern rule.
                     .anyRequest().authenticated()
             }
             .oauth2ResourceServer { oauth2 ->
@@ -211,5 +73,38 @@ class SecurityConfig {
                     .jwt { jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter) }
             }
         return http.build()
+    }
+
+    /**
+     * Applies one permissions.yml rule and returns the registry so callers
+     * can keep folding/chaining. Validates against APP_COGNITO_ROLES (the
+     * same set CognitoGroupsAuthoritiesConverter grants authorities from)
+     * rather than a separate hardcoded list here, and against the real
+     * HttpMethod enum — an unrecognized value in either fails application
+     * startup instead of silently misconfiguring auth.
+     */
+    private fun applyRule(
+        registry: AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry,
+        rule: EndpointPermissionRule,
+    ): AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry {
+        val httpMethod =
+            rule.method?.let {
+                runCatching { HttpMethod.valueOf(it) }.getOrElse {
+                    error("permissions.yml: unknown HTTP method '${rule.method}' for path '${rule.path}'")
+                }
+            }
+        val matcher = if (httpMethod != null) registry.requestMatchers(httpMethod, rule.path) else registry.requestMatchers(rule.path)
+        val roles = APP_COGNITO_ROLES.map { it.uppercase() }
+        return when {
+            rule.access == listOf("PUBLIC") -> matcher.permitAll()
+            rule.access == listOf("AUTHENTICATED") -> matcher.authenticated()
+            rule.access.isNotEmpty() && rule.access.all { it in roles } ->
+                if (rule.access.size == 1) matcher.hasRole(rule.access[0]) else matcher.hasAnyRole(*rule.access.toTypedArray())
+            else ->
+                error(
+                    "permissions.yml: invalid access ${rule.access} for ${rule.method ?: "ANY"} ${rule.path} — " +
+                        "must be PUBLIC, AUTHENTICATED, or one or more of $roles (PUBLIC/AUTHENTICATED can't be combined with a role)",
+                )
+        }
     }
 }

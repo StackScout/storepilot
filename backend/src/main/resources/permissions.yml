@@ -1,0 +1,402 @@
+# Endpoint authorization matrix, bound by EndpointPermissionsProperties and
+# applied in SecurityConfig.kt. See that class's doc comment for the
+# two-layer model this is layer 1 of (coarse role gates; layer 2 is
+# service-layer ownership checks via CurrentActor, which no config file can
+# express — e.g. "does this seller own THIS specific store").
+#
+# Rules are matched TOP TO BOTTOM, FIRST MATCH WINS — order is significant,
+# and several rules below exist specifically to shadow a broader rule that
+# follows later. Each rule is:
+#   - method: an HTTP method (GET/POST/PATCH/PUT/DELETE/OPTIONS), or omitted
+#     to match every method
+#   path:   an Ant-style path pattern
+#   access: PUBLIC (permitAll), AUTHENTICATED (any signed-in user), or a
+#     Cognito role name (BUYER/SELLER/ADMIN) for hasRole — validated at
+#     startup against APP_COGNITO_ROLES (AuthController.kt), so a typo here
+#     fails the app on boot rather than silently misconfiguring auth.
+#
+# Whatever isn't matched by any rule below falls through to
+# anyRequest().authenticated() in SecurityConfig.kt itself — that catch-all
+# isn't expressible here since it's not a path-pattern rule.
+endpoint-permissions:
+  rules:
+    - method: OPTIONS
+      path: "/**"
+      access: PUBLIC
+
+    - path: "/actuator/**"
+      access: PUBLIC
+
+    - path: "/api/auth/**"
+      access: PUBLIC
+
+    # Full store settings (bank details, NIC/ABN, contact info, verification
+    # documents) is owner-only — must be matched before the broader GET
+    # /api/stores/** permitAll below, since rules are first-match-wins.
+    # Buyer-facing checkout/order pages use GET /api/stores/*/public-settings
+    # instead, which stays covered by that broader permitAll rule.
+    - method: GET
+      path: "/api/stores/*/settings"
+      access: SELLER
+
+    # Same first-match-wins reasoning — revenue/fee trend data isn't public.
+    - method: GET
+      path: "/api/stores/*/stats"
+      access: SELLER
+
+    # Reading follow status stays public (permitAll below via the broader
+    # GET /api/stores/** rule) — only toggling it requires a buyer.
+    - method: POST
+      path: "/api/stores/*/follow"
+      access: BUYER
+    - method: DELETE
+      path: "/api/stores/*/follow"
+      access: BUYER
+
+    # Same pattern for wishlisting a product.
+    - method: POST
+      path: "/api/products/*/wishlist"
+      access: BUYER
+    - method: DELETE
+      path: "/api/products/*/wishlist"
+      access: BUYER
+
+    # Same first-match-wins reasoning as /settings above — a seller's own
+    # pending verification-change-request status is not public.
+    - method: GET
+      path: "/api/stores/*/verification-change-requests/current"
+      access: SELLER
+
+    # Public marketplace browsing.
+    - method: GET
+      path: "/api/stores/**"
+      access: PUBLIC
+    - method: GET
+      path: "/api/products/**"
+      access: PUBLIC
+    - method: GET
+      path: "/api/bookable-services/**"
+      access: PUBLIC
+
+    # DB-backed platform config + address state/province options — the
+    # frontend fetches these instead of baking country content into
+    # NEXT_PUBLIC_* build args (see PlatformConfigController).
+    - method: GET
+      path: "/api/platform-config"
+      access: PUBLIC
+    - method: GET
+      path: "/api/states"
+      access: PUBLIC
+
+    # Public ABR register data (see AbnLookupController) — used by the
+    # onboarding form (no session yet) and by /admin (already authenticated,
+    # but no extra gate needed).
+    - method: GET
+      path: "/api/abn-lookup/**"
+      access: PUBLIC
+
+    # Locally-served uploaded files (product images, receipts, seller
+    # verification documents under the !aws profile) — plain static-asset
+    # fetches, not API calls; product images specifically must be reachable
+    # by anonymous marketplace browsing. Under the aws profile this handler
+    # doesn't exist (S3 presigned URLs instead), so this rule is a no-op
+    # there.
+    - method: GET
+      path: "/uploads/**"
+      access: PUBLIC
+
+    # Guest checkout — "possession of the order ID (+ phone for lookup) is
+    # the credential" model; buyerId is always derived server-side from
+    # CurrentActor, never a client-supplied field (see OrderDtos.kt).
+    - method: POST
+      path: "/api/orders"
+      access: PUBLIC
+    - method: GET
+      path: "/api/orders/*"
+      access: PUBLIC
+
+    # Same "order ID is proof enough" model as the GET above — see
+    # OrderController.subscribeToEvents.
+    - method: GET
+      path: "/api/orders/*/events"
+      access: PUBLIC
+
+    # Guest lookup is now a two-step, code-verified flow — see
+    # OrderService.requestLookupCode's doc comment — rather than a single
+    # GET keyed on phone alone.
+    - method: POST
+      path: "/api/orders/lookup/request-code"
+      access: PUBLIC
+    - method: POST
+      path: "/api/orders/lookup/verify"
+      access: PUBLIC
+
+    - method: POST
+      path: "/api/orders/*/receipt"
+      access: PUBLIC
+    - method: POST
+      path: "/api/orders/*/cancel"
+      access: PUBLIC
+    - method: POST
+      path: "/api/orders/*/payhere-checkout"
+      access: PUBLIC
+    - method: POST
+      path: "/api/orders/*/stripe-checkout"
+      access: PUBLIC
+
+    # Same "order ID is proof enough" model — a buyer request and its
+    # history are both reachable unauthenticated; only the seller-only
+    # decision/refund actions below are gated.
+    - method: POST
+      path: "/api/orders/*/returns"
+      access: PUBLIC
+    - method: GET
+      path: "/api/orders/*/returns"
+      access: PUBLIC
+    - method: POST
+      path: "/api/orders/*/returns/*/decision"
+      access: SELLER
+    - method: POST
+      path: "/api/orders/*/returns/*/mark-refunded"
+      access: SELLER
+
+    # Same "booking ID (+ phone for lookup) is the credential" guest model
+    # as orders above.
+    - method: POST
+      path: "/api/bookings"
+      access: PUBLIC
+    - method: GET
+      path: "/api/bookings/*"
+      access: PUBLIC
+
+    # Same "booking ID is proof enough" model as the GET above — see
+    # BookingController.subscribeToEvents.
+    - method: GET
+      path: "/api/bookings/*/events"
+      access: PUBLIC
+
+    # Same model again — a recurrence group id is equally unguessable, see
+    # BookingController.listByRecurrenceGroup.
+    - method: GET
+      path: "/api/bookings/recurrence/*"
+      access: PUBLIC
+
+    - method: POST
+      path: "/api/bookings/lookup/request-code"
+      access: PUBLIC
+    - method: POST
+      path: "/api/bookings/lookup/verify"
+      access: PUBLIC
+
+    - method: POST
+      path: "/api/bookings/*/receipt"
+      access: PUBLIC
+    - method: POST
+      path: "/api/bookings/*/cancel"
+      access: PUBLIC
+    - method: POST
+      path: "/api/bookings/*/payhere-checkout"
+      access: PUBLIC
+    - method: POST
+      path: "/api/bookings/*/stripe-checkout"
+      access: PUBLIC
+
+    - method: POST
+      path: "/api/payments/payhere/notify"
+      access: PUBLIC
+
+    # Signature-verified inside StripeWebhookService, not by auth here — see its doc comment.
+    - method: POST
+      path: "/api/payments/stripe/webhook"
+      access: PUBLIC
+
+    # Signature-verified inside SellerBillingWebhookService — see its doc comment.
+    - method: POST
+      path: "/api/billing/stripe/webhook"
+      access: PUBLIC
+
+    # Side-effect-free dry run — see CouponService.preview's doc comment.
+    - method: POST
+      path: "/api/coupons/preview"
+      access: PUBLIC
+
+    - method: GET
+      path: "/api/stores/*/coupons"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/coupons"
+      access: SELLER
+    - method: PATCH
+      path: "/api/coupons/*"
+      access: SELLER
+    - method: DELETE
+      path: "/api/coupons/*"
+      access: SELLER
+
+    # /api/conversations/** (get, list messages, send) is deliberately left
+    # to the anyRequest().authenticated() catch-all in SecurityConfig.kt —
+    # buyer or seller can both be a valid participant, and
+    # MessagingService.requireParticipant is the actual gate (unlike
+    # order/booking's public "ID is proof enough" model, a conversation is
+    # private).
+    - method: POST
+      path: "/api/stores/*/conversations"
+      access: BUYER
+    - method: GET
+      path: "/api/stores/*/conversations"
+      access: SELLER
+
+    # Seller's own store/plan — must come before the broader /api/me/**
+    # buyer rule below (first-match-wins).
+    - method: GET
+      path: "/api/me/store"
+      access: SELLER
+    - path: "/api/me/seller/**"
+      access: SELLER
+
+    # Buyer's own profile/orders.
+    - path: "/api/me/**"
+      access: BUYER
+
+    # Submitting a review requires a buyer account (see ReviewService's
+    # verified-purchase gate); reading reviews stays public under the
+    # broader GET /api/products/**, /api/stores/** permitAll above.
+    - method: POST
+      path: "/api/products/*/reviews"
+      access: BUYER
+    - method: POST
+      path: "/api/stores/*/reviews"
+      access: BUYER
+
+    # Seller onboarding — any authenticated Cognito user; this call is what
+    # grants ROLE_SELLER (see StoreService.create / task "Seller onboarding").
+    - method: POST
+      path: "/api/stores"
+      access: AUTHENTICATED
+
+    - method: PATCH
+      path: "/api/stores/*/settings"
+      access: SELLER
+    - method: PATCH
+      path: "/api/stores/*/profile"
+      access: SELLER
+
+    - method: POST
+      path: "/api/stores/*/driver-licence-document"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/abn-document"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/nic-document"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/business-reg-document"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/logo"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/banner"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/verification-change-requests"
+      access: SELLER
+
+    - method: POST
+      path: "/api/stores/*/stripe-connect/onboard"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/stripe-connect/refresh"
+      access: SELLER
+
+    - method: POST
+      path: "/api/stores/*/close"
+      access: SELLER
+
+    - method: POST
+      path: "/api/stores/*/products"
+      access: SELLER
+    - method: PATCH
+      path: "/api/products/*"
+      access: SELLER
+    - method: DELETE
+      path: "/api/products/*"
+      access: SELLER
+
+    - method: POST
+      path: "/api/stores/*/bookable-services"
+      access: SELLER
+    - method: PATCH
+      path: "/api/bookable-services/*"
+      access: SELLER
+    - method: DELETE
+      path: "/api/bookable-services/*"
+      access: SELLER
+
+    # /availability (weekly template + exceptions + computed slots) is
+    # covered by the broader GET /api/stores/** permitAll rule above for
+    # reads; only the seller-facing writes below need gating.
+    - method: PUT
+      path: "/api/stores/*/availability/weekly-rules"
+      access: SELLER
+    - method: POST
+      path: "/api/stores/*/availability/exceptions"
+      access: SELLER
+    - method: DELETE
+      path: "/api/stores/*/availability/exceptions/*"
+      access: SELLER
+    - method: PUT
+      path: "/api/stores/*/bookable-services/*/availability-override"
+      access: SELLER
+    - method: DELETE
+      path: "/api/stores/*/bookable-services/*/availability-override"
+      access: SELLER
+
+    - method: GET
+      path: "/api/stores/*/orders"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/payouts"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/payouts/*"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/fee-collections"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/fee-collections/*"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/returns"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/stripe-settlements"
+      access: SELLER
+
+    - method: PATCH
+      path: "/api/orders/*/status"
+      access: SELLER
+    - method: POST
+      path: "/api/orders/*/verify-bank-transfer"
+      access: SELLER
+
+    - method: GET
+      path: "/api/stores/*/bookings"
+      access: SELLER
+
+    # Pro-plan gate is enforced inside BookingAnalyticsService, not here — this rule just documents intent.
+    - method: GET
+      path: "/api/stores/*/booking-analytics"
+      access: SELLER
+
+    - method: PATCH
+      path: "/api/bookings/*/status"
+      access: SELLER
+    - method: POST
+      path: "/api/bookings/*/verify-bank-transfer"
+      access: SELLER
+
+    - path: "/api/admin/**"
+      access: ADMIN

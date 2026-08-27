@@ -13,7 +13,7 @@ spring:
   # `docker compose up`. "optional:" means boot doesn't fail when the file
   # is absent.
   config:
-    import: "optional:file:./src/main/resources/config.yml"
+    import: "optional:file:./src/main/resources/config.yml,classpath:permissions.yml"
   application:
     name: backend
   datasource:

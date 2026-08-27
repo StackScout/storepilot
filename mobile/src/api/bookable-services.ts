@@ -1,8 +1,9 @@
 import { apiFetch, apiFetchForm } from '@/lib/api-client';
-import type { BookableServiceResponse } from '@/api/types';
+import type { BookableServiceResponse, PageResponse } from '@/api/types';
 
-export function listStoreServices(storeId: string): Promise<BookableServiceResponse[]> {
-  return apiFetch<BookableServiceResponse[]>(`/api/stores/${storeId}/bookable-services`);
+/** No pagination UI on the seller dashboard yet — size=200 keeps today's "show everything" behavior. */
+export async function listStoreServices(storeId: string): Promise<BookableServiceResponse[]> {
+  return (await apiFetch<PageResponse<BookableServiceResponse>>(`/api/stores/${storeId}/bookable-services?size=200`)).content;
 }
 
 export function getService(id: string): Promise<BookableServiceResponse> {

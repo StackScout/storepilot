@@ -3,12 +3,12 @@ import { type Href, useRouter } from 'expo-router';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { listCategories } from '@/api/categories';
 import { getFeaturedProducts } from '@/api/buyer-products';
 import { listStores } from '@/api/buyer-stores';
 import { ProductTile } from '@/components/product-tile';
 import { StoreTile } from '@/components/store-tile';
 import { ThemedText } from '@/components/themed-text';
-import { CATEGORIES } from '@/constants/categories';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { usePlatformConfig } from '@/lib/platform-config';
@@ -20,6 +20,7 @@ export default function HomeScreen() {
 
   const featuredQuery = useQuery({ queryKey: ['products', 'featured'], queryFn: () => getFeaturedProducts(8) });
   const storesQuery = useQuery({ queryKey: ['stores', 'popular'], queryFn: () => listStores({ size: 6 }) });
+  const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
 
   const isRefreshing = featuredQuery.isFetching || storesQuery.isFetching;
   const onRefresh = () => {
@@ -42,14 +43,14 @@ export default function HomeScreen() {
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={CATEGORIES}
-          keyExtractor={(c) => c.value}
+          data={categoriesQuery.data ?? []}
+          keyExtractor={(c) => c.id}
           contentContainerStyle={styles.categoryRow}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.categoryChip, { borderColor: theme.textSecondary }]}
-              onPress={() => router.push({ pathname: '/search', params: { category: item.value } } as unknown as Href)}>
-              <ThemedText type="small">{item.label}</ThemedText>
+              onPress={() => router.push({ pathname: '/search', params: { category: item.wireValue } } as unknown as Href)}>
+              <ThemedText type="small">{item.name}</ThemedText>
             </TouchableOpacity>
           )}
         />

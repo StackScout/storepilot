@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createProduct } from '@/api/products';
@@ -9,18 +9,20 @@ import { ProductForm, type ProductFormValue } from '@/components/product-form';
 import { ApiError } from '@/lib/api-client';
 import { useTheme } from '@/hooks/use-theme';
 
-const BLANK: ProductFormValue = {
-  name: '',
-  description: '',
-  category: 'home-living',
-  price: 0,
-  compareAtPrice: undefined,
-  stockQuantity: 0,
-  trackStock: true,
-  sku: undefined,
-  status: 'active',
-  newImageUris: [],
-};
+function blankFor(category: string): ProductFormValue {
+  return {
+    name: '',
+    description: '',
+    category,
+    price: 0,
+    compareAtPrice: undefined,
+    stockQuantity: 0,
+    trackStock: true,
+    sku: undefined,
+    status: 'active',
+    newImageUris: [],
+  };
+}
 
 export default function NewProductScreen() {
   const theme = useTheme();
@@ -44,9 +46,22 @@ export default function NewProductScreen() {
     onError: (e) => Alert.alert('Could not create product', e instanceof ApiError ? e.message : e.message),
   });
 
+  if (storeQuery.isLoading || !storeQuery.data) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <ProductForm initial={BLANK} submitLabel="Save product" submitting={createMutation.isPending} onSubmit={(v) => createMutation.mutate(v)} />
+      <ProductForm
+        initial={blankFor(storeQuery.data.category)}
+        submitLabel="Save product"
+        submitting={createMutation.isPending}
+        onSubmit={(v) => createMutation.mutate(v)}
+      />
     </SafeAreaView>
   );
 }

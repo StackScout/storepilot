@@ -1,4 +1,4 @@
-import type { Booking, CancelBookingInput } from '@storepilot/shared-api';
+import type { Booking, CancelBookingInput, PageResponse } from '@storepilot/shared-api';
 
 import { ApiError, apiFetch, apiFetchForm } from '@/lib/api-client';
 
@@ -12,8 +12,8 @@ export async function getBookingById(id: string): Promise<Booking | null> {
 }
 
 /** GET /api/me/bookings — the signed-in buyer's own booking history. */
-export function listMyBookings(): Promise<Booking[]> {
-  return apiFetch<Booking[]>('/api/me/bookings');
+export async function listMyBookings(): Promise<Booking[]> {
+  return (await apiFetch<PageResponse<Booking>>('/api/me/bookings?size=200')).content;
 }
 
 export async function requestBookingLookupCode(bookingNumber: string, phone: string): Promise<void> {

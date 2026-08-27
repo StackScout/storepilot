@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createService } from '@/api/bookable-services';
@@ -9,16 +9,18 @@ import { ServiceForm, type ServiceFormValue } from '@/components/service-form';
 import { ApiError } from '@/lib/api-client';
 import { useTheme } from '@/hooks/use-theme';
 
-const BLANK: ServiceFormValue = {
-  name: '',
-  description: '',
-  category: 'home-living',
-  price: 0,
-  durationMinutes: 30,
-  bufferMinutes: 0,
-  status: 'active',
-  newImageUris: [],
-};
+function blankFor(category: string): ServiceFormValue {
+  return {
+    name: '',
+    description: '',
+    category,
+    price: 0,
+    durationMinutes: 30,
+    bufferMinutes: 0,
+    status: 'active',
+    newImageUris: [],
+  };
+}
 
 export default function NewServiceScreen() {
   const theme = useTheme();
@@ -40,9 +42,22 @@ export default function NewServiceScreen() {
     onError: (e) => Alert.alert('Could not create service', e instanceof ApiError ? e.message : e.message),
   });
 
+  if (storeQuery.isLoading || !storeQuery.data) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <ServiceForm initial={BLANK} submitLabel="Save service" submitting={createMutation.isPending} onSubmit={(v) => createMutation.mutate(v)} />
+      <ServiceForm
+        initial={blankFor(storeQuery.data.category)}
+        submitLabel="Save service"
+        submitting={createMutation.isPending}
+        onSubmit={(v) => createMutation.mutate(v)}
+      />
     </SafeAreaView>
   );
 }

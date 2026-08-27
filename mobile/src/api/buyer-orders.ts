@@ -1,4 +1,4 @@
-import type { Order } from '@storepilot/shared-api';
+import type { Order, PageResponse } from '@storepilot/shared-api';
 
 import { ApiError, apiFetch, apiFetchForm, resolveAssetUrl } from '@/lib/api-client';
 
@@ -21,7 +21,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
 
 /** GET /api/me/orders — the signed-in buyer's own order history. */
 export async function listMyOrders(): Promise<Order[]> {
-  return (await apiFetch<Order[]>('/api/me/orders')).map(normalizeOrder);
+  return (await apiFetch<PageResponse<Order>>('/api/me/orders?size=200')).content.map(normalizeOrder);
 }
 
 export async function requestOrderLookupCode(orderNumber: string, phone: string): Promise<void> {

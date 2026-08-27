@@ -1,15 +1,15 @@
+import { useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
 
+import { listCategories } from '@/api/categories';
 import type { BookableServiceFormInput } from '@/api/bookable-services';
 import type { BookableServiceResponse } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-
-const CATEGORIES = ['fashion', 'food-beverage', 'beauty', 'handicrafts', 'electronics', 'home-living', 'jewelry', 'grocery'] as const;
 
 export type ServiceFormValue = BookableServiceFormInput & { newImageUris: string[] };
 
@@ -27,9 +27,13 @@ export function ServiceForm({
   onSubmit: (value: ServiceFormValue) => void;
 }) {
   const theme = useTheme();
+  const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
+  // A service's category is locked to its store's own approved category —
+  // same rule as ProductForm — so this is a read-only label, not a picker.
+  const categoryLabel = categoriesQuery.data?.find((c) => c.wireValue === initial.category)?.name ?? initial.category;
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description);
-  const [category, setCategory] = useState(initial.category);
+  const category = initial.category;
   const [price, setPrice] = useState(String(initial.price / 100));
   const [durationMinutes, setDurationMinutes] = useState(String(initial.durationMinutes));
   const [bufferMinutes, setBufferMinutes] = useState(String(initial.bufferMinutes));
@@ -103,17 +107,11 @@ export function ServiceForm({
         value={description}
         onChangeText={setDescription}
       />
-      <View style={styles.categoryRow}>
-        {CATEGORIES.map((c) => (
-          <TouchableOpacity
-            key={c}
-            style={[styles.chip, { backgroundColor: c === category ? '#208AEF' : theme.backgroundElement }]}
-            onPress={() => setCategory(c)}>
-            <ThemedText style={c === category ? styles.chipTextActive : undefined} themeColor={c === category ? undefined : 'textSecondary'} type="small">
-              {c}
-            </ThemedText>
-          </TouchableOpacity>
-        ))}
+      <View style={[styles.categoryLocked, { backgroundColor: theme.backgroundElement }]}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Category
+        </ThemedText>
+        <ThemedText type="small">{categoryLabel}</ThemedText>
       </View>
 
       <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
@@ -163,9 +161,7 @@ const styles = StyleSheet.create({
   addImage: { width: 72, height: 72, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   input: { height: 48, borderRadius: 10, paddingHorizontal: Spacing.three, fontSize: 16 },
   multiline: { height: 90, paddingTop: Spacing.two, textAlignVertical: 'top' },
-  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
-  chip: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one, borderRadius: 999 },
-  chipTextActive: { color: '#fff' },
+  categoryLocked: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 10 },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.one },
   submit: { height: 50, borderRadius: 12, backgroundColor: '#208AEF', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.three },
   submitDisabled: { opacity: 0.6 },

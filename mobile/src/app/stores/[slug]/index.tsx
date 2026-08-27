@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { listCategories } from '@/api/categories';
 import { listProductsByStore } from '@/api/buyer-products';
 import { listServicesByStore } from '@/api/buyer-services';
 import { getStoreBySlug } from '@/api/buyer-stores';
@@ -16,7 +17,6 @@ import { ProductTile } from '@/components/product-tile';
 import { ReviewsSection } from '@/components/reviews-section';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { getCategoryLabel } from '@/constants/categories';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, usePlatformConfig } from '@/lib/platform-config';
 import { router, type Href } from 'expo-router';
@@ -40,6 +40,8 @@ export default function StoreScreen() {
 
   const productsQuery = useQuery({ queryKey: ['store', store?.id, 'products'], queryFn: () => listProductsByStore(store!.id), enabled: !!store });
   const servicesQuery = useQuery({ queryKey: ['store', store?.id, 'services'], queryFn: () => listServicesByStore(store!.id), enabled: !!store });
+  const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
+  const categoryLabel = categoriesQuery.data?.find((c) => c.wireValue === store?.category)?.name ?? store?.category;
 
   if (storeQuery.isLoading || !store) {
     return (
@@ -65,7 +67,7 @@ export default function StoreScreen() {
               {store.name}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {getCategoryLabel(store.category)} · {store.address.city}
+              {categoryLabel} · {store.address.city}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               {store.rating.toFixed(1)} ★ ({store.reviewCount}) · {store.productCount} products

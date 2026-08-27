@@ -1,8 +1,9 @@
 import { apiFetch, apiFetchForm } from '@/lib/api-client';
-import type { ProductResponse, ProductStatus } from '@/api/types';
+import type { PageResponse, ProductResponse, ProductStatus } from '@/api/types';
 
-export function listStoreProducts(storeId: string): Promise<ProductResponse[]> {
-  return apiFetch<ProductResponse[]>(`/api/stores/${storeId}/products`);
+/** No pagination UI on the seller dashboard yet — size=200 keeps today's "show everything" behavior. */
+export async function listStoreProducts(storeId: string): Promise<ProductResponse[]> {
+  return (await apiFetch<PageResponse<ProductResponse>>(`/api/stores/${storeId}/products?size=200`)).content;
 }
 
 export function getProduct(id: string): Promise<ProductResponse> {

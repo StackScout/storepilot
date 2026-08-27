@@ -49,7 +49,7 @@ export async function getProductById(id: string): Promise<Product | null> {
 }
 
 export async function listProductsByStore(storeId: string): Promise<Product[]> {
-  return (await apiFetch<Product[]>(`/api/stores/${storeId}/products`, { skipAuth: true })).map(normalizeProduct);
+  return (await apiFetch<PageResponse<Product>>(`/api/stores/${storeId}/products?size=200`, { skipAuth: true })).content.map(normalizeProduct);
 }
 
 /** GET /products/:id/wishlist — public; reports false for a signed-out visitor. */
@@ -69,5 +69,5 @@ export async function removeFromWishlist(productId: string): Promise<void> {
 
 /** GET /me/wishlist — the signed-in buyer's saved products. */
 export async function listMyWishlist(): Promise<Product[]> {
-  return (await apiFetch<Product[]>('/api/me/wishlist')).map(normalizeProduct);
+  return (await apiFetch<PageResponse<Product>>('/api/me/wishlist?size=200')).content.map(normalizeProduct);
 }

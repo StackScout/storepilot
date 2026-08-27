@@ -89,8 +89,8 @@ src/hooks/           Custom hooks: cart, auth session, seller store
                      resolution, live status polling, etc.
 src/lib/             api-client.ts (the one file that talks HTTP to the
                      backend), constants.ts, currency.ts, format.ts,
-                     payhere.ts, platform-config.ts, utils.ts
-src/mock/            Category config only (categories.ts) — no seed data
+                     payhere.ts, platform-config.ts, utils.ts,
+                     query-keys.ts (shared React Query key factory)
 src/services/        REST-shaped async functions calling apiClient (the
                      backend integration boundary)
 src/store/           Zustand stores (cart-store.ts)
@@ -140,10 +140,14 @@ Three deliberately separate mechanisms — don't blur them:
 2. **TanStack Query** — all service-backed data. `staleTime: 30_000`,
    `refetchOnWindowFocus: false` (set once in `src/app/providers.tsx`).
    Call `queryClient.invalidateQueries` on mutation success for every
-   dependent list. There is no shared hooks layer (`useProducts()` etc.)
-   today — query keys are hand-written inline at each call site; keep new
-   ones consistent with existing patterns (e.g. `["products", "store",
-   storeId]`) to avoid cache-key drift.
+   dependent list. Query keys come from the shared factory in
+   `src/lib/query-keys.ts` (`queryKeys.products.byStore(storeId)`, etc.) —
+   add a new entry there instead of hand-writing an inline array literal,
+   so distinct query shapes never collide on the same top-level key. A
+   handful of entities also have thin hook wrappers in `src/hooks/use-*.ts`
+   (e.g. `use-categories.ts`) for the most-duplicated call sites; not every
+   entity needs one — an inline `useQuery` pulling its key from
+   `queryKeys` is still the norm for the rest.
 3. **Local `useState`** — everything else (dialogs, steppers, local form
    UI state not covered by react-hook-form).
 

@@ -8,11 +8,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { timeAgo } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 import { messagingService } from "@/services";
 
 export default function AccountMessagesPage() {
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations", "me"],
+    queryKey: queryKeys.conversations.mine(),
     queryFn: () => messagingService.listMyConversations(),
     refetchInterval: 10000,
   });
@@ -28,7 +29,7 @@ export default function AccountMessagesPage() {
               <TableRowSkeleton columns={1} />
               <TableRowSkeleton columns={1} />
             </div>
-          ) : !conversations || conversations.length === 0 ? (
+          ) : !conversations || conversations.content.length === 0 ? (
             <EmptyState
               icon={Mail}
               title="No conversations yet"
@@ -36,7 +37,7 @@ export default function AccountMessagesPage() {
             />
           ) : (
             <div className="divide-y">
-              {conversations.map((conversation) => (
+              {conversations.content.map((conversation) => (
                 <Link
                   key={conversation.id}
                   href={`/account/messages/${conversation.id}`}

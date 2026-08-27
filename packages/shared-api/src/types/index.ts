@@ -14,3 +14,4 @@ export * from "./seller-plan";
 export * from "./review";
 export * from "./coupon";
 export * from "./messaging";
+export * from "./category";

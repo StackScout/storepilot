@@ -1,5 +1,5 @@
-import { apiClient } from "@/lib/api-client";
-import type { ReturnRequest, ReturnRequestCreateInput } from "@/types";
+import { apiClient, toQueryString } from "@/lib/api-client";
+import type { PageResponse, ReturnRequest, ReturnRequestCreateInput } from "@/types";
 
 /** POST /orders/:orderId/returns — buyer request, reachable unauthenticated (order ID is the credential, same model as receipt upload/cancel). */
 export async function createReturnRequest(orderId: string, input: ReturnRequestCreateInput): Promise<ReturnRequest> {
@@ -30,15 +30,16 @@ export async function markReturnRefundedBySeller(
   return apiClient.post<ReturnRequest>(`/api/orders/${orderId}/returns/${returnId}/mark-refunded`, { refundReference });
 }
 
-/** GET /stores/:storeId/returns — seller's own store. */
-export async function listReturnsForStore(storeId: string): Promise<ReturnRequest[]> {
-  return apiClient.get<ReturnRequest[]>(`/api/stores/${storeId}/returns`);
+/** GET /stores/:storeId/returns — seller's own store. Paginated server-side. */
+export async function listReturnsForStore(storeId: string, page = 0, size = 20): Promise<PageResponse<ReturnRequest>> {
+  const qs = toQueryString({ page, size });
+  return apiClient.get<PageResponse<ReturnRequest>>(`/api/stores/${storeId}/returns${qs}`);
 }
 
-/** GET /admin/returns — platform-wide, optionally filtered by status. */
-export async function adminListReturns(status?: string): Promise<ReturnRequest[]> {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiClient.get<ReturnRequest[]>(`/api/admin/returns${qs}`);
+/** GET /admin/returns — platform-wide, optionally filtered by status. Paginated server-side. */
+export async function adminListReturns(status?: string, page = 0, size = 20): Promise<PageResponse<ReturnRequest>> {
+  const qs = toQueryString({ status, page, size });
+  return apiClient.get<PageResponse<ReturnRequest>>(`/api/admin/returns${qs}`);
 }
 
 /** PATCH /admin/returns/:id — admin confirms a PayHere refund (the platform's own merchant account is the one that has to send the money back — see ReturnRequestService.adminMarkRefunded). */

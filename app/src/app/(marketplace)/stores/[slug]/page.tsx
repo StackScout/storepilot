@@ -21,14 +21,14 @@ export default async function StorePage({ params }: StorePageProps) {
         bookableServicesService.listServicesByStore(store.id),
         storesService.getPublicStoreSettings(store.id),
       ])
-    : [[], [], null];
+    : [{ content: [] }, { content: [] }, null];
 
   return (
     <StorePageContent
       slug={slug}
       initialStore={store}
-      initialProducts={products}
-      initialServices={services}
+      initialProducts={products.content}
+      initialServices={services.content}
       bookingsEnabled={publicSettings?.bookingsEnabled ?? false}
     />
   );

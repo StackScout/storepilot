@@ -65,7 +65,7 @@ export default function AdminCouponsPage() {
               <TableRowSkeleton columns={5} />
               <TableRowSkeleton columns={5} />
             </div>
-          ) : !coupons || coupons.length === 0 ? (
+          ) : !coupons || coupons.content.length === 0 ? (
             <EmptyState
               icon={Tag}
               title="No platform-wide coupons yet"
@@ -84,7 +84,7 @@ export default function AdminCouponsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {coupons.map((coupon) => (
+                  {coupons.content.map((coupon) => (
                     <tr key={coupon.id} className="border-b last:border-0">
                       <td className="px-6 py-3 font-mono font-medium">{coupon.code}</td>
                       <td className="px-6 py-3">{discountLabel(coupon, currency)}</td>

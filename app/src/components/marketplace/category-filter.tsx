@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { CATEGORIES } from "@/mock/categories";
+import { useCategories } from "@/hooks/use-categories";
 import { cn } from "@/lib/utils";
 import type { StoreCategory } from "@/types";
 
@@ -21,6 +23,7 @@ export function CategoryFilter({
   query?: string;
   basePath?: string;
 }) {
+  const { categories } = useCategories();
   return (
     <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
       <Link
@@ -34,18 +37,18 @@ export function CategoryFilter({
       >
         All
       </Link>
-      {CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <Link
-          key={c.value}
-          href={buildHref(basePath, { q: query, category: c.value })}
+          key={c.wireValue}
+          href={buildHref(basePath, { q: query, category: c.wireValue })}
           className={cn(
             "shrink-0 rounded-full border px-3.5 py-1.5 text-sm whitespace-nowrap transition-colors",
-            activeCategory === c.value
+            activeCategory === c.wireValue
               ? "bg-primary text-primary-foreground border-primary"
               : "hover:bg-accent",
           )}
         >
-          {c.label}
+          {c.name}
         </Link>
       ))}
     </div>

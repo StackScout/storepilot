@@ -14,23 +14,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUploader } from "@/components/dashboard/image-uploader";
 import { cn } from "@/lib/utils";
-import { getCategoryLabel } from "@/mock/categories";
+import { useCategories } from "@/hooks/use-categories";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import type { Product, ProductFormInput, StoreCategory } from "@/types";
 
 const productFormSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   description: z.string().min(10, "Add a short description (min 10 characters)"),
-  category: z.enum([
-    "fashion",
-    "food-beverage",
-    "beauty",
-    "handicrafts",
-    "electronics",
-    "home-living",
-    "jewelry",
-    "grocery",
-  ]),
+  category: z.string().min(1),
   price: z.number().positive("Enter a valid price"),
   compareAtPrice: z.union([z.number().positive(), z.nan()]).optional(),
   stockQuantity: z.number().int().min(0, "Stock can't be negative"),
@@ -58,6 +49,7 @@ export function ProductForm({
   stockManagementEnabled,
   storeCategory,
 }: ProductFormProps) {
+  const { getCategoryLabel } = useCategories();
   const {
     register,
     handleSubmit,

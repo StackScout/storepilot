@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { queryKeys } from "@/lib/query-keys";
 import { bookingsService, ordersService, productsService, storesService } from "@/services";
 
 /** "+12.4% vs last week" / "-8.2% vs last week" — undefined when there's nothing to compare (both periods zero). */
@@ -37,7 +38,7 @@ export default function DashboardOverviewPage() {
   // that outgrows this needs a real backend aggregate query instead of
   // summing a fetched page client-side; out of scope for now.
   const ordersQuery = useQuery({
-    queryKey: ["orders", storeId, "overview"],
+    queryKey: queryKeys.orders.overviewByStore(storeId),
     queryFn: () => ordersService.listOrdersByStore(storeId, undefined, 0, 1000),
   });
   // Bookings alongside orders below — a bookings-only seller with no
@@ -45,21 +46,21 @@ export default function DashboardOverviewPage() {
   // of how much booking business they're doing (see StoreService.getStats'
   // matching backend-side fix).
   const bookingsQuery = useQuery({
-    queryKey: ["bookings", storeId, "overview"],
+    queryKey: queryKeys.bookings.overviewByStore(storeId),
     queryFn: () => bookingsService.listBookingsByStore(storeId),
   });
   const productsQuery = useQuery({
-    queryKey: ["products", "store", storeId],
+    queryKey: queryKeys.products.byStore(storeId),
     queryFn: () => productsService.listProductsByStore(storeId),
   });
   const statsQuery = useQuery({
-    queryKey: ["store-stats", storeId],
+    queryKey: queryKeys.store.stats(storeId),
     queryFn: () => storesService.getStoreStats(storeId),
   });
 
   const orders = ordersQuery.data?.content ?? [];
-  const bookings = bookingsQuery.data ?? [];
-  const products = productsQuery.data ?? [];
+  const bookings = bookingsQuery.data?.content ?? [];
+  const products = productsQuery.data?.content ?? [];
 
   // "Paid" here matches the payouts page's own definition of earnings
   // (see /dashboard/payouts) — a non-cancelled-but-still-unpaid COD order

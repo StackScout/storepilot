@@ -1,9 +1,10 @@
-import { apiClient } from "@/lib/api-client";
-import type { Coupon, CouponInput, CouponPreviewResponse } from "@/types";
+import { apiClient, toQueryString } from "@/lib/api-client";
+import type { Coupon, CouponInput, CouponPreviewResponse, PageResponse } from "@/types";
 
-/** GET /stores/:storeId/coupons — seller-scoped, this store's own coupons. */
-export async function listStoreCoupons(storeId: string): Promise<Coupon[]> {
-  return apiClient.get<Coupon[]>(`/api/stores/${storeId}/coupons`);
+/** GET /stores/:storeId/coupons — seller-scoped, this store's own coupons. Paginated server-side; defaults to a generous page size since a seller usually runs a handful of active coupons. */
+export async function listStoreCoupons(storeId: string, page = 0, size = 50): Promise<PageResponse<Coupon>> {
+  const qs = toQueryString({ page, size });
+  return apiClient.get<PageResponse<Coupon>>(`/api/stores/${storeId}/coupons${qs}`);
 }
 
 /** POST /stores/:storeId/coupons */
@@ -21,9 +22,10 @@ export async function deleteStoreCoupon(id: string): Promise<void> {
   await apiClient.delete<void>(`/api/coupons/${id}`);
 }
 
-/** GET /admin/coupons — admin-scoped, platform-wide coupons. */
-export async function listPlatformCoupons(): Promise<Coupon[]> {
-  return apiClient.get<Coupon[]>("/api/admin/coupons");
+/** GET /admin/coupons — admin-scoped, platform-wide coupons. Paginated server-side. */
+export async function listPlatformCoupons(page = 0, size = 50): Promise<PageResponse<Coupon>> {
+  const qs = toQueryString({ page, size });
+  return apiClient.get<PageResponse<Coupon>>(`/api/admin/coupons${qs}`);
 }
 
 /** POST /admin/coupons */

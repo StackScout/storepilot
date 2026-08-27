@@ -1,12 +1,10 @@
-export type StoreCategory =
-  | "fashion"
-  | "food-beverage"
-  | "beauty"
-  | "handicrafts"
-  | "electronics"
-  | "home-living"
-  | "jewelry"
-  | "grocery";
+/**
+ * Admin-managed via GET /api/categories (see Category.kt backend-side) —
+ * no longer a fixed set of literals. Was a union type; widened to `string`
+ * once categories became dynamic. Valid values are whatever `GET
+ * /api/categories` currently returns, not enumerable at the type level.
+ */
+export type StoreCategory = string;
 
 /** `state` is deliberately one generic "state/province" field, not a separate district+province pair — see backend's StoreAddress.state doc comment. Options come from `GET /api/states`. */
 export interface StoreAddress {

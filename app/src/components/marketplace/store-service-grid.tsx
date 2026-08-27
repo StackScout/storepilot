@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarX } from "lucide-react";
 import { ServiceCard } from "@/components/marketplace/service-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { queryKeys } from "@/lib/query-keys";
 import { bookableServicesService } from "@/services";
 import type { BookableService } from "@/types";
 
@@ -16,8 +17,8 @@ export function StoreServiceGrid({
   initialServices: BookableService[];
 }) {
   const { data: services } = useQuery({
-    queryKey: ["bookable-services", "store", storeId],
-    queryFn: () => bookableServicesService.listServicesByStore(storeId),
+    queryKey: queryKeys.bookableServices.byStore(storeId),
+    queryFn: async () => (await bookableServicesService.listServicesByStore(storeId)).content,
     initialData: initialServices,
     staleTime: 0,
   });

@@ -26,8 +26,8 @@ export function NotificationsBell() {
     refetchInterval: 60_000,
   });
 
-  const unreadCount = notifications?.filter((n) => !n.read).length ?? 0;
-  const recent = notifications?.slice(0, 8) ?? [];
+  const unreadCount = notifications?.content.filter((n) => !n.read).length ?? 0;
+  const recent = notifications?.content.slice(0, 8) ?? [];
 
   async function handleOpenChange(open: boolean) {
     if (open || unreadCount === 0) return;
@@ -64,7 +64,7 @@ export function NotificationsBell() {
             </DropdownMenuItem>
           ))
         )}
-        {notifications && notifications.length > 8 ? (
+        {notifications && notifications.totalElements > 8 ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem render={<Link href="/admin/notifications" />}>

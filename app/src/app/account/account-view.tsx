@@ -15,6 +15,7 @@ import { AddressFormDialog } from "@/components/marketplace/address-form-dialog"
 import { DeleteAccountDialog } from "@/components/marketplace/delete-account-dialog";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { formatDate } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 import {
   ordersService,
   buyersService,
@@ -30,25 +31,25 @@ export function AccountView() {
   const queryClient = useQueryClient();
 
   const { data: buyer } = useQuery({
-    queryKey: ["buyer", "me"],
+    queryKey: queryKeys.buyer.me(),
     queryFn: () => buyersService.getCurrentBuyer(),
   });
 
   const { data: addresses, isLoading: isAddressesLoading } = useQuery({
-    queryKey: ["addresses"],
+    queryKey: queryKeys.buyer.addresses(),
     queryFn: () => addressesService.listAddresses(),
   });
 
   const { data: conversations } = useQuery({
-    queryKey: ["conversations", "me"],
+    queryKey: queryKeys.conversations.mine(),
     queryFn: () => messagingService.listMyConversations(),
   });
-  const messagesUnreadCount = conversations?.reduce((sum, c) => sum + c.unreadCount, 0) ?? 0;
+  const messagesUnreadCount = conversations?.content.reduce((sum, c) => sum + c.unreadCount, 0) ?? 0;
 
   const setDefaultMutation = useMutation({
     mutationFn: (id: string) => addressesService.setDefaultAddress(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["addresses"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buyer.addresses() });
       toast.success("Default address updated");
     },
     onError: () => toast.error("Couldn't update your default address. Please try again."),
@@ -57,36 +58,36 @@ export function AccountView() {
   const deleteAddressMutation = useMutation({
     mutationFn: (id: string) => addressesService.deleteAddress(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["addresses"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buyer.addresses() });
       toast.success("Address removed");
     },
     onError: () => toast.error("Couldn't remove this address. Please try again."),
   });
 
   const { data: orders, isLoading } = useQuery({
-    queryKey: ["orders", "me"],
+    queryKey: queryKeys.orders.mine(),
     queryFn: () => ordersService.listMyOrders(),
   });
 
   const { data: bookings, isLoading: isBookingsLoading } = useQuery({
-    queryKey: ["bookings", "me"],
+    queryKey: queryKeys.bookings.mine(),
     queryFn: () => bookingsService.listMyBookings(),
   });
 
   const { data: wishlist, isLoading: isWishlistLoading } = useQuery({
-    queryKey: ["wishlist"],
+    queryKey: queryKeys.products.wishlist(),
     queryFn: () => productsService.listMyWishlist(),
   });
 
   const { data: savedSearches, isLoading: isSavedSearchesLoading } = useQuery({
-    queryKey: ["saved-searches"],
+    queryKey: queryKeys.buyer.savedSearches(),
     queryFn: () => savedSearchesService.listSavedSearches(),
   });
 
   const deleteSavedSearchMutation = useMutation({
     mutationFn: (id: string) => savedSearchesService.deleteSavedSearch(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["saved-searches"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buyer.savedSearches() });
       toast.success("Saved search removed");
     },
     onError: () => toast.error("Couldn't remove this saved search. Please try again."),
@@ -208,7 +209,7 @@ export function AccountView() {
               <TableRowSkeleton columns={1} />
               <TableRowSkeleton columns={1} />
             </div>
-          ) : !orders || orders.length === 0 ? (
+          ) : !orders || orders.content.length === 0 ? (
             <EmptyState
               icon={Package}
               title="No orders yet"
@@ -221,7 +222,7 @@ export function AccountView() {
             />
           ) : (
             <div className="divide-y">
-              {orders.map((order) => (
+              {orders.content.map((order) => (
                 <Link
                   key={order.id}
                   href={`/orders/${order.id}`}
@@ -256,7 +257,7 @@ export function AccountView() {
               <TableRowSkeleton columns={1} />
               <TableRowSkeleton columns={1} />
             </div>
-          ) : !bookings || bookings.length === 0 ? (
+          ) : !bookings || bookings.content.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
               title="No bookings yet"
@@ -264,7 +265,7 @@ export function AccountView() {
             />
           ) : (
             <div className="divide-y">
-              {bookings.map((booking) => (
+              {bookings.content.map((booking) => (
                 <Link
                   key={booking.id}
                   href={`/bookings/${booking.id}`}
@@ -299,7 +300,7 @@ export function AccountView() {
               <TableRowSkeleton columns={1} />
               <TableRowSkeleton columns={1} />
             </div>
-          ) : !wishlist || wishlist.length === 0 ? (
+          ) : !wishlist || wishlist.content.length === 0 ? (
             <EmptyState
               icon={Heart}
               title="Your wishlist is empty"
@@ -312,7 +313,7 @@ export function AccountView() {
             />
           ) : (
             <div className="divide-y">
-              {wishlist.map((product) => (
+              {wishlist.content.map((product) => (
                 <Link
                   key={product.id}
                   href={`/stores/${product.storeSlug}/products/${product.slug}`}

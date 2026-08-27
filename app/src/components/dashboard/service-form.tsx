@@ -12,23 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUploader } from "@/components/dashboard/image-uploader";
-import { getCategoryLabel } from "@/mock/categories";
+import { useCategories } from "@/hooks/use-categories";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import type { BookableService, BookableServiceFormInput, ServiceStatus, StoreCategory } from "@/types";
 
 const serviceFormSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   description: z.string().min(10, "Add a short description (min 10 characters)"),
-  category: z.enum([
-    "fashion",
-    "food-beverage",
-    "beauty",
-    "handicrafts",
-    "electronics",
-    "home-living",
-    "jewelry",
-    "grocery",
-  ]),
+  category: z.string().min(1),
   price: z.number().positive("Enter a valid price"),
   durationMinutes: z.number().int().positive("Enter how long this service takes"),
   bufferMinutes: z.number().int().min(0, "Buffer can't be negative"),
@@ -51,6 +42,7 @@ export function ServiceForm({
   submitLabel = "Save service",
   storeCategory,
 }: ServiceFormProps) {
+  const { getCategoryLabel } = useCategories();
   const {
     register,
     handleSubmit,

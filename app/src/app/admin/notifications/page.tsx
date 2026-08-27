@@ -36,11 +36,11 @@ export default function AdminNotificationsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <p className="text-muted-foreground p-6 text-center text-sm">Loading…</p>
-          ) : !notifications || notifications.length === 0 ? (
+          ) : !notifications || notifications.content.length === 0 ? (
             <EmptyState icon={Bell} title="No notifications yet" description="Nothing to review right now." />
           ) : (
             <ul className="divide-y">
-              {notifications.map((n) => (
+              {notifications.content.map((n) => (
                 <li
                   key={n.id}
                   className={cn("flex items-start justify-between gap-4 p-4", !n.read && "bg-primary/5")}

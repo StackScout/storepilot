@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { formatCurrency } from "@/lib/currency";
+import { queryKeys } from "@/lib/query-keys";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { bookableServicesService } from "@/services";
@@ -35,14 +36,14 @@ export default function DashboardServicesPage() {
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   const { data: services, isLoading } = useQuery({
-    queryKey: ["bookable-services", "store", storeId],
-    queryFn: () => bookableServicesService.listServicesByStore(storeId),
+    queryKey: queryKeys.bookableServices.byStore(storeId),
+    queryFn: async () => (await bookableServicesService.listServicesByStore(storeId)).content,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => bookableServicesService.deleteService(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bookable-services"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.bookableServices.byStore(storeId) });
       toast.success("Service deleted");
       setServiceToDelete(null);
     },

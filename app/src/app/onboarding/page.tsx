@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AbnVerificationBadge } from "@/components/shared/abn-verification-badge";
-import { CATEGORIES } from "@/mock/categories";
+import { useCategories } from "@/hooks/use-categories";
 import { formatCurrency } from "@/lib/currency";
 import { usePlatformConfig, useStates } from "@/hooks/use-platform-config";
 import { storesService, authService, billingService } from "@/services";
@@ -85,6 +85,7 @@ export default function OnboardingPage() {
   const { name, platformFeePercent, countryCode, proMonthlyPriceCents, currencyCode, currencySymbol, currencyLocale } =
     usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
+  const { categories } = useCategories();
   const isSriLanka = countryCode === "LK";
   const [sellerPlan, setSellerPlan] = useState<"free" | "pro">("free");
   const onboardingSchema = useMemo(() => buildOnboardingSchema(isSriLanka), [isSriLanka]);
@@ -252,13 +253,13 @@ export default function OnboardingPage() {
                 >
                   <SelectTrigger id="category" className="w-full">
                     <SelectValue placeholder="Select category">
-                      {(v: string) => (v ? (CATEGORIES.find((c) => c.value === v)?.label ?? v) : "Select category")}
+                      {(v: string) => (v ? (categories.find((c) => c.wireValue === v)?.name ?? v) : "Select category")}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>
-                        {c.label}
+                    {categories.map((c) => (
+                      <SelectItem key={c.wireValue} value={c.wireValue}>
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

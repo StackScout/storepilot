@@ -24,6 +24,7 @@ import { formatCurrency } from "@/lib/currency";
 import { formatDateTime, returnReasonLabel, returnStatusLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { queryKeys } from "@/lib/query-keys";
 import { storesService, payoutsService, ordersService, adminService, returnsService } from "@/services";
 import type { Store } from "@/types";
 
@@ -54,7 +55,7 @@ export default function AdminAccountingPage() {
   const [returnRefundReference, setReturnRefundReference] = useState("");
 
   const { data: summary } = useQuery({
-    queryKey: ["admin-accounting-summary"],
+    queryKey: queryKeys.admin.accountingSummary(),
     queryFn: () => adminService.getAccountingSummary(),
   });
 
@@ -64,19 +65,19 @@ export default function AdminAccountingPage() {
     queryFn: async () => {
       const stores = await storesService.adminListStores("active");
       const enriched = await Promise.all(
-        stores.map(async (store) => {
+        stores.content.map(async (store) => {
           // A payout batch bundles every eligible order AND booking for a
           // store into one run — see PayoutSourceRef's doc comment.
           const [orders, bookings] = await Promise.all([
-            payoutsService.adminGetEligibleOrdersForPayout(store.id),
-            payoutsService.adminGetEligibleBookingsForPayout(store.id),
+            payoutsService.adminGetEligibleOrdersForPayout(store.id, 0, 200),
+            payoutsService.adminGetEligibleBookingsForPayout(store.id, 0, 200),
           ]);
           return {
             store,
-            eligibleCount: orders.length + bookings.length,
+            eligibleCount: orders.content.length + bookings.content.length,
             eligibleNet:
-              orders.reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0) +
-              bookings.reduce((sum, b) => sum + (b.servicePrice - b.platformFee), 0),
+              orders.content.reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0) +
+              bookings.content.reduce((sum, b) => sum + (b.servicePrice - b.platformFee), 0),
           };
         }),
       );
@@ -95,17 +96,17 @@ export default function AdminAccountingPage() {
     queryFn: async () => {
       const stores = await storesService.adminListStores("active");
       const enriched = await Promise.all(
-        stores.map(async (store) => {
+        stores.content.map(async (store) => {
           const [orders, bookings] = await Promise.all([
-            payoutsService.adminGetEligibleOrdersForFeeCollection(store.id),
-            payoutsService.adminGetEligibleBookingsForFeeCollection(store.id),
+            payoutsService.adminGetEligibleOrdersForFeeCollection(store.id, 0, 200),
+            payoutsService.adminGetEligibleBookingsForFeeCollection(store.id, 0, 200),
           ]);
           return {
             store,
-            eligibleCount: orders.length + bookings.length,
+            eligibleCount: orders.content.length + bookings.content.length,
             eligibleFee:
-              orders.reduce((sum, o) => sum + o.platformFee, 0) +
-              bookings.reduce((sum, b) => sum + b.platformFee, 0),
+              orders.content.reduce((sum, o) => sum + o.platformFee, 0) +
+              bookings.content.reduce((sum, b) => sum + b.platformFee, 0),
           };
         }),
       );
@@ -129,7 +130,7 @@ export default function AdminAccountingPage() {
   });
 
   function invalidateAccounting() {
-    queryClient.invalidateQueries({ queryKey: ["admin-accounting-summary"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.accountingSummary() });
   }
 
   const createPayoutMutation = useMutation({
@@ -304,7 +305,7 @@ export default function AdminAccountingPage() {
                   <h3 className="mb-2 text-sm font-semibold">All payouts</h3>
                   {payoutsLoading ? (
                     <TableRowSkeleton columns={5} />
-                  ) : !allPayouts || allPayouts.length === 0 ? (
+                  ) : !allPayouts || allPayouts.content.length === 0 ? (
                     <p className="text-muted-foreground text-sm">No payouts created yet.</p>
                   ) : (
                     <div className="-mx-6 overflow-x-auto">
@@ -319,7 +320,7 @@ export default function AdminAccountingPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {allPayouts.map((payout) => (
+                          {allPayouts.content.map((payout) => (
                             <tr key={payout.id} className="border-b last:border-0">
                               <td className="px-6 py-3 font-medium">{payout.storeName}</td>
                               <td className="text-muted-foreground px-6 py-3">
@@ -396,7 +397,7 @@ export default function AdminAccountingPage() {
                 <h3 className="mb-2 text-sm font-semibold">All fee collections</h3>
                 {feeCollectionsLoading ? (
                   <TableRowSkeleton columns={5} />
-                ) : !allFeeCollections || allFeeCollections.length === 0 ? (
+                ) : !allFeeCollections || allFeeCollections.content.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No fee collections created yet.</p>
                 ) : (
                   <div className="-mx-6 overflow-x-auto">
@@ -411,7 +412,7 @@ export default function AdminAccountingPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {allFeeCollections.map((fc) => (
+                        {allFeeCollections.content.map((fc) => (
                           <tr key={fc.id} className="border-b last:border-0">
                             <td className="px-6 py-3 font-medium">{fc.storeName}</td>
                             <td className="text-muted-foreground px-6 py-3">
@@ -456,7 +457,7 @@ export default function AdminAccountingPage() {
               </p>
               {stripeSettlementsLoading ? (
                 <TableRowSkeleton columns={4} />
-              ) : !stripeSettlements || stripeSettlements.length === 0 ? (
+              ) : !stripeSettlements || stripeSettlements.content.length === 0 ? (
                 <EmptyState icon={CreditCard} title="No Stripe orders yet" />
               ) : (
                 <div className="-mx-6 overflow-x-auto">
@@ -470,7 +471,7 @@ export default function AdminAccountingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stripeSettlements.map((order) => (
+                      {stripeSettlements.content.map((order) => (
                         <tr key={order.id} className="border-b last:border-0">
                           <td className="px-6 py-3 font-medium">{order.storeName}</td>
                           <td className="text-muted-foreground px-6 py-3">{order.orderNumber}</td>
@@ -498,7 +499,7 @@ export default function AdminAccountingPage() {
               </p>
               {returnsLoading ? (
                 <TableRowSkeleton columns={5} />
-              ) : !allReturns || allReturns.length === 0 ? (
+              ) : !allReturns || allReturns.content.length === 0 ? (
                 <EmptyState icon={RotateCcw} title="No returns yet" />
               ) : (
                 <div className="-mx-6 overflow-x-auto">
@@ -514,7 +515,7 @@ export default function AdminAccountingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {allReturns.map((r) => (
+                      {allReturns.content.map((r) => (
                         <tr key={r.id} className="border-b last:border-0">
                           <td className="px-6 py-3 font-medium">{r.storeName}</td>
                           <td className="text-muted-foreground px-6 py-3">{r.orderNumber}</td>

@@ -1,12 +1,15 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { RatingStars } from "@/components/shared/rating-stars";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
-import { getCategoryLabel } from "@/mock/categories";
+import { useCategories } from "@/hooks/use-categories";
 import type { Store } from "@/types";
 
 export function StoreCard({ store }: { store: Store }) {
+  const { getCategoryLabel } = useCategories();
   return (
     <Link
       href={`/stores/${store.slug}`}

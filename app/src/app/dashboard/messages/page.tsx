@@ -9,13 +9,14 @@ import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { timeAgo } from "@/lib/format";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { queryKeys } from "@/lib/query-keys";
 import { messagingService } from "@/services";
 
 export default function DashboardMessagesPage() {
   const storeId = useSellerStoreId();
 
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations", "store", storeId],
+    queryKey: queryKeys.conversations.byStore(storeId),
     queryFn: () => messagingService.listStoreConversations(storeId),
     refetchInterval: 10000,
   });
@@ -34,7 +35,7 @@ export default function DashboardMessagesPage() {
               <TableRowSkeleton columns={1} />
               <TableRowSkeleton columns={1} />
             </div>
-          ) : !conversations || conversations.length === 0 ? (
+          ) : !conversations || conversations.content.length === 0 ? (
             <EmptyState
               icon={Mail}
               title="No conversations yet"
@@ -42,7 +43,7 @@ export default function DashboardMessagesPage() {
             />
           ) : (
             <div className="divide-y">
-              {conversations.map((conversation) => (
+              {conversations.content.map((conversation) => (
                 <Link
                   key={conversation.id}
                   href={`/dashboard/messages/${conversation.id}`}

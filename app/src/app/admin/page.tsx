@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/currency";
 import { formatDateTime } from "@/lib/format";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { queryKeys } from "@/lib/query-keys";
 import { storesService, adminService } from "@/services";
 
 export default function AdminOverviewPage() {
@@ -15,17 +16,17 @@ export default function AdminOverviewPage() {
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   const { data: pendingStores } = useQuery({
-    queryKey: ["admin-pending-stores-count"],
+    queryKey: queryKeys.admin.pendingStoresCount(),
     queryFn: () => storesService.adminListStores("pending"),
   });
 
   const { data: summary } = useQuery({
-    queryKey: ["admin-accounting-summary"],
+    queryKey: queryKeys.admin.accountingSummary(),
     queryFn: () => adminService.getAccountingSummary(),
   });
 
   const { data: recentActivity } = useQuery({
-    queryKey: ["admin-audit-log", { page: 0, size: 5 }],
+    queryKey: queryKeys.admin.auditLog(0, 5),
     queryFn: () => adminService.listAuditLog({ page: 0, size: 5 }),
   });
 
@@ -42,7 +43,7 @@ export default function AdminOverviewPage() {
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
               <ClipboardCheck className="size-4" /> Pending applications
             </div>
-            <p className="text-2xl font-bold">{pendingStores?.length ?? "—"}</p>
+            <p className="text-2xl font-bold">{pendingStores?.totalElements ?? "—"}</p>
             <Button render={<Link href="/admin/stores" />} variant="ghost" size="sm" className="-ml-2">
               Review <ArrowRight className="size-3.5" />
             </Button>

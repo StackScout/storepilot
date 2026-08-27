@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell, ShieldCheck, Tag } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, Wallet, Users, History, Bell, ShieldCheck, Tag, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/admin/stores", label: "Store approvals", icon: ClipboardCheck },
   { href: "/admin/accounting", label: "Accounting", icon: Wallet },
   { href: "/admin/coupons", label: "Coupons", icon: Tag },
+  { href: "/admin/categories", label: "Categories", icon: LayoutGrid },
   { href: "/admin/admins", label: "Admins", icon: Users },
   { href: "/admin/audit-log", label: "Audit log", icon: History },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },

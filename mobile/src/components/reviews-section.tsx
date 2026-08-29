@@ -15,10 +15,12 @@ export function ReviewsSection({
   queryKey,
   listReviews,
   createReview,
+  hideHeading,
 }: {
   queryKey: unknown[];
   listReviews: () => Promise<Review[]>;
   createReview: (input: ReviewInput) => Promise<Review>;
+  hideHeading?: boolean;
 }) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -42,9 +44,11 @@ export function ReviewsSection({
 
   return (
     <View style={styles.container}>
-      <ThemedText type="smallBold" themeColor="textSecondary">
-        REVIEWS
-      </ThemedText>
+      {hideHeading ? null : (
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          REVIEWS
+        </ThemedText>
+      )}
 
       {canReview ? (
         <View style={styles.form}>

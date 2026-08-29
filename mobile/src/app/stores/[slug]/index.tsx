@@ -95,20 +95,16 @@ export default function StoreScreen() {
         </View>
 
         <ThemedText style={styles.tagline}>{store.tagline}</ThemedText>
-        <ThemedText
-          type="small"
-          themeColor="textSecondary"
-          style={styles.description}
-          numberOfLines={descriptionExpanded ? undefined : 2}>
-          {store.description}
-        </ThemedText>
-        {store.description.length > 100 ? (
-          <TouchableOpacity onPress={() => setDescriptionExpanded((v) => !v)} style={styles.readMore}>
-            <ThemedText type="small" themeColor="textSecondary" style={{ textDecorationLine: 'underline' }}>
-              {descriptionExpanded ? 'Show less' : 'Read more'}
-            </ThemedText>
-          </TouchableOpacity>
+        {descriptionExpanded ? (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.description}>
+            {store.description}
+          </ThemedText>
         ) : null}
+        <TouchableOpacity onPress={() => setDescriptionExpanded((v) => !v)} style={styles.readMore}>
+          <ThemedText type="small" themeColor="textSecondary" style={{ textDecorationLine: 'underline' }}>
+            {descriptionExpanded ? 'Show less' : 'Read more'}
+          </ThemedText>
+        </TouchableOpacity>
 
         {(productsQuery.data ?? []).length > 0 ? (
           <>

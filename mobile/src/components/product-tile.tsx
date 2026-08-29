@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { type Href, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 
 import type { Product } from '@storepilot/shared-api';
@@ -7,17 +7,19 @@ import type { Product } from '@storepilot/shared-api';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { usePlatformConfig, formatCurrency } from '@/lib/platform-config';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 
 export function ProductTile({ product }: { product: Product }) {
   const theme = useTheme();
   const router = useRouter();
+  const hrefs = useStoreHrefs();
   const platformConfig = usePlatformConfig();
 
   return (
     <TouchableOpacity
       style={styles.container}
-      onPress={() => router.push(`/stores/${product.storeSlug}/products/${product.slug}` as Href)}>
+      onPress={() => router.push(hrefs.product(product.storeSlug, product.slug))}>
       <Image source={{ uri: product.images[0]?.url }} style={[styles.image, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
       <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
         {product.storeName}

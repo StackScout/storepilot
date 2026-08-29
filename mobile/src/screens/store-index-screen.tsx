@@ -18,6 +18,7 @@ import { ProductTile } from '@/components/product-tile';
 import { ReviewsSection } from '@/components/reviews-section';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, usePlatformConfig } from '@/lib/platform-config';
 import { router, type Href } from 'expo-router';
@@ -25,6 +26,7 @@ import { router, type Href } from 'expo-router';
 export default function StoreScreen() {
   const theme = useTheme();
   const platformConfig = usePlatformConfig();
+  const hrefs = useStoreHrefs();
   const { slug } = useLocalSearchParams<{ slug: string }>();
 
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
@@ -131,7 +133,7 @@ export default function StoreScreen() {
               <TouchableOpacity
                 key={service.id}
                 style={[styles.serviceRow, { borderColor: theme.backgroundElement }]}
-                onPress={() => router.push(`/stores/${store.slug}/services/${service.slug}` as Href)}>
+                onPress={() => router.push(hrefs.service(store.slug, service.slug))}>
                 <ThemedText type="smallBold">{service.name}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatCurrency(service.price, platformConfig)} · {service.durationMinutes} min

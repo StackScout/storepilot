@@ -16,6 +16,9 @@ export default function AccountLayout() {
       <Stack.Screen name="bookings/[id]" options={{ title: 'Booking' }} />
       <Stack.Screen name="messages/index" options={{ title: 'Messages' }} />
       <Stack.Screen name="messages/[id]" options={{ title: 'Conversation' }} />
+      <Stack.Screen name="stores/[slug]/index" options={{ title: '' }} />
+      <Stack.Screen name="stores/[slug]/products/[productSlug]" options={{ title: '' }} />
+      <Stack.Screen name="stores/[slug]/services/[serviceSlug]" options={{ title: '' }} />
     </Stack>
   );
 }

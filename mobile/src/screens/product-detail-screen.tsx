@@ -13,12 +13,14 @@ import { ThemedText } from '@/components/themed-text';
 import { WishlistButton } from '@/components/wishlist-button';
 import { Spacing } from '@/constants/theme';
 import { useCart } from '@/hooks/use-cart';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, usePlatformConfig } from '@/lib/platform-config';
 
 export default function ProductScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const hrefs = useStoreHrefs();
   const platformConfig = usePlatformConfig();
   const { slug, productSlug } = useLocalSearchParams<{ slug: string; productSlug: string }>();
   const { cart, addItem, replaceCartWithItem } = useCart();
@@ -44,7 +46,10 @@ export default function ProductScreen() {
   const handleAddToCart = () => {
     const added = addItem(product, quantity);
     if (added) {
-      Alert.alert('Added to cart', `${product.name} added to your cart.`);
+      Alert.alert('Added to cart', `${product.name} added to your cart.`, [
+        { text: 'Continue shopping', style: 'cancel' },
+        { text: 'View cart', onPress: () => router.push('/cart' as Href) },
+      ]);
       return;
     }
     Alert.alert(
@@ -52,7 +57,16 @@ export default function ProductScreen() {
       `Your cart has items from ${cart.storeName}. Adding this will start a new cart from ${product.storeName}.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Replace cart', onPress: () => replaceCartWithItem(product, quantity) },
+        {
+          text: 'Replace cart',
+          onPress: () => {
+            replaceCartWithItem(product, quantity);
+            Alert.alert('Added to cart', `${product.name} added to your cart.`, [
+              { text: 'Continue shopping', style: 'cancel' },
+              { text: 'View cart', onPress: () => router.push('/cart' as Href) },
+            ]);
+          },
+        },
       ],
     );
   };
@@ -64,7 +78,7 @@ export default function ProductScreen() {
         <Image source={{ uri: product.images[0]?.url }} style={[styles.image, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
 
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.push(`/stores/${product.storeSlug}` as Href)}>
+          <TouchableOpacity onPress={() => router.push(hrefs.store(product.storeSlug))}>
             <ThemedText type="small" themeColor="textSecondary">
               {product.storeName}
             </ThemedText>

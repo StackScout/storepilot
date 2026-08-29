@@ -1,10 +1,10 @@
 import { apiClient, toQueryString } from "@/lib/api-client";
-import type { Booking, BookingAnalytics, BookingStatus, CancelBookingInput, CheckoutBookingInput, PayHereCheckoutPayload } from "@/types";
+import type { Booking, BookingAnalytics, BookingStatus, CancelBookingInput, CheckoutBookingInput, PageResponse, PayHereCheckoutPayload } from "@/types";
 
-/** GET /stores/:storeId/bookings */
-export async function listBookingsByStore(storeId: string, status?: BookingStatus): Promise<Booking[]> {
-  const qs = toQueryString({ status });
-  return apiClient.get<Booking[]>(`/api/stores/${storeId}/bookings${qs}`);
+/** GET /stores/:storeId/bookings — paginated server-side; defaults to a generous page size. */
+export async function listBookingsByStore(storeId: string, status?: BookingStatus, page = 0, size = 100): Promise<PageResponse<Booking>> {
+  const qs = toQueryString({ status, page, size });
+  return apiClient.get<PageResponse<Booking>>(`/api/stores/${storeId}/bookings${qs}`);
 }
 
 /** GET /stores/:storeId/booking-analytics — Pro-only; the backend 403s with a "Booking analytics is a Pro feature" message for a non-Pro seller. */
@@ -12,9 +12,10 @@ export async function getBookingAnalytics(storeId: string): Promise<BookingAnaly
   return apiClient.get<BookingAnalytics>(`/api/stores/${storeId}/booking-analytics`);
 }
 
-/** GET /api/me/bookings — the signed-in buyer's own booking history, derived from the auth cookie. */
-export async function listMyBookings(): Promise<Booking[]> {
-  return apiClient.get<Booking[]>("/api/me/bookings");
+/** GET /api/me/bookings — the signed-in buyer's own booking history, derived from the auth cookie. Paginated server-side; defaults to a generous page size. */
+export async function listMyBookings(page = 0, size = 100): Promise<PageResponse<Booking>> {
+  const qs = toQueryString({ page, size });
+  return apiClient.get<PageResponse<Booking>>(`/api/me/bookings${qs}`);
 }
 
 /** GET /bookings/:id */

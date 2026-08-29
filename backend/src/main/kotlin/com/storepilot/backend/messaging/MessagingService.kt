@@ -2,13 +2,19 @@ package com.storepilot.backend.messaging
 
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.notification.MessagingNotifier
 import com.storepilot.backend.store.StoreRepository
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 /**
  * One conversation per (store, buyer) pair — see Conversation's doc
@@ -44,17 +50,26 @@ class MessagingService(
         return conversation.toResponse(SenderType.BUYER)
     }
 
-    /** GET /api/me/conversations — buyer-scoped list, newest activity first. */
+    /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/me/conversations uses the paged overload below. */
     @Transactional
     fun listMyConversations(): List<ConversationResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         return conversationRepository.findByBuyerIdOrderByLastMessageAtDesc(buyerId).map { it.toResponse(SenderType.BUYER) }
     }
 
+    /** GET /api/me/conversations — buyer-scoped list, newest activity first. */
+    @Transactional
+    fun listMyConversations(page: Int, size: Int): PageResponse<ConversationResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return conversationRepository.findByBuyerIdOrderByLastMessageAtDesc(buyerId, pageable).toPageResponse { it.toResponse(SenderType.BUYER) }
+    }
+
     /** GET /api/stores/{storeId}/conversations — seller-scoped list. */
-    fun listStoreConversations(storeId: UUID): List<ConversationResponse> {
+    fun listStoreConversations(storeId: UUID, page: Int, size: Int): PageResponse<ConversationResponse> {
         requireOwnedStore(storeId)
-        return conversationRepository.findByStoreIdOrderByLastMessageAtDesc(storeId).map { it.toResponse(SenderType.SELLER) }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return conversationRepository.findByStoreIdOrderByLastMessageAtDesc(storeId, pageable).toPageResponse { it.toResponse(SenderType.SELLER) }
     }
 
     fun getById(id: UUID): ConversationResponse {
@@ -63,7 +78,7 @@ class MessagingService(
         return conversation.toResponse(side)
     }
 
-    /** GET /api/conversations/{id}/messages — also marks every message as read for the calling side. */
+    /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/conversations/{id}/messages uses the paged overload below. Also marks every message as read for the calling side, same as the paged overload. */
     @Transactional
     fun listMessages(id: UUID): List<MessageResponse> {
         val conversation = requireConversation(id)
@@ -71,6 +86,17 @@ class MessagingService(
         if (side == SenderType.BUYER) conversation.buyerUnreadCount = 0 else conversation.sellerUnreadCount = 0
         conversationRepository.save(conversation)
         return messageRepository.findByConversationIdOrderByCreatedAtAsc(id).map { it.toResponse() }
+    }
+
+    /** GET /api/conversations/{id}/messages — also marks every message as read for the calling side. */
+    @Transactional
+    fun listMessages(id: UUID, page: Int, size: Int): PageResponse<MessageResponse> {
+        val conversation = requireConversation(id)
+        val side = requireParticipant(conversation)
+        if (side == SenderType.BUYER) conversation.buyerUnreadCount = 0 else conversation.sellerUnreadCount = 0
+        conversationRepository.save(conversation)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return messageRepository.findByConversationIdOrderByCreatedAtAsc(id, pageable).toPageResponse { it.toResponse() }
     }
 
     /** POST /api/conversations/{id}/messages */

@@ -5,6 +5,7 @@ import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.booking.BookingRepository
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.buyer.Buyer
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -33,6 +34,9 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.Pageable
+import org.springframework.data.jpa.domain.Specification
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupResponse
 import java.math.BigDecimal
@@ -55,6 +59,7 @@ class StoreServiceTest {
     private val bookingRepository = mockk<BookingRepository>()
     private val payoutRepository = mockk<PayoutRepository>()
     private val feeCollectionRepository = mockk<FeeCollectionRepository>()
+    private val categoryRepository = mockk<CategoryRepository>()
 
     private val service = StoreService(
         storeRepository,
@@ -72,6 +77,7 @@ class StoreServiceTest {
         bookingRepository,
         payoutRepository,
         feeCollectionRepository,
+        categoryRepository,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID() }
@@ -86,7 +92,7 @@ class StoreServiceTest {
             name = "Handicrafts Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.PENDING,
@@ -106,6 +112,7 @@ class StoreServiceTest {
         every { platformConfigService.current() } returns australiaSettings()
         // The response mapper re-resolves logoUrl/bannerUrl/document URLs through this on every read — without a passthrough, the relaxed mock's default (empty string) would silently mask what was actually stored.
         every { fileStorageService.resolveUrl(any()) } answers { firstArg() }
+        every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
     private fun australiaSettings() = PlatformSettings(
@@ -688,17 +695,17 @@ class StoreServiceTest {
 
     @Test
     fun `adminList returns every store when no status filter is given`() {
-        every { storeRepository.findAll() } returns listOf(store)
-        val result = service.adminList(null)
-        assertEquals(1, result.size)
+        every { storeRepository.findAll(any<Pageable>()) } returns PageImpl(listOf(store))
+        val result = service.adminList(null, 0, 20)
+        assertEquals(1, result.content.size)
     }
 
     @Test
     fun `adminList filters by verification status`() {
-        every { storeRepository.findByVerificationStatus(StoreVerificationStatus.PENDING) } returns listOf(store)
-        val result = service.adminList("pending")
-        assertEquals(1, result.size)
-        verify(exactly = 0) { storeRepository.findAll() }
+        every { storeRepository.findAll(any<Specification<Store>>(), any<Pageable>()) } returns PageImpl(listOf(store))
+        val result = service.adminList("pending", 0, 20)
+        assertEquals(1, result.content.size)
+        verify(exactly = 0) { storeRepository.findAll(any<Pageable>()) }
     }
 
     @Test

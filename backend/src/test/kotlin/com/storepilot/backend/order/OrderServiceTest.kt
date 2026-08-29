@@ -23,7 +23,6 @@ import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.store.SellerType
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
@@ -91,7 +90,7 @@ class OrderServiceTest {
             name = "Handicrafts Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -114,7 +113,7 @@ class OrderServiceTest {
             name = "A product",
             slug = "a-product",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             price = 1000,
             stockQuantity = 10,
             trackStock = true,

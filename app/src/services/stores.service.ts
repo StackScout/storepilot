@@ -211,11 +211,11 @@ export async function closeStore(storeId: string): Promise<Store> {
 
 // --- Admin (requires the admin Cognito role) ---
 
-/** GET /admin/stores?status= */
-export async function adminListStores(status?: StoreVerificationStatus): Promise<Store[]> {
-  const qs = toQueryString({ status });
-  const stores = await apiClient.get<Store[]>(`/api/admin/stores${qs}`);
-  return stores.map(normalizeStore);
+/** GET /admin/stores?status= — paginated server-side. */
+export async function adminListStores(status?: StoreVerificationStatus, page = 0, size = 24): Promise<PageResponse<Store>> {
+  const qs = toQueryString({ status, page, size });
+  const result = await apiClient.get<PageResponse<Store>>(`/api/admin/stores${qs}`);
+  return { ...result, content: result.content.map(normalizeStore) };
 }
 
 /** GET /admin/stores/:id/settings — full verification/bank details for any store, regardless of who owns it. */
@@ -284,13 +284,15 @@ export async function submitVerificationChangeRequest(
   return normalizeChangeRequest(request);
 }
 
-/** GET /admin/verification-change-requests?status= — defaults to every request across all stores when status is omitted. */
+/** GET /admin/verification-change-requests?status= — defaults to every request across all stores when status is omitted. Paginated server-side. */
 export async function adminListVerificationChangeRequests(
   status?: StoreVerificationChangeRequestStatus,
-): Promise<StoreVerificationChangeRequest[]> {
-  const qs = toQueryString({ status });
-  const requests = await apiClient.get<StoreVerificationChangeRequest[]>(`/api/admin/verification-change-requests${qs}`);
-  return requests.map(normalizeChangeRequest);
+  page = 0,
+  size = 20,
+): Promise<PageResponse<StoreVerificationChangeRequest>> {
+  const qs = toQueryString({ status, page, size });
+  const result = await apiClient.get<PageResponse<StoreVerificationChangeRequest>>(`/api/admin/verification-change-requests${qs}`);
+  return { ...result, content: result.content.map(normalizeChangeRequest) };
 }
 
 /** POST /admin/verification-change-requests/:id/approve — applies every proposed field/document onto the store's live settings. */

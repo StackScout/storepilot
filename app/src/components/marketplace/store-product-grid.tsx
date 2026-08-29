@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
 import { ProductCard } from "@/components/marketplace/product-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { queryKeys } from "@/lib/query-keys";
 import { productsService } from "@/services";
 import type { Product } from "@/types";
 
@@ -22,8 +23,8 @@ export function StoreProductGrid({
   initialProducts: Product[];
 }) {
   const { data: products } = useQuery({
-    queryKey: ["products", "store", storeId],
-    queryFn: () => productsService.listProductsByStore(storeId),
+    queryKey: queryKeys.products.byStore(storeId),
+    queryFn: async () => (await productsService.listProductsByStore(storeId)).content,
     initialData: initialProducts,
     staleTime: 0,
   });

@@ -18,7 +18,6 @@ import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
@@ -63,7 +62,7 @@ class PayHereServiceTest {
             name = "Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -136,7 +135,7 @@ class PayHereServiceTest {
             name = "A service",
             slug = "a-service",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             price = total,
             durationMinutes = 60,
             status = ServiceStatus.ACTIVE,

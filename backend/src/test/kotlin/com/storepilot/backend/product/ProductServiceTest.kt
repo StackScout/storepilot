@@ -1,6 +1,7 @@
 package com.storepilot.backend.product
 
 import com.storepilot.backend.buyer.Buyer
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -10,7 +11,6 @@ import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.SellerType
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
@@ -41,8 +41,9 @@ class ProductServiceTest {
     private val currentActor = mockk<CurrentActor>()
     private val fileStorageService = mockk<FileStorageService>(relaxed = true)
     private val wishlistItemRepository = mockk<WishlistItemRepository>()
+    private val categoryRepository = mockk<CategoryRepository>()
 
-    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService, wishlistItemRepository)
+    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService, wishlistItemRepository, categoryRepository)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -57,7 +58,7 @@ class ProductServiceTest {
             name = "Handicrafts Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -66,6 +67,7 @@ class ProductServiceTest {
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
         every { productRepository.findByStoreIdAndSlug(storeId, any()) } returns null
+        every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
     private fun product(
@@ -74,7 +76,7 @@ class ProductServiceTest {
         status: ProductStatus = ProductStatus.ACTIVE,
         sku: String? = null,
     ) = Product(
-        store = store, name = "Existing", slug = "existing", description = "description", category = StoreCategory.HANDICRAFTS,
+        store = store, name = "Existing", slug = "existing", description = "description", category = "handicrafts",
         price = 500, stockQuantity = stockQuantity, trackStock = trackStock, status = status, sku = sku,
     ).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now() }
 
@@ -138,7 +140,7 @@ class ProductServiceTest {
             name = "Existing",
             slug = "existing",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             price = 500,
             stockQuantity = 1,
             status = ProductStatus.ACTIVE,

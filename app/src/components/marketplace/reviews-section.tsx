@@ -125,9 +125,9 @@ export function ReviewsSection({ kind, targetId }: ReviewsSectionProps) {
         </p>
       )}
 
-      {reviews && reviews.length > 0 ? (
+      {reviews && reviews.content.length > 0 ? (
         <ul className="divide-y">
-          {reviews.map((review: Review) => (
+          {reviews.content.map((review: Review) => (
             <li key={review.id} className="space-y-1 py-4 first:pt-0">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium">{review.buyerName}</span>

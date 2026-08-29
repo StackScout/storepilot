@@ -20,12 +20,12 @@ import com.storepilot.backend.order.ReceiptStorageService
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.data.domain.PageImpl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -68,7 +68,7 @@ class FeeCollectionServiceTest {
             name = "Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -119,7 +119,7 @@ class FeeCollectionServiceTest {
             name = "A service",
             slug = "a-service",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             price = servicePrice,
             durationMinutes = 60,
             status = ServiceStatus.ACTIVE,
@@ -154,7 +154,7 @@ class FeeCollectionServiceTest {
     fun `listByStore rejects a non-owning seller`() {
         val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
         every { currentActor.requireSeller() } returns otherSeller
-        assertThrows(ForbiddenException::class.java) { service.listByStore(storeId) }
+        assertThrows(ForbiddenException::class.java) { service.listByStore(storeId, 0, 20) }
     }
 
     // ---- getEligibleOrders / getEligibleBookings ----
@@ -168,10 +168,10 @@ class FeeCollectionServiceTest {
         val stripe = owedOrder(paymentMethod = PaymentMethod.STRIPE)
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(cod, bankTransfer, payHere, stripe)
 
-        val result = service.getEligibleOrders(storeId)
+        val result = service.getEligibleOrders(storeId, 0, 20)
 
-        assertEquals(2, result.size)
-        assertTrue(result.map { it.id }.containsAll(listOf(cod.id, bankTransfer.id)))
+        assertEquals(2, result.content.size)
+        assertTrue(result.content.map { it.id }.containsAll(listOf(cod.id, bankTransfer.id)))
     }
 
     @Test
@@ -185,7 +185,7 @@ class FeeCollectionServiceTest {
         every { feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(existing)
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(order)
 
-        assertTrue(service.getEligibleOrders(storeId).isEmpty())
+        assertTrue(service.getEligibleOrders(storeId, 0, 20).content.isEmpty())
     }
 
     @Test
@@ -195,9 +195,9 @@ class FeeCollectionServiceTest {
         val pending = owedBooking(status = BookingStatus.PENDING)
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(completed, pending)
 
-        val result = service.getEligibleBookings(storeId)
+        val result = service.getEligibleBookings(storeId, 0, 20)
 
-        assertEquals(1, result.size)
+        assertEquals(1, result.content.size)
     }
 
     @Test
@@ -205,9 +205,9 @@ class FeeCollectionServiceTest {
         emptyHistory()
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(owedBooking())
 
-        val result = service.adminGetEligibleBookings(storeId)
+        val result = service.adminGetEligibleBookings(storeId, 0, 20)
 
-        assertEquals(1, result.size)
+        assertEquals(1, result.content.size)
         verify(exactly = 0) { currentActor.requireSeller() }
     }
 
@@ -275,10 +275,10 @@ class FeeCollectionServiceTest {
     fun `adminList returns every fee collection, most recent first`() {
         val older = FeeCollection(store = store, subtotal = 100, platformFee = 5).apply { id = UUID.randomUUID(); createdAt = Instant.now().minusSeconds(60) }
         val newer = FeeCollection(store = store, subtotal = 200, platformFee = 10).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
-        every { feeCollectionRepository.findAll() } returns listOf(older, newer)
+        every { feeCollectionRepository.findAllByOrderByCreatedAtDesc(any()) } returns PageImpl(listOf(newer, older))
 
-        val result = service.adminList()
+        val result = service.adminList(0, 20)
 
-        assertEquals(newer.id, result.first().id)
+        assertEquals(newer.id, result.content.first().id)
     }
 }

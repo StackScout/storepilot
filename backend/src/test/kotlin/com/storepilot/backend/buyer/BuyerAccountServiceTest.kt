@@ -24,7 +24,6 @@ import com.storepilot.backend.store.Follow
 import com.storepilot.backend.store.FollowRepository
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
@@ -85,7 +84,7 @@ class BuyerAccountServiceTest {
             name = "Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -139,7 +138,7 @@ class BuyerAccountServiceTest {
         store = store,
         service = BookableService(
             store = store, name = "Service", slug = "service", description = "description",
-            category = StoreCategory.HANDICRAFTS, price = 500, durationMinutes = 60, status = ServiceStatus.ACTIVE,
+            category = "handicrafts", price = 500, durationMinutes = 60, status = ServiceStatus.ACTIVE,
         ).apply { id = UUID.randomUUID() },
         serviceName = "Service",
         servicePrice = 500,
@@ -189,7 +188,7 @@ class BuyerAccountServiceTest {
         val savedSearch = SavedSearch(buyer = buyer, name = "Necklaces", queryString = "q=necklace")
         val product = Product(
             store = store, name = "Product", slug = "product", description = "description",
-            category = StoreCategory.HANDICRAFTS, price = 1000, stockQuantity = 5, status = ProductStatus.ACTIVE,
+            category = "handicrafts", price = 1000, stockQuantity = 5, status = ProductStatus.ACTIVE,
         ).apply { id = UUID.randomUUID() }
         val wishlistItem = WishlistItem(buyer = buyer, product = product)
         every { addressRepository.findByBuyerIdOrderByIsDefaultDescCreatedAtAsc(buyer.id!!) } returns listOf(address)

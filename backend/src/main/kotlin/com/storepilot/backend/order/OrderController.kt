@@ -33,13 +33,23 @@ class OrderController(
     ): PageResponse<OrderResponse> = orderService.listByStore(storeId, status, page, size)
 
     @GetMapping("/api/me/orders")
-    fun listByCurrentBuyer(): List<OrderResponse> = orderService.listByCurrentBuyer()
+    fun listByCurrentBuyer(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<OrderResponse> = orderService.listByCurrentBuyer(page, size)
 
     @GetMapping("/api/stores/{storeId}/stripe-settlements")
-    fun stripeSettlements(@PathVariable storeId: UUID): List<OrderResponse> = orderService.listStripeSettlementsByStore(storeId)
+    fun stripeSettlements(
+        @PathVariable storeId: UUID,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<OrderResponse> = orderService.listStripeSettlementsByStore(storeId, page, size)
 
     @GetMapping("/api/admin/stripe-settlements")
-    fun adminStripeSettlements(): List<OrderResponse> = orderService.adminListStripeSettlements()
+    fun adminStripeSettlements(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PageResponse<OrderResponse> = orderService.adminListStripeSettlements(page, size)
 
     /** First step of guest lookup — see OrderService.requestLookupCode's doc comment. Always 204, regardless of whether orderNumber/phone matched anything. */
     @PostMapping("/api/orders/lookup/request-code")

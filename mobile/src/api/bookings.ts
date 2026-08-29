@@ -1,8 +1,9 @@
 import { apiFetch } from '@/lib/api-client';
-import type { BookingResponse, BookingStatus } from '@/api/types';
+import type { BookingResponse, BookingStatus, PageResponse } from '@/api/types';
 
-export function listStoreBookings(storeId: string): Promise<BookingResponse[]> {
-  return apiFetch<BookingResponse[]>(`/api/stores/${storeId}/bookings`);
+/** No pagination UI on the seller dashboard yet — size=200 keeps today's "show everything" behavior. */
+export async function listStoreBookings(storeId: string): Promise<BookingResponse[]> {
+  return (await apiFetch<PageResponse<BookingResponse>>(`/api/stores/${storeId}/bookings?size=200`)).content;
 }
 
 export function getBooking(id: string): Promise<BookingResponse> {

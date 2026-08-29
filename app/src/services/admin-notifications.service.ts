@@ -1,9 +1,10 @@
-import { apiClient } from "@/lib/api-client";
-import type { AdminNotification, AdminNotificationSummary } from "@/types";
+import { apiClient, toQueryString } from "@/lib/api-client";
+import type { AdminNotification, AdminNotificationSummary, PageResponse } from "@/types";
 
-/** GET /admin/notifications */
-export async function listAdminNotifications(): Promise<AdminNotification[]> {
-  return apiClient.get<AdminNotification[]>("/api/admin/notifications");
+/** GET /admin/notifications — paginated server-side. */
+export async function listAdminNotifications(page = 0, size = 20): Promise<PageResponse<AdminNotification>> {
+  const qs = toQueryString({ page, size });
+  return apiClient.get<PageResponse<AdminNotification>>(`/api/admin/notifications${qs}`);
 }
 
 /** GET /admin/notifications/summary */

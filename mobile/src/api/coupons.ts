@@ -1,8 +1,9 @@
 import { apiFetch } from '@/lib/api-client';
-import type { CouponInput, CouponResponse } from '@/api/types';
+import type { CouponInput, CouponResponse, PageResponse } from '@/api/types';
 
-export function listStoreCoupons(storeId: string): Promise<CouponResponse[]> {
-  return apiFetch<CouponResponse[]>(`/api/stores/${storeId}/coupons`);
+/** No pagination UI on the seller dashboard yet — size=200 keeps today's "show everything" behavior. */
+export async function listStoreCoupons(storeId: string): Promise<CouponResponse[]> {
+  return (await apiFetch<PageResponse<CouponResponse>>(`/api/stores/${storeId}/coupons?size=200`)).content;
 }
 
 export function createCoupon(storeId: string, input: CouponInput): Promise<CouponResponse> {

@@ -1,4 +1,4 @@
-import type { BookableService, DayAvailability } from '@storepilot/shared-api';
+import type { BookableService, DayAvailability, PageResponse } from '@storepilot/shared-api';
 
 import { ApiError, apiFetch, resolveAssetUrl, toQueryString } from '@/lib/api-client';
 
@@ -9,7 +9,7 @@ function normalizeService(service: BookableService): BookableService {
 }
 
 export async function listServicesByStore(storeId: string): Promise<BookableService[]> {
-  return (await apiFetch<BookableService[]>(`/api/stores/${storeId}/bookable-services`, { skipAuth: true })).map(normalizeService);
+  return (await apiFetch<PageResponse<BookableService>>(`/api/stores/${storeId}/bookable-services?size=200`, { skipAuth: true })).content.map(normalizeService);
 }
 
 export async function getServiceById(id: string): Promise<BookableService | null> {

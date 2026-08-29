@@ -2,7 +2,6 @@ package com.storepilot.backend.product
 
 import com.storepilot.backend.common.BaseEntity
 import com.storepilot.backend.store.Store
-import com.storepilot.backend.store.StoreCategory
 import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -45,8 +44,9 @@ class Product(
     var slug: String,
     @Column(nullable = false, columnDefinition = "text")
     var description: String,
+    /** Validated against the admin-managed categories table (common.Category) at write time — see CategoryRepository.requireCategory. Plain varchar, not an FK — see Category.kt's doc comment. */
     @Column(nullable = false)
-    var category: StoreCategory,
+    var category: String,
     /** Cents (the currency's smallest unit), not whole dollars — see currency.ts#formatCurrency. */
     @Column(nullable = false)
     var price: Int,

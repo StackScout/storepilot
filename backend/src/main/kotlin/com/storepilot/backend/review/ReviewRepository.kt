@@ -1,12 +1,14 @@
 package com.storepilot.backend.review
 
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
 interface ReviewRepository : JpaRepository<Review, UUID> {
-    fun findByProductIdOrderByCreatedAtDesc(productId: UUID): List<Review>
+    fun findByProductIdOrderByCreatedAtDesc(productId: UUID, pageable: Pageable): Page<Review>
 
-    fun findByStoreIdAndProductIdIsNullOrderByCreatedAtDesc(storeId: UUID): List<Review>
+    fun findByStoreIdAndProductIdIsNullOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Review>
 
     /** Buyer data export — every review this buyer has written, product or store-level alike. */
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Review>

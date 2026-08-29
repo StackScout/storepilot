@@ -32,7 +32,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     productsService.listProductsByStore(product.storeId),
   ]);
 
-  const relatedProducts = storeProducts.filter((p) => p.id !== product.id).slice(0, 4);
+  const relatedProducts = storeProducts.content.filter((p) => p.id !== product.id).slice(0, 4);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

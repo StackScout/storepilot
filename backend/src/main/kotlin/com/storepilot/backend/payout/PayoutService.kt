@@ -10,8 +10,10 @@ import com.storepilot.backend.booking.toResponse
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.notification.PayoutNotifier
 import com.storepilot.backend.order.Order
 import com.storepilot.backend.order.OrderRepository
@@ -22,10 +24,42 @@ import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.order.ReceiptStorageService
 import com.storepilot.backend.order.toResponse
 import com.storepilot.backend.store.StoreRepository
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
+
+/**
+ * Slices an already-computed in-memory list into one page, for the eligible-
+ * orders/eligible-bookings endpoints below — those lists come from filtering
+ * every one of a store's orders/bookings in Kotlin (see eligibleOrderEntities/
+ * eligibleBookingEntities), not a `Pageable`-driven DB query, since
+ * createBatch needs the complete eligible set regardless (a payout batch
+ * must include every eligible order, not just one page of them). "Shallow"
+ * pagination (correct results, but not a LIMIT/OFFSET query) is an
+ * acceptable tradeoff here: the eligible set between payout runs is bounded
+ * by realistic order volume over one settlement cycle, not the store's
+ * entire history.
+ */
+private fun <T : Any, R> List<T>.toPageResponseInMemory(requestedPage: Int, requestedSize: Int, mapper: (T) -> R): PageResponse<R> {
+    val boundedPage = requestedPage.coerceAtLeast(0)
+    val boundedSize = requestedSize.coerceIn(1, MAX_PAGE_SIZE)
+    val totalElements = size.toLong()
+    val pageContent: List<T> = drop(boundedPage * boundedSize).take(boundedSize)
+    val pageImpl = PageImpl<T>(pageContent, PageRequest.of(boundedPage, boundedSize), totalElements)
+    return PageResponse(
+        content = pageImpl.content.map(mapper),
+        page = pageImpl.number,
+        size = pageImpl.size,
+        totalElements = pageImpl.totalElements,
+        totalPages = pageImpl.totalPages,
+    )
+}
 
 @Service
 @Transactional(readOnly = true)
@@ -40,9 +74,10 @@ class PayoutService(
     private val auditLogService: AuditLogService,
     private val payoutNotifier: PayoutNotifier,
 ) {
-    fun listByStore(storeId: UUID): List<PayoutResponse> {
+    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<PayoutResponse> {
         requireSellerOwnsStore(storeId)
-        return payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
     }
 
     /**
@@ -55,15 +90,15 @@ class PayoutService(
      * Stripe Connect direct charges settle automatically at charge time
      * (see PaymentMethod.STRIPE's doc comment) — neither ever belongs here.
      */
-    fun getEligibleOrders(storeId: UUID): List<OrderResponse> {
+    fun getEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> {
         requireSellerOwnsStore(storeId)
-        return eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+        return eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
     /** Same eligibility rule as getEligibleOrders, for bookings — COMPLETED (the appointment-lifecycle analog of DELIVERED) + PAID + PAYHERE. */
-    fun getEligibleBookings(storeId: UUID): List<BookingResponse> {
+    fun getEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> {
         requireSellerOwnsStore(storeId)
-        return eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+        return eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
     }
 
     /**
@@ -77,12 +112,12 @@ class PayoutService(
      * "/api/admin" prefix, already gated to hasRole("ADMIN") by
      * SecurityConfig as a whole.
      */
-    fun adminGetEligibleOrders(storeId: UUID): List<OrderResponse> =
-        eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+    fun adminGetEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> =
+        eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
 
     /** Admin-facing equivalent of getEligibleBookings — see adminGetEligibleOrders's doc comment. */
-    fun adminGetEligibleBookings(storeId: UUID): List<BookingResponse> =
-        eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+    fun adminGetEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> =
+        eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
 
     private fun requireSellerOwnsStore(storeId: UUID) {
         val seller = currentActor.requireSeller()
@@ -183,6 +218,8 @@ class PayoutService(
         return saved.toResponse()
     }
 
-    fun adminList(): List<PayoutResponse> =
-        payoutRepository.findAll().sortedByDescending { it.createdAt }.map { it.toResponse() }
+    fun adminList(page: Int, size: Int): PageResponse<PayoutResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return payoutRepository.findAllByOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
+    }
 }

@@ -15,7 +15,6 @@ import com.storepilot.backend.product.ProductStatus
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -53,7 +52,7 @@ class ReviewServiceTest {
             name = "Blue Mountains Roasters",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.FOOD_BEVERAGE,
+            category = "food-beverage",
             address = StoreAddress(city = "Katoomba", state = "NSW"),
             whatsappNumber = "+61400000000",
         ).apply { id = storeId }
@@ -62,7 +61,7 @@ class ReviewServiceTest {
             name = "Colombian Coffee Beans",
             slug = "colombian-coffee-beans",
             description = "description",
-            category = StoreCategory.FOOD_BEVERAGE,
+            category = "food-beverage",
             price = 1800,
             stockQuantity = 10,
             status = ProductStatus.ACTIVE,

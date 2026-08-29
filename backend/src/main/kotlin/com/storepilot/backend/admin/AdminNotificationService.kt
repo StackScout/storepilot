@@ -1,13 +1,19 @@
 package com.storepilot.backend.admin
 
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.notification.EmailService
 import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.store.Store
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 /**
  * Payouts happen outside this app (a seller's bank account is where the
@@ -27,8 +33,10 @@ class AdminNotificationService(
 ) {
     private val log = LoggerFactory.getLogger(AdminNotificationService::class.java)
 
-    fun list(): List<AdminNotificationResponse> =
-        adminNotificationRepository.findAllByOrderByCreatedAtDesc().map { it.toResponse() }
+    fun list(page: Int, size: Int): PageResponse<AdminNotificationResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return adminNotificationRepository.findAllByOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
+    }
 
     fun summary(): AdminNotificationSummaryResponse =
         AdminNotificationSummaryResponse(unreadCount = adminNotificationRepository.countByReadFalse())

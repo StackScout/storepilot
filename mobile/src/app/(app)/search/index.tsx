@@ -4,20 +4,20 @@ import { useState } from 'react';
 import { FlatList, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { listCategories } from '@/api/categories';
 import { listProducts, type ProductQueryParams } from '@/api/buyer-products';
 import { EmptyState } from '@/components/empty-state';
 import { ProductTile } from '@/components/product-tile';
 import { ThemedText } from '@/components/themed-text';
-import { CATEGORIES } from '@/constants/categories';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { StoreCategory } from '@storepilot/shared-api';
 
 export default function SearchScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams<{ category?: string; query?: string }>();
   const [query, setQuery] = useState(params.query ?? '');
-  const [category, setCategory] = useState<StoreCategory | undefined>(params.category as StoreCategory | undefined);
+  const [category, setCategory] = useState<string | undefined>(params.category);
+  const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
 
   const searchParams: ProductQueryParams = { query: query.trim() || undefined, category };
   const productsQuery = useQuery({
@@ -40,16 +40,16 @@ export default function SearchScreen() {
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={CATEGORIES}
-        keyExtractor={(c) => c.value}
+        data={categoriesQuery.data ?? []}
+        keyExtractor={(c) => c.id}
         contentContainerStyle={styles.categoryRow}
         renderItem={({ item }) => {
-          const selected = category === item.value;
+          const selected = category === item.wireValue;
           return (
             <TouchableOpacity
               style={[styles.categoryChip, { borderColor: selected ? theme.text : theme.textSecondary, backgroundColor: selected ? theme.backgroundElement : 'transparent' }]}
-              onPress={() => setCategory(selected ? undefined : item.value)}>
-              <ThemedText type="small">{item.label}</ThemedText>
+              onPress={() => setCategory(selected ? undefined : item.wireValue)}>
+              <ThemedText type="small">{item.name}</ThemedText>
             </TouchableOpacity>
           );
         }}

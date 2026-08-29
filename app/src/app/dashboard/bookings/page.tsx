@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { BOOKING_STATUS_LABELS } from "@/lib/constants";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { queryKeys } from "@/lib/query-keys";
 import { bookingsService } from "@/services";
 import type { BookingStatus } from "@/types";
 
@@ -33,7 +34,7 @@ export default function DashboardBookingsPage() {
   const [filter, setFilter] = useState<BookingStatus | "all">("all");
 
   const { data: bookings, isLoading } = useQuery({
-    queryKey: ["bookings", storeId, filter],
+    queryKey: queryKeys.bookings.byStore(storeId, filter),
     queryFn: () => bookingsService.listBookingsByStore(storeId, filter === "all" ? undefined : filter),
   });
 
@@ -67,7 +68,7 @@ export default function DashboardBookingsPage() {
               <TableRowSkeleton columns={6} />
               <TableRowSkeleton columns={6} />
             </div>
-          ) : !bookings || bookings.length === 0 ? (
+          ) : !bookings || bookings.content.length === 0 ? (
             <EmptyState icon={CalendarClock} title="No bookings found" description="Try a different filter." />
           ) : (
             <div className="-mx-6 overflow-x-auto">
@@ -84,7 +85,7 @@ export default function DashboardBookingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((booking) => (
+                  {bookings.content.map((booking) => (
                     <tr key={booking.id} className="border-b last:border-0">
                       <td className="px-6 py-3">
                         <Link href={`/dashboard/bookings/${booking.id}`} className="text-primary font-medium">

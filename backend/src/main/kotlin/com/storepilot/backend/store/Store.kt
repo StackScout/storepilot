@@ -54,8 +54,9 @@ class Store(
     var logoUrl: String? = null,
     @Column(name = "banner_url")
     var bannerUrl: String? = null,
+    /** Validated against the admin-managed categories table (common.Category) at write time — see CategoryRepository.requireCategory. Plain varchar, not an FK — see Category.kt's doc comment. */
     @Column(nullable = false)
-    var category: StoreCategory,
+    var category: String,
     @Embedded
     var address: StoreAddress,
     @Column(name = "whatsapp_number", nullable = false)

@@ -10,8 +10,10 @@ import com.storepilot.backend.booking.toResponse
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.order.Order
 import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.order.OrderResponse
@@ -21,10 +23,31 @@ import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.order.ReceiptStorageService
 import com.storepilot.backend.order.toResponse
 import com.storepilot.backend.store.StoreRepository
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
+
+/** Mirrors PayoutService's own private helper of the same name — see its doc comment for why eligible-orders/eligible-bookings use in-memory "shallow" pagination rather than a Pageable-driven DB query. */
+private fun <T : Any, R> List<T>.toPageResponseInMemory(requestedPage: Int, requestedSize: Int, mapper: (T) -> R): PageResponse<R> {
+    val boundedPage = requestedPage.coerceAtLeast(0)
+    val boundedSize = requestedSize.coerceIn(1, MAX_PAGE_SIZE)
+    val totalElements = size.toLong()
+    val pageContent: List<T> = drop(boundedPage * boundedSize).take(boundedSize)
+    val pageImpl = PageImpl<T>(pageContent, PageRequest.of(boundedPage, boundedSize), totalElements)
+    return PageResponse(
+        content = pageImpl.content.map(mapper),
+        page = pageImpl.number,
+        size = pageImpl.size,
+        totalElements = pageImpl.totalElements,
+        totalPages = pageImpl.totalPages,
+    )
+}
 
 /** Mirrors PayoutService exactly, just for the reverse direction — see FeeCollection's doc comment. */
 @Service
@@ -39,9 +62,10 @@ class FeeCollectionService(
     private val currentActor: CurrentActor,
     private val auditLogService: AuditLogService,
 ) {
-    fun listByStore(storeId: UUID): List<FeeCollectionResponse> {
+    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<FeeCollectionResponse> {
         requireSellerOwnsStore(storeId)
-        return feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
     }
 
     /**
@@ -50,15 +74,15 @@ class FeeCollectionService(
      * is holding that the platform hasn't been paid its cut on. Mirrors
      * PayoutService#eligibleOrders, opposite direction.
      */
-    fun getEligibleOrders(storeId: UUID): List<OrderResponse> {
+    fun getEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> {
         requireSellerOwnsStore(storeId)
-        return eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+        return eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
     /** Mirrors getEligibleOrders, opposite direction, for bookings paid via "Pay at venue"/bank-transfer. */
-    fun getEligibleBookings(storeId: UUID): List<BookingResponse> {
+    fun getEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> {
         requireSellerOwnsStore(storeId)
-        return eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+        return eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
     }
 
     /**
@@ -70,12 +94,12 @@ class FeeCollectionService(
      * only under the "/api/admin" prefix, already gated to hasRole("ADMIN")
      * by SecurityConfig as a whole.
      */
-    fun adminGetEligibleOrders(storeId: UUID): List<OrderResponse> =
-        eligibleOrderEntities(storeId).map { it.toResponse(receiptStorageService, fileStorageService) }
+    fun adminGetEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> =
+        eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
 
     /** Admin-facing equivalent of getEligibleBookings — see adminGetEligibleOrders's doc comment. */
-    fun adminGetEligibleBookings(storeId: UUID): List<BookingResponse> =
-        eligibleBookingEntities(storeId).map { it.toResponse(receiptStorageService) }
+    fun adminGetEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> =
+        eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
 
     private fun requireSellerOwnsStore(storeId: UUID) {
         val seller = currentActor.requireSeller()
@@ -167,6 +191,8 @@ class FeeCollectionService(
         return saved.toResponse()
     }
 
-    fun adminList(): List<FeeCollectionResponse> =
-        feeCollectionRepository.findAll().sortedByDescending { it.createdAt }.map { it.toResponse() }
+    fun adminList(page: Int, size: Int): PageResponse<FeeCollectionResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return feeCollectionRepository.findAllByOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
+    }
 }

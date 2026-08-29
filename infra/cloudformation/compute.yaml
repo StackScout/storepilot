@@ -26,9 +26,25 @@ Parameters:
     Description: >
       t3.micro (1GB RAM) is too small for Postgres + a JVM + Node running
       together — see infra/README.md.
+  # Pinned, not the "latest AL2023" SSM alias this used to default to.
+  # AWS::EC2::Instance.ImageId always requires replacement on change (see
+  # the CFN resource reference), and that alias re-resolves to a newer AMI
+  # every time Amazon patches the AL2023 base image — so a routine redeploy
+  # of this stack months after launch would silently try to replace this
+  # instance. That's fatal here: Postgres data lives only in a Docker
+  # volume on this instance's own root EBS volume (DeleteOnTermination:
+  # true, no RDS/snapshot behind it) — see the InstanceId Output below.
+  # Confirmed as the root cause of the 2026-08-18 UPDATE_ROLLBACK_COMPLETE
+  # incident (CloudFormation refused the replacement because
+  # storepilot-au-cicd still imports this stack's InstanceId export,
+  # which is the only reason the data survived). Bump this deliberately
+  # (via `aws ssm get-parameter --name
+  # /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64`)
+  # only as part of a planned instance migration, never as an incidental
+  # side effect of an unrelated compute.yaml change.
   LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Type: AWS::EC2::Image::Id
+    Default: ami-0cb938ea8bf5b7973
   # What makes this stack a distinct country's platform (e.g. a separate
   # Australia deployment alongside a future Sri Lanka one, same template,
   # same code) — read once at boot by DataSeeder to seed the DB-backed

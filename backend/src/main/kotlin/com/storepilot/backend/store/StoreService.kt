@@ -3,11 +3,13 @@ package com.storepilot.backend.store
 import com.storepilot.backend.admin.AdminNotificationService
 import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
+import com.storepilot.backend.common.requireCategory
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.security.CognitoProperties
 import com.storepilot.backend.common.storage.FileStorageService
@@ -59,6 +61,7 @@ class StoreService(
     private val bookingRepository: BookingRepository,
     private val payoutRepository: PayoutRepository,
     private val feeCollectionRepository: FeeCollectionRepository,
+    private val categoryRepository: CategoryRepository,
 ) {
     private val log = LoggerFactory.getLogger(StoreService::class.java)
 
@@ -68,13 +71,13 @@ class StoreService(
      * Pageable) — the DB is only ever asked for one page's worth of rows.
      */
     fun search(category: String?, query: String?, page: Int, size: Int): PageResponse<StoreResponse> {
-        val categoryEnum = category?.let { wireValueOf<StoreCategory>(it) }
+        val validatedCategory = category?.let { categoryRepository.requireCategory(it) }
 
         val activeOnly = Specification<Store> { root, _, cb ->
             cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), StoreVerificationStatus.ACTIVE)
         }
-        val categorySpec: Specification<Store>? = categoryEnum?.let { cat ->
-            Specification { root, _, cb -> cb.equal(root.get<StoreCategory>("category"), cat) }
+        val categorySpec: Specification<Store>? = validatedCategory?.let { cat ->
+            Specification { root, _, cb -> cb.equal(root.get<String>("category"), cat) }
         }
         val querySpec: Specification<Store>? = query?.trim()?.takeIf { it.isNotBlank() }?.let { q ->
             val pattern = "%${q.lowercase()}%"
@@ -248,7 +251,7 @@ class StoreService(
             existing.name = input.name
             existing.tagline = input.tagline
             existing.description = input.description
-            existing.category = wireValueOf(input.category)
+            existing.category = categoryRepository.requireCategory(input.category)
             existing.address = StoreAddress(city = input.city, state = input.state)
             existing.whatsappNumber = input.whatsappNumber
             existing.verificationStatus = StoreVerificationStatus.PENDING
@@ -265,7 +268,7 @@ class StoreService(
             // logoUrl/bannerUrl start null — the frontend renders a
             // generated initials avatar / color block until the seller
             // uploads real images via uploadLogo/uploadBanner below.
-            category = wireValueOf(input.category),
+            category = categoryRepository.requireCategory(input.category),
             address = StoreAddress(
                 city = input.city,
                 state = input.state,
@@ -572,13 +575,12 @@ class StoreService(
 
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
-    fun adminList(status: String?): List<StoreResponse> {
-        val results = if (status != null) {
-            storeRepository.findByVerificationStatus(wireValueOf(status))
-        } else {
-            storeRepository.findAll()
-        }
-        return results.sortedByDescending { it.createdAt }.map { it.toResponse(fileStorageService) }
+    fun adminList(status: String?, page: Int, size: Int): PageResponse<StoreResponse> {
+        val statusEnum = status?.let { wireValueOf<StoreVerificationStatus>(it) }
+        val spec = statusEnum?.let { s -> Specification<Store> { root, _, cb -> cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), s) } }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE), Sort.by("createdAt").descending())
+        val results = if (spec != null) storeRepository.findAll(spec, pageable) else storeRepository.findAll(pageable)
+        return results.toPageResponse { it.toResponse(fileStorageService) }
     }
 
     /**

@@ -20,7 +20,6 @@ import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
@@ -83,7 +82,7 @@ class BookingServiceTest {
             name = "Test Salon",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.BEAUTY,
+            category = "beauty",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -104,7 +103,7 @@ class BookingServiceTest {
             name = "Haircut",
             slug = "haircut",
             description = "A haircut",
-            category = StoreCategory.BEAUTY,
+            category = "beauty",
             price = 5000,
             durationMinutes = 30,
             status = ServiceStatus.ACTIVE,

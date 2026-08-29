@@ -13,7 +13,7 @@ fun Product.toResponse(fileStorageService: FileStorageService): ProductResponse 
         slug = slug,
         description = description,
         images = images.map { ProductImageResponse(requireNotNull(it.id), fileStorageService.resolveUrl(it.url), it.alt) },
-        category = category.wireValue,
+        category = category,
         price = price,
         compareAtPrice = compareAtPrice,
         stockQuantity = stockQuantity,

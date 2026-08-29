@@ -1,10 +1,12 @@
+"use client";
+
 import { Check, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import { AbnVerificationBadge } from "@/components/shared/abn-verification-badge";
 import { formatDate } from "@/lib/format";
-import { getCategoryLabel } from "@/mock/categories";
+import { useCategories } from "@/hooks/use-categories";
 import type { Store, StoreSettings, StoreVerificationStatus } from "@/types";
 
 const STATUS_TONES: Record<StoreVerificationStatus, StatusTone> = {
@@ -39,6 +41,7 @@ export function StoreDetailCard({
   onReject?: (store: Store) => void;
   isApproving?: boolean;
 }) {
+  const { getCategoryLabel } = useCategories();
   return (
     <div className="rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">

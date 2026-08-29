@@ -21,12 +21,12 @@ import com.storepilot.backend.order.ReceiptStorageService
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.data.domain.PageImpl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -71,7 +71,7 @@ class PayoutServiceTest {
             name = "Store",
             tagline = "tagline",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000",
             verificationStatus = StoreVerificationStatus.ACTIVE,
@@ -122,7 +122,7 @@ class PayoutServiceTest {
             name = "A service",
             slug = "a-service",
             description = "description",
-            category = StoreCategory.HANDICRAFTS,
+            category = "handicrafts",
             price = servicePrice,
             durationMinutes = 60,
             status = ServiceStatus.ACTIVE,
@@ -157,7 +157,7 @@ class PayoutServiceTest {
     fun `listByStore rejects a non-owning seller`() {
         val otherSeller = Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
         every { currentActor.requireSeller() } returns otherSeller
-        assertThrows(ForbiddenException::class.java) { service.listByStore(storeId) }
+        assertThrows(ForbiddenException::class.java) { service.listByStore(storeId, 0, 20) }
     }
 
     @Test
@@ -169,10 +169,10 @@ class PayoutServiceTest {
         val notPayHere = payableOrder(paymentMethod = PaymentMethod.COD)
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(delivered, notDelivered, notPaid, notPayHere)
 
-        val result = service.getEligibleOrders(storeId)
+        val result = service.getEligibleOrders(storeId, 0, 20)
 
-        assertEquals(1, result.size)
-        assertEquals(delivered.id, result[0].id)
+        assertEquals(1, result.content.size)
+        assertEquals(delivered.id, result.content[0].id)
     }
 
     @Test
@@ -186,9 +186,9 @@ class PayoutServiceTest {
         every { payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(existingPayout)
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(order)
 
-        val result = service.getEligibleOrders(storeId)
+        val result = service.getEligibleOrders(storeId, 0, 20)
 
-        assertTrue(result.isEmpty())
+        assertTrue(result.content.isEmpty())
     }
 
     @Test
@@ -198,9 +198,9 @@ class PayoutServiceTest {
         val notCompleted = payableBooking(status = BookingStatus.CONFIRMED)
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(completed, notCompleted)
 
-        val result = service.getEligibleBookings(storeId)
+        val result = service.getEligibleBookings(storeId, 0, 20)
 
-        assertEquals(1, result.size)
+        assertEquals(1, result.content.size)
     }
 
     @Test
@@ -208,9 +208,9 @@ class PayoutServiceTest {
         emptyPayoutHistory()
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(payableOrder())
 
-        val result = service.adminGetEligibleOrders(storeId)
+        val result = service.adminGetEligibleOrders(storeId, 0, 20)
 
-        assertEquals(1, result.size)
+        assertEquals(1, result.content.size)
         verify(exactly = 0) { currentActor.requireSeller() }
     }
 
@@ -273,10 +273,10 @@ class PayoutServiceTest {
     fun `adminList returns every payout, most recent first`() {
         val older = Payout(store = store, subtotal = 100, platformFee = 5, net = 95).apply { id = UUID.randomUUID(); createdAt = Instant.now().minusSeconds(60) }
         val newer = Payout(store = store, subtotal = 200, platformFee = 10, net = 190).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
-        every { payoutRepository.findAll() } returns listOf(older, newer)
+        every { payoutRepository.findAllByOrderByCreatedAtDesc(any()) } returns PageImpl(listOf(newer, older))
 
-        val result = service.adminList()
+        val result = service.adminList(0, 20)
 
-        assertEquals(newer.id, result.first().id)
+        assertEquals(newer.id, result.content.first().id)
     }
 }

@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableRowSkeleton } from "@/components/shared/loading-skeletons";
 import { formatDateTime } from "@/lib/format";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { queryKeys } from "@/lib/query-keys";
 import { storesService, adminService } from "@/services";
 import type { Store, StoreSettings, StoreVerificationChangeRequest, StoreVerificationStatus } from "@/types";
 
@@ -80,9 +81,9 @@ export default function AdminStoresPage() {
   const { data: pendingApplications, isLoading: pendingLoading } = useQuery<StoreWithSettings[]>({
     queryKey: ["admin-pending-stores"],
     queryFn: async () => {
-      const stores = await storesService.adminListStores("pending");
+      const stores = await storesService.adminListStores("pending", 0, 100);
       return Promise.all(
-        stores.map(async (store) => ({ store, settings: await storesService.adminGetStoreSettings(store.id) })),
+        stores.content.map(async (store) => ({ store, settings: await storesService.adminGetStoreSettings(store.id) })),
       );
     },
   });
@@ -90,9 +91,9 @@ export default function AdminStoresPage() {
   const { data: allStores, isLoading: allStoresLoading } = useQuery<StoreWithSettings[]>({
     queryKey: ["admin-all-stores"],
     queryFn: async () => {
-      const stores = await storesService.adminListStores();
+      const stores = await storesService.adminListStores(undefined, 0, 100);
       return Promise.all(
-        stores.map(async (store) => ({ store, settings: await storesService.adminGetStoreSettings(store.id) })),
+        stores.content.map(async (store) => ({ store, settings: await storesService.adminGetStoreSettings(store.id) })),
       );
     },
   });
@@ -118,7 +119,7 @@ export default function AdminStoresPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-pending-stores"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-stores"] });
       queryClient.invalidateQueries({ queryKey: ["admin-store-decision-history"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-pending-stores-count"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.pendingStoresCount() });
       toast.success("Store approved — it's now live on the marketplace");
     },
     onError: () => toast.error("Couldn't approve this store"),
@@ -131,7 +132,7 @@ export default function AdminStoresPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-pending-stores"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-stores"] });
       queryClient.invalidateQueries({ queryKey: ["admin-store-decision-history"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-pending-stores-count"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.pendingStoresCount() });
       toast.success("Application rejected");
       setRejectTarget(null);
       setRejectReason("");
@@ -182,8 +183,8 @@ export default function AdminStoresPage() {
             <TabsTrigger value="all">All stores</TabsTrigger>
             <TabsTrigger value="changes">
               Verification changes
-              {pendingChangeRequests && pendingChangeRequests.length > 0 ? (
-                <Badge className="ml-1.5 border-0 px-1.5">{pendingChangeRequests.length}</Badge>
+              {pendingChangeRequests && pendingChangeRequests.content.length > 0 ? (
+                <Badge className="ml-1.5 border-0 px-1.5">{pendingChangeRequests.content.length}</Badge>
               ) : null}
             </TabsTrigger>
             <TabsTrigger value="history">Decision history</TabsTrigger>
@@ -277,11 +278,11 @@ export default function AdminStoresPage() {
                   <TableRowSkeleton columns={3} />
                   <TableRowSkeleton columns={3} />
                 </div>
-              ) : !pendingChangeRequests || pendingChangeRequests.length === 0 ? (
+              ) : !pendingChangeRequests || pendingChangeRequests.content.length === 0 ? (
                 <EmptyState icon={FileEdit} title="No verification changes pending review" />
               ) : (
                 <div className="space-y-3">
-                  {pendingChangeRequests.map((request) => (
+                  {pendingChangeRequests.content.map((request) => (
                     <div key={request.id} className="space-y-3 rounded-md border p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-semibold">{request.storeName}</p>

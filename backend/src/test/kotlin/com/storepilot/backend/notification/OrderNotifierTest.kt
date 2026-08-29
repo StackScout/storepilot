@@ -14,7 +14,6 @@ import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.SellerType
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.store.StoreVerificationStatus
@@ -51,7 +50,7 @@ class OrderNotifierTest {
         seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
         store = Store(
             seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
-            category = StoreCategory.HANDICRAFTS, address = StoreAddress(city = "Sydney", state = "NSW"),
+            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
         ).apply { id = UUID.randomUUID() }
         every { platformConfigService.current() } returns PlatformSettings(

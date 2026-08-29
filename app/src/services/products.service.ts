@@ -42,10 +42,20 @@ export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
   return (await listProducts({ sort: "rating", page: 0, size: limit })).content;
 }
 
+/** GET /stores/:storeId/products — paginated server-side; defaults to a generous page size since most callers want "the whole catalog." */
+export async function listProductsByStore(storeId: string, page = 0, size = 100): Promise<PageResponse<Product>> {
+  const qs = toQueryString({ page, size });
+  const result = await apiClient.get<PageResponse<Product>>(`/api/stores/${storeId}/products${qs}`);
+  return { ...result, content: result.content.map(normalizeProduct) };
+}
+
 /**
  * GET /stores/:storeSlug/products/:productSlug — no dedicated backend
  * endpoint either; composed from the store-by-slug and products-by-store
- * endpoints, same two lookups the mock effectively needed anyway.
+ * endpoints, same two lookups the mock effectively needed anyway. Walks
+ * every page of the store's catalog (rare beyond page 0 — a store's
+ * product count only exceeds one page at the max page size for a genuinely
+ * large catalog) since the product being looked up could be on any page.
  */
 export async function getProductBySlug(
   storeSlug: string,
@@ -53,19 +63,20 @@ export async function getProductBySlug(
 ): Promise<Product | null> {
   const store = await apiClient.getOrNull<{ id: string }>(`/api/stores/${storeSlug}`);
   if (!store) return null;
-  const products = (await apiClient.get<Product[]>(`/api/stores/${store.id}/products`)).map(normalizeProduct);
-  return products.find((p) => p.slug === productSlug) ?? null;
+  let page = 0;
+  while (true) {
+    const result = await listProductsByStore(store.id, page);
+    const match = result.content.find((p) => p.slug === productSlug);
+    if (match) return match;
+    if (page + 1 >= result.totalPages) return null;
+    page += 1;
+  }
 }
 
 /** GET /products/:id */
 export async function getProductById(id: string): Promise<Product | null> {
   const product = await apiClient.getOrNull<Product>(`/api/products/${id}`);
   return product ? normalizeProduct(product) : null;
-}
-
-/** GET /stores/:storeId/products */
-export async function listProductsByStore(storeId: string): Promise<Product[]> {
-  return (await apiClient.get<Product[]>(`/api/stores/${storeId}/products`)).map(normalizeProduct);
 }
 
 function buildProductFormData(input: ProductFormInput, images: File[]): FormData {
@@ -125,7 +136,9 @@ export async function removeFromWishlist(productId: string): Promise<void> {
   await apiClient.delete<void>(`/api/products/${productId}/wishlist`);
 }
 
-/** GET /me/wishlist — the signed-in buyer's saved products. */
-export async function listMyWishlist(): Promise<Product[]> {
-  return (await apiClient.get<Product[]>("/api/me/wishlist")).map(normalizeProduct);
+/** GET /me/wishlist — the signed-in buyer's saved products. Paginated server-side; defaults to a generous page size since a wishlist is usually shown in full. */
+export async function listMyWishlist(page = 0, size = 100): Promise<PageResponse<Product>> {
+  const qs = toQueryString({ page, size });
+  const result = await apiClient.get<PageResponse<Product>>(`/api/me/wishlist${qs}`);
+  return { ...result, content: result.content.map(normalizeProduct) };
 }

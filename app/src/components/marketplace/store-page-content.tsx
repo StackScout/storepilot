@@ -13,7 +13,8 @@ import { RatingStars } from "@/components/shared/rating-stars";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { Button } from "@/components/ui/button";
-import { getCategoryLabel } from "@/mock/categories";
+import { queryKeys } from "@/lib/query-keys";
+import { useCategories } from "@/hooks/use-categories";
 import { bookableServicesService, productsService, storesService } from "@/services";
 import type { BookableService, Product, Store } from "@/types";
 
@@ -37,22 +38,23 @@ export function StorePageContent({
   initialServices: BookableService[];
   bookingsEnabled: boolean;
 }) {
+  const { getCategoryLabel } = useCategories();
   const { data: store, isLoading } = useQuery({
-    queryKey: ["store", "slug", slug],
+    queryKey: queryKeys.store.bySlug(slug),
     queryFn: () => storesService.getStoreBySlug(slug),
     initialData: initialStore,
     staleTime: 0,
   });
   const { data: products } = useQuery({
-    queryKey: ["products", "store", store?.id],
-    queryFn: () => (store ? productsService.listProductsByStore(store.id) : Promise.resolve([])),
+    queryKey: queryKeys.products.byStore(store?.id ?? ""),
+    queryFn: async () => (store ? (await productsService.listProductsByStore(store.id)).content : []),
     initialData: initialProducts,
     enabled: !!store,
     staleTime: 0,
   });
   const { data: services } = useQuery({
-    queryKey: ["bookable-services", "store", store?.id],
-    queryFn: () => (store ? bookableServicesService.listServicesByStore(store.id) : Promise.resolve([])),
+    queryKey: queryKeys.bookableServices.byStore(store?.id ?? ""),
+    queryFn: async () => (store ? (await bookableServicesService.listServicesByStore(store.id)).content : []),
     initialData: initialServices,
     enabled: !!store && bookingsEnabled,
     staleTime: 0,

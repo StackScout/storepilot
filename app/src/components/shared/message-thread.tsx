@@ -44,7 +44,7 @@ export function MessageThread({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages?.length]);
+  }, [messages?.content.length]);
 
   const mutation = useMutation({
     mutationFn: (text: string) => messagingService.sendMessage(conversationId, text),
@@ -74,12 +74,12 @@ export function MessageThread({
         <CardContent className="flex h-full flex-col gap-3 overflow-y-auto">
           {isLoading ? (
             <p className="text-muted-foreground text-center text-sm">Loading…</p>
-          ) : !messages || messages.length === 0 ? (
+          ) : !messages || messages.content.length === 0 ? (
             <p className="text-muted-foreground text-center text-sm">
               No messages yet — say hello!
             </p>
           ) : (
-            messages.map((message) => {
+            messages.content.map((message) => {
               const isOwn = message.senderType === viewerSide;
               return (
                 <div key={message.id} className={cn("flex", isOwn ? "justify-end" : "justify-start")}>

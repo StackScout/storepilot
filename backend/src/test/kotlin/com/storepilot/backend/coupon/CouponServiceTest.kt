@@ -7,11 +7,11 @@ import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
+import org.springframework.data.domain.PageImpl
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -168,7 +168,7 @@ class CouponServiceTest {
     fun setUpStore() {
         store = Store(
             seller = seller, slug = "store", name = "Store", tagline = "tagline", description = "description",
-            category = StoreCategory.HANDICRAFTS, address = StoreAddress(city = "Sydney", state = "NSW"),
+            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
         ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
@@ -299,8 +299,9 @@ class CouponServiceTest {
 
     @Test
     fun `listPlatformWide returns only coupons with no owning store`() {
-        every { couponRepository.findByStoreIdIsNullOrderByCreatedAtDesc() } returns listOf(coupon(storeScoped = false))
-        assertEquals(1, service.listPlatformWide().size)
+        every { couponRepository.findByStoreIdIsNullOrderByCreatedAtDesc(any()) } returns
+            PageImpl(listOf(coupon(storeScoped = false)))
+        assertEquals(1, service.listPlatformWide(0, 20).content.size)
     }
 
     // ---- recordUse ----

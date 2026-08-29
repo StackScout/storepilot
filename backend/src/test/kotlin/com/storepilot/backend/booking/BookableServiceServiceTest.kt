@@ -1,5 +1,6 @@
 package com.storepilot.backend.booking
 
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
@@ -8,7 +9,6 @@ import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
 import org.springframework.mock.web.MockMultipartFile
 import java.time.Instant
 import java.util.Optional
@@ -32,8 +33,9 @@ class BookableServiceServiceTest {
     private val storeRepository = mockk<StoreRepository>()
     private val currentActor = mockk<CurrentActor>()
     private val fileStorageService = mockk<FileStorageService>(relaxed = true)
+    private val categoryRepository = mockk<CategoryRepository>()
 
-    private val service = BookableServiceService(serviceRepository, bookingRepository, storeRepository, currentActor, fileStorageService)
+    private val service = BookableServiceService(serviceRepository, bookingRepository, storeRepository, currentActor, fileStorageService, categoryRepository)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -44,12 +46,13 @@ class BookableServiceServiceTest {
     fun setUp() {
         store = Store(
             seller = seller, slug = "studio", name = "Studio", tagline = "tagline", description = "description",
-            category = StoreCategory.HANDICRAFTS, address = StoreAddress(city = "Sydney", state = "NSW"),
+            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
             whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
         ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { serviceRepository.findByStoreIdAndSlug(storeId, any()) } returns null
+        every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
     private fun formInput(category: String = "handicrafts") = BookableServiceFormInput(
@@ -58,7 +61,7 @@ class BookableServiceServiceTest {
     )
 
     private fun bookableService(status: ServiceStatus = ServiceStatus.ACTIVE) = BookableService(
-        store = store, name = "Existing", slug = "existing", description = "description", category = StoreCategory.HANDICRAFTS,
+        store = store, name = "Existing", slug = "existing", description = "description", category = "handicrafts",
         price = 5000, durationMinutes = 30, status = status,
     ).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now() }
 
@@ -271,19 +274,21 @@ class BookableServiceServiceTest {
     @Test
     fun `listByStore shows drafts to the owning seller`() {
         every { currentActor.sellerOrNull() } returns seller
-        every { serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId) } returns listOf(bookableService())
+        every { serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, any()) } returns
+            PageImpl(listOf(bookableService()))
 
-        assertEquals(1, service.listByStore(storeId).size)
-        verify { serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId) }
+        assertEquals(1, service.listByStore(storeId, 0, 20).content.size)
+        verify { serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, any()) }
     }
 
     @Test
     fun `listByStore hides drafts from a non-owning caller`() {
         every { currentActor.sellerOrNull() } returns null
-        every { serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT) } returns listOf(bookableService())
+        every { serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT, any()) } returns
+            PageImpl(listOf(bookableService()))
 
-        assertEquals(1, service.listByStore(storeId).size)
-        verify { serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT) }
+        assertEquals(1, service.listByStore(storeId, 0, 20).content.size)
+        verify { serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT, any()) }
     }
 
     @Test

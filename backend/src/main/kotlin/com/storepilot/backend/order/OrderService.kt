@@ -34,6 +34,9 @@ import java.time.temporal.ChronoField
 import java.util.UUID
 import kotlin.random.Random
 
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
+
 private val ORDER_NUMBER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatterBuilder()
     .appendValue(ChronoField.YEAR, 4)
     .appendValue(ChronoField.MONTH_OF_YEAR, 2)
@@ -118,6 +121,14 @@ class OrderService(
         return orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
+    /** Paged sibling of the above — GET /api/me/orders itself. */
+    @Transactional
+    fun listByCurrentBuyer(page: Int, size: Int): PageResponse<OrderResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
+    }
+
     /**
      * GET /api/stores/{storeId}/stripe-settlements — read-only reconciliation
      * view of paid Stripe orders for this store: what went through Stripe,
@@ -125,18 +136,26 @@ class OrderService(
      * took. Never a ledger to release/collect from — Connect already moved
      * the money at charge time (see PaymentMethod.STRIPE's doc comment).
      */
-    fun listStripeSettlementsByStore(storeId: UUID): List<OrderResponse> {
+    fun listStripeSettlementsByStore(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
-        return orderRepository.findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId, PaymentMethod.STRIPE, PaymentStatus.PAID)
-            .map { it.toResponse(receiptStorageService, fileStorageService) }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return orderRepository.findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId, PaymentMethod.STRIPE, PaymentStatus.PAID, pageable)
+            .toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
-    /** GET /api/admin/stripe-settlements — same view, platform-wide. */
+    /** Unpaged — internal cross-service use (AccountingService.summary() needs every settled order to sum correctly). GET /api/admin/stripe-settlements uses the paged overload below. */
     fun adminListStripeSettlements(): List<OrderResponse> =
         orderRepository.findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID)
             .map { it.toResponse(receiptStorageService, fileStorageService) }
+
+    /** Paged sibling of the above — GET /api/admin/stripe-settlements itself. */
+    fun adminListStripeSettlements(page: Int, size: Int): PageResponse<OrderResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return orderRepository.findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID, pageable)
+            .toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
+    }
 
     fun getById(id: UUID): OrderResponse =
         orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }.toResponse(receiptStorageService, fileStorageService)

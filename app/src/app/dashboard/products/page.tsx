@@ -24,6 +24,7 @@ import { PriceDisplay } from "@/components/shared/price-display";
 import { formatCurrency } from "@/lib/currency";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { queryKeys } from "@/lib/query-keys";
 import { productsService } from "@/services";
 import type { Product } from "@/types";
 
@@ -35,7 +36,7 @@ export default function DashboardProductsPage() {
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ["products", "store", storeId],
+    queryKey: queryKeys.products.byStore(storeId),
     queryFn: () => productsService.listProductsByStore(storeId),
   });
 
@@ -69,7 +70,7 @@ export default function DashboardProductsPage() {
               <TableRowSkeleton columns={5} />
               <TableRowSkeleton columns={5} />
             </div>
-          ) : !products || products.length === 0 ? (
+          ) : !products || products.content.length === 0 ? (
             <EmptyState
               icon={Package}
               title="No products yet"
@@ -93,7 +94,7 @@ export default function DashboardProductsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((product) => (
+                  {products.content.map((product) => (
                     <tr key={product.id} className="border-b last:border-0">
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-3">

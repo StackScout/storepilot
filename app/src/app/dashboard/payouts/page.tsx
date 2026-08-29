@@ -32,7 +32,7 @@ export default function DashboardPayoutsPage() {
   });
   const { data: eligibleOrders } = useQuery({
     queryKey: ["payout-eligible-orders", storeId],
-    queryFn: () => payoutsService.getEligibleOrdersForPayout(storeId),
+    queryFn: () => payoutsService.getEligibleOrdersForPayout(storeId, 0, 200),
     enabled: showPayouts,
   });
   const { data: settings } = useQuery({
@@ -46,7 +46,7 @@ export default function DashboardPayoutsPage() {
   });
   const { data: feeEligibleOrders } = useQuery({
     queryKey: ["fee-collection-eligible-orders", storeId],
-    queryFn: () => payoutsService.getEligibleOrdersForFeeCollection(storeId),
+    queryFn: () => payoutsService.getEligibleOrdersForFeeCollection(storeId, 0, 200),
   });
   const { data: stripeSettlements, isLoading: isStripeLoading } = useQuery({
     queryKey: ["stripe-settlements", storeId],
@@ -54,22 +54,22 @@ export default function DashboardPayoutsPage() {
     enabled: showStripe,
   });
 
-  const availableAmount = (eligibleOrders ?? []).reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0);
-  const scheduledAmount = (payouts ?? [])
+  const availableAmount = (eligibleOrders?.content ?? []).reduce((sum, o) => sum + (o.subtotal - o.platformFee), 0);
+  const scheduledAmount = (payouts?.content ?? [])
     .filter((p) => p.status === "scheduled")
     .reduce((sum, p) => sum + p.net, 0);
-  const paidAmount = (payouts ?? []).filter((p) => p.status === "paid").reduce((sum, p) => sum + p.net, 0);
+  const paidAmount = (payouts?.content ?? []).filter((p) => p.status === "paid").reduce((sum, p) => sum + p.net, 0);
 
-  const feeOwedAmount = (feeEligibleOrders ?? []).reduce((sum, o) => sum + o.platformFee, 0);
-  const feePendingAmount = (feeCollections ?? [])
+  const feeOwedAmount = (feeEligibleOrders?.content ?? []).reduce((sum, o) => sum + o.platformFee, 0);
+  const feePendingAmount = (feeCollections?.content ?? [])
     .filter((f) => f.status === "pending")
     .reduce((sum, f) => sum + f.platformFee, 0);
-  const feeCollectedAmount = (feeCollections ?? [])
+  const feeCollectedAmount = (feeCollections?.content ?? [])
     .filter((f) => f.status === "collected")
     .reduce((sum, f) => sum + f.platformFee, 0);
 
-  const stripeGross = (stripeSettlements ?? []).reduce((sum, o) => sum + o.total, 0);
-  const stripeFees = (stripeSettlements ?? []).reduce((sum, o) => sum + o.platformFee, 0);
+  const stripeGross = (stripeSettlements?.content ?? []).reduce((sum, o) => sum + o.total, 0);
+  const stripeFees = (stripeSettlements?.content ?? []).reduce((sum, o) => sum + o.platformFee, 0);
   const stripeNet = stripeGross - stripeFees;
 
   return (
@@ -123,7 +123,7 @@ export default function DashboardPayoutsPage() {
                   <TableRowSkeleton columns={5} />
                   <TableRowSkeleton columns={5} />
                 </div>
-              ) : !payouts || payouts.length === 0 ? (
+              ) : !payouts || payouts.content.length === 0 ? (
                 <EmptyState icon={Wallet} title="No payouts yet" />
               ) : (
                 <div className="-mx-6 overflow-x-auto">
@@ -139,7 +139,7 @@ export default function DashboardPayoutsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {payouts.map((payout) => (
+                      {payouts.content.map((payout) => (
                         <tr key={payout.id} className="border-b last:border-0">
                           <td className="px-6 py-3 font-medium">{payout.id}</td>
                           <td className="text-muted-foreground px-6 py-3">{formatDate(payout.createdAt)}</td>
@@ -190,7 +190,7 @@ export default function DashboardPayoutsPage() {
                 <TableRowSkeleton columns={5} />
                 <TableRowSkeleton columns={5} />
               </div>
-            ) : !feeCollections || feeCollections.length === 0 ? (
+            ) : !feeCollections || feeCollections.content.length === 0 ? (
               <EmptyState icon={ReceiptText} title="No fee collections yet" />
             ) : (
               <div className="-mx-6 overflow-x-auto">
@@ -206,7 +206,7 @@ export default function DashboardPayoutsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {feeCollections.map((fc) => (
+                    {feeCollections.content.map((fc) => (
                       <tr key={fc.id} className="border-b last:border-0">
                         <td className="px-6 py-3 font-medium">{fc.id}</td>
                         <td className="text-muted-foreground px-6 py-3">{formatDate(fc.createdAt)}</td>
@@ -255,7 +255,7 @@ export default function DashboardPayoutsPage() {
                   <TableRowSkeleton columns={4} />
                   <TableRowSkeleton columns={4} />
                 </div>
-              ) : !stripeSettlements || stripeSettlements.length === 0 ? (
+              ) : !stripeSettlements || stripeSettlements.content.length === 0 ? (
                 <EmptyState icon={CreditCard} title="No Stripe orders yet" />
               ) : (
                 <div className="-mx-6 overflow-x-auto">
@@ -269,7 +269,7 @@ export default function DashboardPayoutsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stripeSettlements.map((order) => (
+                      {stripeSettlements.content.map((order) => (
                         <tr key={order.id} className="border-b last:border-0">
                           <td className="px-6 py-3 font-medium">{order.orderNumber}</td>
                           <td className="px-6 py-3">{formatCurrency(order.total, currency)}</td>

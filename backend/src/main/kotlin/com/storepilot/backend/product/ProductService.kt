@@ -1,16 +1,17 @@
 package com.storepilot.backend.product
 
+import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
+import com.storepilot.backend.common.requireCategory
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.store.Store
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import org.springframework.data.domain.PageRequest
@@ -39,6 +40,7 @@ class ProductService(
     private val currentActor: CurrentActor,
     private val fileStorageService: FileStorageService,
     private val wishlistItemRepository: WishlistItemRepository,
+    private val categoryRepository: CategoryRepository,
 ) {
     /**
      * GET /api/products — the matching row set is never fully materialized:
@@ -63,7 +65,7 @@ class ProductService(
         page: Int,
         size: Int,
     ): PageResponse<ProductResponse> {
-        val categoryEnum = category?.let { wireValueOf<StoreCategory>(it) }
+        val validatedCategory = category?.let { categoryRepository.requireCategory(it) }
         val trimmedQuery = query?.trim()
         val boundedPage = page.coerceAtLeast(0)
         val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
@@ -74,7 +76,7 @@ class ProductService(
                 else -> "relevance"
             }
             val results = productRepository.searchFullText(
-                category = categoryEnum?.wireValue,
+                category = validatedCategory,
                 query = trimmedQuery,
                 likePattern = "%${trimmedQuery.lowercase()}%",
                 minPrice = minPrice,
@@ -88,7 +90,7 @@ class ProductService(
         val spec = Specification.allOf(
             ProductSpecifications.storeActive(),
             ProductSpecifications.notDraft(),
-            ProductSpecifications.hasCategory(categoryEnum),
+            ProductSpecifications.hasCategory(validatedCategory),
             ProductSpecifications.priceBetween(minPrice, maxPrice),
         )
         val sortOrder = when (sort) {
@@ -165,13 +167,7 @@ class ProductService(
         }
     }
 
-    /**
-     * Shared by the seller's own product list (needs every status,
-     * including drafts) and the public storefront's per-store product grid
-     * (must never show a draft) — same endpoint, so the response depends on
-     * whether the caller owns this store, not on a query param a public
-     * caller could just set themselves.
-     */
+    /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/products uses the paged overload below. */
     fun listByStore(storeId: UUID): List<ProductResponse> {
         val products = if (isOwnedByCurrentSeller(storeId)) {
             productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId)
@@ -181,12 +177,29 @@ class ProductService(
         return products.map { it.toResponse(fileStorageService) }
     }
 
+    /**
+     * Shared by the seller's own product list (needs every status,
+     * including drafts) and the public storefront's per-store product grid
+     * (must never show a draft) — same endpoint, so the response depends on
+     * whether the caller owns this store, not on a query param a public
+     * caller could just set themselves.
+     */
+    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<ProductResponse> {
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        val products = if (isOwnedByCurrentSeller(storeId)) {
+            productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
+        } else {
+            productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT, pageable)
+        }
+        return products.toPageResponse { it.toResponse(fileStorageService) }
+    }
+
     @Transactional
     fun create(storeId: UUID, input: ProductFormInput, images: List<MultipartFile>): ProductResponse {
         require(images.isNotEmpty()) { "Upload at least one product image" }
         val store = requireStore(storeId)
         requireOwnership(store)
-        val category = wireValueOf<StoreCategory>(input.category)
+        val category = categoryRepository.requireCategory(input.category)
         requireCategoryMatchesStore(store, category)
         val trackStock = effectiveTrackStock(storeId, input.trackStock)
         val sku = input.sku?.trim()?.takeIf { it.isNotBlank() }
@@ -219,7 +232,7 @@ class ProductService(
     fun update(id: UUID, input: ProductFormInput, images: List<MultipartFile>): ProductResponse {
         val product = productRepository.findById(id).orElseThrow { NotFoundException("Product $id not found") }
         requireOwnership(product.store)
-        val category = wireValueOf<StoreCategory>(input.category)
+        val category = categoryRepository.requireCategory(input.category)
         requireCategoryMatchesStore(product.store, category)
         product.name = input.name
         product.description = input.description
@@ -295,11 +308,19 @@ class ProductService(
         wishlistItemRepository.delete(item)
     }
 
-    /** GET /api/me/wishlist — mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
+    /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/me/wishlist uses the paged overload below. Mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
     @Transactional
     fun listWishlist(): List<ProductResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId).map { it.product.toResponse(fileStorageService) }
+    }
+
+    /** GET /api/me/wishlist — mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
+    @Transactional
+    fun listWishlist(page: Int, size: Int): PageResponse<ProductResponse> {
+        val buyerId = requireNotNull(currentActor.requireBuyer().id)
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.product.toResponse(fileStorageService) }
     }
 
     private fun resolveStatus(input: ProductFormInput, trackStock: Boolean): ProductStatus =
@@ -329,9 +350,9 @@ class ProductService(
     }
 
     /** A product's category is locked to the store's own approved category — see task item 40's doc comment on Store.kt. */
-    private fun requireCategoryMatchesStore(store: Store, category: StoreCategory) {
+    private fun requireCategoryMatchesStore(store: Store, category: String) {
         if (category != store.category) {
-            throw ConflictException("Products must be listed under this store's category (${store.category.wireValue})")
+            throw ConflictException("Products must be listed under this store's category (${store.category})")
         }
     }
 

@@ -36,7 +36,11 @@ class ProductController(
     fun getById(@PathVariable id: UUID): ProductResponse = productService.getById(id)
 
     @GetMapping("/api/stores/{storeId}/products")
-    fun listByStore(@PathVariable storeId: UUID): List<ProductResponse> = productService.listByStore(storeId)
+    fun listByStore(
+        @PathVariable storeId: UUID,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "24") size: Int,
+    ): PageResponse<ProductResponse> = productService.listByStore(storeId, page, size)
 
     @PostMapping("/api/stores/{storeId}/products", consumes = ["multipart/form-data"])
     fun create(
@@ -72,5 +76,8 @@ class ProductController(
     }
 
     @GetMapping("/api/me/wishlist")
-    fun listWishlist(): List<ProductResponse> = productService.listWishlist()
+    fun listWishlist(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "24") size: Int,
+    ): PageResponse<ProductResponse> = productService.listWishlist(page, size)
 }

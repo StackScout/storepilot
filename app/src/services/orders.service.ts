@@ -57,24 +57,31 @@ export async function getStripeCheckoutUrl(orderId: string): Promise<{ checkoutU
   return apiClient.post<{ checkoutUrl: string }>(`/api/orders/${orderId}/stripe-checkout`);
 }
 
-/** GET /api/me/orders — the signed-in buyer's own order history, derived from the auth cookie. */
-export async function listMyOrders(): Promise<Order[]> {
-  return (await apiClient.get<Order[]>("/api/me/orders")).map(normalizeOrder);
+/** GET /api/me/orders — the signed-in buyer's own order history, derived from the auth cookie. Paginated server-side. */
+export async function listMyOrders(page = 0, size = 20): Promise<PageResponse<Order>> {
+  const qs = toQueryString({ page, size });
+  const result = await apiClient.get<PageResponse<Order>>(`/api/me/orders${qs}`);
+  return { ...result, content: result.content.map(normalizeOrder) };
 }
 
 /**
  * GET /stores/:storeId/stripe-settlements — read-only reconciliation view of
  * paid Stripe orders: what went through Stripe, what Stripe auto-paid the
  * seller, what the platform automatically took. Never a batchable ledger
- * like payouts/fee-collections — Connect already moved the money.
+ * like payouts/fee-collections — Connect already moved the money. Paginated
+ * server-side.
  */
-export async function listStripeSettlementsByStore(storeId: string): Promise<Order[]> {
-  return (await apiClient.get<Order[]>(`/api/stores/${storeId}/stripe-settlements`)).map(normalizeOrder);
+export async function listStripeSettlementsByStore(storeId: string, page = 0, size = 20): Promise<PageResponse<Order>> {
+  const qs = toQueryString({ page, size });
+  const result = await apiClient.get<PageResponse<Order>>(`/api/stores/${storeId}/stripe-settlements${qs}`);
+  return { ...result, content: result.content.map(normalizeOrder) };
 }
 
-/** GET /admin/stripe-settlements — same view, platform-wide. */
-export async function adminListStripeSettlements(): Promise<Order[]> {
-  return (await apiClient.get<Order[]>("/api/admin/stripe-settlements")).map(normalizeOrder);
+/** GET /admin/stripe-settlements — same view, platform-wide. Paginated server-side. */
+export async function adminListStripeSettlements(page = 0, size = 20): Promise<PageResponse<Order>> {
+  const qs = toQueryString({ page, size });
+  const result = await apiClient.get<PageResponse<Order>>(`/api/admin/stripe-settlements${qs}`);
+  return { ...result, content: result.content.map(normalizeOrder) };
 }
 
 /**

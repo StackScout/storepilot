@@ -5,8 +5,10 @@ import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.notification.OrderNotifier
 import com.storepilot.backend.order.Order
@@ -21,11 +23,15 @@ import com.storepilot.backend.payout.PayoutRepository
 import com.storepilot.backend.payout.PayoutStatus
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.stripe.StripeService
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+
+/** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
+private const val MAX_PAGE_SIZE = 100
 
 /**
  * The post-delivery "buyer wants their money back" path — separate from
@@ -103,9 +109,10 @@ class ReturnRequestService(
         returnRequestRepository.findByOrder_IdOrderByCreatedAtDesc(orderId).map { it.toResponse() }
 
     /** GET /api/stores/{storeId}/returns — seller's own store. */
-    fun listForStore(storeId: UUID): List<ReturnRequestResponse> {
+    fun listForStore(storeId: UUID, page: Int, size: Int): PageResponse<ReturnRequestResponse> {
         requireSellerOwnsStore(storeId)
-        return returnRequestRepository.findByOrder_Store_IdOrderByCreatedAtDesc(storeId).map { it.toResponse() }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
+        return returnRequestRepository.findByOrder_Store_IdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
     }
 
     /**
@@ -240,14 +247,15 @@ class ReturnRequestService(
     }
 
     /** GET /api/admin/returns — gated by SecurityConfig's blanket admin-role rule on every /api/admin path. */
-    fun adminList(status: String?): List<ReturnRequestResponse> {
+    fun adminList(status: String?, page: Int, size: Int): PageResponse<ReturnRequestResponse> {
         val statusEnum = status?.let { wireValueOf<ReturnRequestStatus>(it) }
+        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         val requests = if (statusEnum != null) {
-            returnRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum)
+            returnRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum, pageable)
         } else {
-            returnRequestRepository.findAllByOrderByCreatedAtDesc()
+            returnRequestRepository.findAllByOrderByCreatedAtDesc(pageable)
         }
-        return requests.map { it.toResponse() }
+        return requests.toPageResponse { it.toResponse() }
     }
 
     private fun completeRefund(request: ReturnRequest, order: Order, refundReference: String?): ReturnRequestResponse {

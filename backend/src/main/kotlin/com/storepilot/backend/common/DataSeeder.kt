@@ -25,13 +25,13 @@ import com.storepilot.backend.seller.SellerRepository
 import com.storepilot.backend.store.SellerType
 import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAddress
-import com.storepilot.backend.store.StoreCategory
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import org.slf4j.LoggerFactory
 import org.springframework.boot.CommandLineRunner
+import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -51,7 +51,7 @@ private data class SeedStore(
     val name: String,
     val tagline: String,
     val description: String,
-    val category: StoreCategory,
+    val category: String,
     val city: String,
     val state: String,
     val whatsapp: String,
@@ -76,7 +76,7 @@ private data class SeedProduct(
     val slug: String,
     val description: String,
     val imageSeed: String,
-    val category: StoreCategory,
+    val category: String,
     val price: Int,
     val compareAtPrice: Int?,
     val stockQuantity: Int,
@@ -90,8 +90,21 @@ private data class SeedProduct(
 
 /**
  * Translates demo marketplace content into real rows on first boot (only runs
- * against an empty `stores` table, so it's safe to leave enabled — restarts
- * against an already-seeded database are a no-op).
+ * against an empty `stores` table, so it's safe to leave enabled in a local/dev
+ * profile — restarts against an already-seeded database are a no-op).
+ *
+ * `@Profile("!aws")` is the real safety net, not the row-count check above —
+ * the row-count guard only protects against re-seeding an *already-seeded*
+ * database; it does nothing to stop this from populating a fresh *production*
+ * database with fake demo content (fictional stores, ABNs, bank details, a
+ * `test-seller@storepilot.test` Cognito binding) on its very first boot. This
+ * mirrors every other local-only `@Component` in this codebase (e.g.
+ * LoggingEmailService/LocalFileStorageService vs their `@Profile("aws")`
+ * counterparts) — demo seeding simply has no production counterpart to pair
+ * with, so it's disabled outright under the `aws` profile instead. The single
+ * genuinely production-needed seed step (the `platform_settings` bootstrap
+ * row) is deliberately NOT part of this class — see PlatformSettingsSeeder,
+ * which runs in every profile.
  *
  * Demo content is Australian — AU is the near-term deployment target while
  * the Sri Lanka launch sits on hold pending business registration (see
@@ -113,6 +126,7 @@ private data class SeedProduct(
  * where each entity is constructed, not here.
  */
 @Component
+@Profile("!aws")
 class DataSeeder(
     private val storeRepository: StoreRepository,
     private val storeSettingsRepository: StoreSettingsRepository,
@@ -124,14 +138,11 @@ class DataSeeder(
     private val sellerRepository: SellerRepository,
     private val jdbcTemplate: JdbcTemplate,
     private val platformProperties: PlatformProperties,
-    private val platformSettingsRepository: PlatformSettingsRepository,
 ) : CommandLineRunner {
     private val log = LoggerFactory.getLogger(DataSeeder::class.java)
 
     @Transactional
     override fun run(vararg args: String) {
-        seedPlatformSettingsIfMissing()
-
         if (storeRepository.count() > 0) {
             log.info("Seed skipped — stores table already has data.")
             return
@@ -152,39 +163,6 @@ class DataSeeder(
             productIds.size,
             orderIds.size,
         )
-    }
-
-    /**
-     * The single platform_settings row — inserted once from PlatformProperties'
-     * bootstrap env-var values (see its doc comment); a no-op on every later
-     * boot. This is what makes the DB (not application.yml) the running
-     * app's actual config source, and what an operator would edit directly
-     * to reconfigure a deployment without rebuilding/redeploying.
-     */
-    private fun seedPlatformSettingsIfMissing() {
-        if (platformSettingsRepository.count() > 0) return
-        platformSettingsRepository.save(
-            PlatformSettings(
-                name = platformProperties.name,
-                tagline = platformProperties.tagline,
-                countryName = platformProperties.countryName,
-                countryCode = platformProperties.countryCode,
-                currencyCode = platformProperties.currencyCode,
-                currencySymbol = platformProperties.currencySymbol,
-                currencyLocale = platformProperties.currencyLocale,
-                platformFeePercent = platformProperties.platformFeePercent,
-                flatShippingFee = platformProperties.flatShippingFee,
-                proMonthlyPriceCents = platformProperties.proMonthlyPriceCents,
-                defaultCodEnabled = platformProperties.defaultCodEnabled,
-                defaultOnlinePaymentEnabled = platformProperties.defaultOnlinePaymentEnabled,
-                defaultBankTransferEnabled = platformProperties.defaultBankTransferEnabled,
-                supportEmail = platformProperties.supportEmail,
-                companyLocation = platformProperties.companyLocation,
-                timezone = platformProperties.timezone,
-                returnWindowDays = platformProperties.returnWindowDays,
-            ),
-        )
-        log.info("Seeded platform_settings from bootstrap PlatformProperties (name={}).", platformProperties.name)
     }
 
     /**
@@ -222,14 +200,14 @@ class DataSeeder(
 
     private fun seedStores(sellers: Map<String, Seller>): Map<String, UUID> {
         val seeds = listOf(
-            SeedStore("store-01", "blue-mountains-roasters", "Blue Mountains Roasters", "Small-batch coffee & tea from the Blue Mountains", "We roast single-origin coffee and blend loose-leaf tea in small batches out of Katoomba, sourcing green beans direct from growers we know by name.", StoreCategory.FOOD_BEVERAGE, "Katoomba", "New South Wales", "+61412345601", 4.8, 214, 4, true, "2024-02-11", 1320),
-            SeedStore("store-02", "yarra-valley-weavers", "Yarra Valley Weavers", "Handwoven wool textiles from the Yarra Valley", "A small weaving studio turning locally sourced Merino wool into throws, scarves and cushion covers on traditional floor looms.", StoreCategory.HANDICRAFTS, "Yarra Valley", "Victoria", "+61412345602", 4.9, 156, 3, true, "2023-11-02", 980),
-            SeedStore("store-03", "bondi-streetwear", "Bondi Streetwear", "Everyday streetwear designed and printed in Bondi", "Small local streetwear label making graphic tees, caps and sneakers inspired by Bondi's beach and skate culture.", StoreCategory.FASHION, "Bondi Beach", "New South Wales", "+61412345603", 4.6, 342, 3, true, "2024-05-20", 2110),
-            SeedStore("store-04", "byron-bay-botanicals", "Byron Bay Botanicals", "Native-botanical skincare from Byron Bay", "Small-batch skincare made with native Australian botanicals and macadamia oil — cruelty-free and locally formulated.", StoreCategory.BEAUTY, "Byron Bay", "New South Wales", "+61412345604", 4.7, 98, 3, false, "2025-01-15", 410),
-            SeedStore("store-05", "outback-opal-co", "Outback Opal Co.", "Certified Australian opals, ethically sourced from Coober Pedy", "Family-run jewellers offering certified boulder and doublet opals set in silver and gold, sourced directly from Coober Pedy fields.", StoreCategory.JEWELRY, "Coober Pedy", "South Australia", "+61412345605", 4.9, 67, 3, true, "2023-08-09", 540),
-            SeedStore("store-06", "techhub-australia", "TechHub Australia", "Affordable phone & gadget accessories, delivered nationwide", "Your neighbourhood tech shop online — chargers, earbuds, cables and accessories at fair prices with fast Melbourne dispatch.", StoreCategory.ELECTRONICS, "Melbourne", "Victoria", "+61412345606", 4.4, 501, 4, true, "2024-09-03", 1875),
-            SeedStore("store-07", "aussie-farm-basket", "Aussie Farm Basket", "Organic produce direct from Toowoomba farms", "Connecting Darling Downs farmers to city kitchens — organic honey, macadamias, flour and free-range eggs with no middlemen.", StoreCategory.GROCERY, "Toowoomba", "Queensland", "+61412345607", 4.7, 133, 4, false, "2025-03-28", 305),
-            SeedStore("store-08", "coastal-home-co", "Coastal Home Co.", "Handmade seagrass, glass & driftwood decor for the home", "Coastal-inspired everyday homeware — woven seagrass baskets, recycled glass vases and driftwood pieces, made in Fremantle.", StoreCategory.HOME_LIVING, "Fremantle", "Western Australia", "+61412345608", 4.5, 74, 3, false, "2025-02-02", 260),
+            SeedStore("store-01", "blue-mountains-roasters", "Blue Mountains Roasters", "Small-batch coffee & tea from the Blue Mountains", "We roast single-origin coffee and blend loose-leaf tea in small batches out of Katoomba, sourcing green beans direct from growers we know by name.", "food-beverage", "Katoomba", "New South Wales", "+61412345601", 4.8, 214, 4, true, "2024-02-11", 1320),
+            SeedStore("store-02", "yarra-valley-weavers", "Yarra Valley Weavers", "Handwoven wool textiles from the Yarra Valley", "A small weaving studio turning locally sourced Merino wool into throws, scarves and cushion covers on traditional floor looms.", "handicrafts", "Yarra Valley", "Victoria", "+61412345602", 4.9, 156, 3, true, "2023-11-02", 980),
+            SeedStore("store-03", "bondi-streetwear", "Bondi Streetwear", "Everyday streetwear designed and printed in Bondi", "Small local streetwear label making graphic tees, caps and sneakers inspired by Bondi's beach and skate culture.", "fashion", "Bondi Beach", "New South Wales", "+61412345603", 4.6, 342, 3, true, "2024-05-20", 2110),
+            SeedStore("store-04", "byron-bay-botanicals", "Byron Bay Botanicals", "Native-botanical skincare from Byron Bay", "Small-batch skincare made with native Australian botanicals and macadamia oil — cruelty-free and locally formulated.", "beauty", "Byron Bay", "New South Wales", "+61412345604", 4.7, 98, 3, false, "2025-01-15", 410),
+            SeedStore("store-05", "outback-opal-co", "Outback Opal Co.", "Certified Australian opals, ethically sourced from Coober Pedy", "Family-run jewellers offering certified boulder and doublet opals set in silver and gold, sourced directly from Coober Pedy fields.", "jewelry", "Coober Pedy", "South Australia", "+61412345605", 4.9, 67, 3, true, "2023-08-09", 540),
+            SeedStore("store-06", "techhub-australia", "TechHub Australia", "Affordable phone & gadget accessories, delivered nationwide", "Your neighbourhood tech shop online — chargers, earbuds, cables and accessories at fair prices with fast Melbourne dispatch.", "electronics", "Melbourne", "Victoria", "+61412345606", 4.4, 501, 4, true, "2024-09-03", 1875),
+            SeedStore("store-07", "aussie-farm-basket", "Aussie Farm Basket", "Organic produce direct from Toowoomba farms", "Connecting Darling Downs farmers to city kitchens — organic honey, macadamias, flour and free-range eggs with no middlemen.", "grocery", "Toowoomba", "Queensland", "+61412345607", 4.7, 133, 4, false, "2025-03-28", 305),
+            SeedStore("store-08", "coastal-home-co", "Coastal Home Co.", "Handmade seagrass, glass & driftwood decor for the home", "Coastal-inspired everyday homeware — woven seagrass baskets, recycled glass vases and driftwood pieces, made in Fremantle.", "home-living", "Fremantle", "Western Australia", "+61412345608", 4.5, 74, 3, false, "2025-02-02", 260),
         )
 
         val ids = mutableMapOf<String, UUID>()
@@ -304,40 +282,40 @@ class DataSeeder(
 
     private fun seedProducts(storeIds: Map<String, UUID>): Map<String, UUID> {
         val seeds = listOf(
-            SeedProduct("store-01", "Colombian Single-Origin Coffee Beans (250g)", "colombian-single-origin-coffee-beans-250g", "Washed Colombian beans, roasted in small batches to a bright, fruit-forward medium roast. Whole bean.", "coffeebeans", StoreCategory.FOOD_BEVERAGE, 18, 22, 42, ProductStatus.ACTIVE, "BMR-COF-250", 4.9, 88, "2025-03-01", "2026-06-12"),
-            SeedProduct("store-01", "English Breakfast Tea Leaves (200g)", "english-breakfast-tea-leaves-200g", "A bold, malty loose-leaf blend — hand-packed in Katoomba, great with milk.", "blacktea", StoreCategory.FOOD_BEVERAGE, 14, null, 76, ProductStatus.ACTIVE, "BMR-TEA-200", 4.8, 121, "2025-02-14", "2026-05-30"),
-            SeedProduct("store-01", "Cold-Pressed Macadamia Oil (500ml)", "cold-pressed-macadamia-oil-500ml", "Unrefined, cold-pressed macadamia oil — great for cooking, hair and skin.", "macoil", StoreCategory.FOOD_BEVERAGE, 24, null, 0, ProductStatus.OUT_OF_STOCK, "BMR-OIL-500", 4.6, 54, "2025-04-20", "2026-07-01"),
-            SeedProduct("store-01", "House Blend Ground Coffee (250g)", "house-blend-ground-coffee-250g", "Our everyday house blend, pre-ground for the filter or plunger.", "groundcoffee", StoreCategory.FOOD_BEVERAGE, 16, null, 5, ProductStatus.ACTIVE, "BMR-GRD-250", 4.7, 39, "2025-05-11", "2026-06-25"),
+            SeedProduct("store-01", "Colombian Single-Origin Coffee Beans (250g)", "colombian-single-origin-coffee-beans-250g", "Washed Colombian beans, roasted in small batches to a bright, fruit-forward medium roast. Whole bean.", "coffeebeans", "food-beverage", 18, 22, 42, ProductStatus.ACTIVE, "BMR-COF-250", 4.9, 88, "2025-03-01", "2026-06-12"),
+            SeedProduct("store-01", "English Breakfast Tea Leaves (200g)", "english-breakfast-tea-leaves-200g", "A bold, malty loose-leaf blend — hand-packed in Katoomba, great with milk.", "blacktea", "food-beverage", 14, null, 76, ProductStatus.ACTIVE, "BMR-TEA-200", 4.8, 121, "2025-02-14", "2026-05-30"),
+            SeedProduct("store-01", "Cold-Pressed Macadamia Oil (500ml)", "cold-pressed-macadamia-oil-500ml", "Unrefined, cold-pressed macadamia oil — great for cooking, hair and skin.", "macoil", "food-beverage", 24, null, 0, ProductStatus.OUT_OF_STOCK, "BMR-OIL-500", 4.6, 54, "2025-04-20", "2026-07-01"),
+            SeedProduct("store-01", "House Blend Ground Coffee (250g)", "house-blend-ground-coffee-250g", "Our everyday house blend, pre-ground for the filter or plunger.", "groundcoffee", "food-beverage", 16, null, 5, ProductStatus.ACTIVE, "BMR-GRD-250", 4.7, 39, "2025-05-11", "2026-06-25"),
 
-            SeedProduct("store-02", "Handwoven Wool Throw Blanket", "handwoven-wool-throw-blanket", "Merino wool throw, handwoven on a traditional floor loom in the Yarra Valley. One-of-a-kind patterns.", "throwblanket", StoreCategory.HANDICRAFTS, 89, 110, 18, ProductStatus.ACTIVE, "YVW-THR-01", 4.9, 47, "2025-01-22", "2026-06-18"),
-            SeedProduct("store-02", "Merino Wool Scarf", "merino-wool-scarf", "Lightweight Merino wool scarf, hand-dyed and woven in-house.", "woolscarf", StoreCategory.FASHION, 45, null, 9, ProductStatus.ACTIVE, "YVW-SCF-02", 4.8, 31, "2025-06-02", "2026-07-05"),
-            SeedProduct("store-02", "Woven Cushion Cover Set (2pc)", "woven-cushion-cover-set-2pc", "Set of two 45x45cm cushion covers in complementary handwoven patterns.", "cushioncover", StoreCategory.HOME_LIVING, 55, null, 23, ProductStatus.ACTIVE, "YVW-CUS-03", 4.7, 22, "2025-07-19", "2026-04-14"),
+            SeedProduct("store-02", "Handwoven Wool Throw Blanket", "handwoven-wool-throw-blanket", "Merino wool throw, handwoven on a traditional floor loom in the Yarra Valley. One-of-a-kind patterns.", "throwblanket", "handicrafts", 89, 110, 18, ProductStatus.ACTIVE, "YVW-THR-01", 4.9, 47, "2025-01-22", "2026-06-18"),
+            SeedProduct("store-02", "Merino Wool Scarf", "merino-wool-scarf", "Lightweight Merino wool scarf, hand-dyed and woven in-house.", "woolscarf", "fashion", 45, null, 9, ProductStatus.ACTIVE, "YVW-SCF-02", 4.8, 31, "2025-06-02", "2026-07-05"),
+            SeedProduct("store-02", "Woven Cushion Cover Set (2pc)", "woven-cushion-cover-set-2pc", "Set of two 45x45cm cushion covers in complementary handwoven patterns.", "cushioncover", "home-living", 55, null, 23, ProductStatus.ACTIVE, "YVW-CUS-03", 4.7, 22, "2025-07-19", "2026-04-14"),
 
-            SeedProduct("store-03", "\"Bondi Beach\" Graphic Tee", "bondi-beach-graphic-tee", "100% combed cotton tee with a screen-printed Bondi Beach graphic. Unisex fit.", "graphictee", StoreCategory.FASHION, 35, null, 64, ProductStatus.ACTIVE, "BST-TEE-01", 4.6, 203, "2025-02-28", "2026-07-10"),
-            SeedProduct("store-03", "Australiana Dad Cap", "australiana-dad-cap", "Adjustable cotton twill cap with embroidered kangaroo emblem.", "dadcap", StoreCategory.FASHION, 28, null, 3, ProductStatus.ACTIVE, "BST-CAP-02", 4.5, 66, "2025-03-15", "2026-06-01"),
-            SeedProduct("store-03", "Canvas Low-Top Sneakers", "canvas-low-top-sneakers", "Locally made canvas sneakers with rubber soles, unisex sizing.", "sneakers", StoreCategory.FASHION, 79, 95, 15, ProductStatus.ACTIVE, "BST-SNK-03", 4.4, 73, "2025-05-04", "2026-05-22"),
+            SeedProduct("store-03", "\"Bondi Beach\" Graphic Tee", "bondi-beach-graphic-tee", "100% combed cotton tee with a screen-printed Bondi Beach graphic. Unisex fit.", "graphictee", "fashion", 35, null, 64, ProductStatus.ACTIVE, "BST-TEE-01", 4.6, 203, "2025-02-28", "2026-07-10"),
+            SeedProduct("store-03", "Australiana Dad Cap", "australiana-dad-cap", "Adjustable cotton twill cap with embroidered kangaroo emblem.", "dadcap", "fashion", 28, null, 3, ProductStatus.ACTIVE, "BST-CAP-02", 4.5, 66, "2025-03-15", "2026-06-01"),
+            SeedProduct("store-03", "Canvas Low-Top Sneakers", "canvas-low-top-sneakers", "Locally made canvas sneakers with rubber soles, unisex sizing.", "sneakers", "fashion", 79, 95, 15, ProductStatus.ACTIVE, "BST-SNK-03", 4.4, 73, "2025-05-04", "2026-05-22"),
 
-            SeedProduct("store-04", "Native Botanicals Face Serum (30ml)", "native-botanicals-face-serum-30ml", "Lightweight serum with native Kakadu plum extract and niacinamide for brightening.", "faceserum", StoreCategory.BEAUTY, 42, null, 31, ProductStatus.ACTIVE, "BBB-SER-01", 4.7, 41, "2025-04-09", "2026-06-30"),
-            SeedProduct("store-04", "Tea Tree Foaming Cleanser (150ml)", "tea-tree-foaming-cleanser-150ml", "Gentle daily cleanser with Australian tea tree oil.", "facewash", StoreCategory.BEAUTY, 22, null, 58, ProductStatus.ACTIVE, "BBB-CLN-02", 4.6, 29, "2025-04-09", "2026-06-30"),
-            SeedProduct("store-04", "Macadamia Body Scrub (250g)", "macadamia-body-scrub-250g", "Exfoliating body scrub with crushed macadamia shell and coconut oil.", "bodyscrub", StoreCategory.BEAUTY, 26, null, 12, ProductStatus.ACTIVE, "BBB-SCR-03", 4.8, 18, "2025-08-01", "2026-07-02"),
+            SeedProduct("store-04", "Native Botanicals Face Serum (30ml)", "native-botanicals-face-serum-30ml", "Lightweight serum with native Kakadu plum extract and niacinamide for brightening.", "faceserum", "beauty", 42, null, 31, ProductStatus.ACTIVE, "BBB-SER-01", 4.7, 41, "2025-04-09", "2026-06-30"),
+            SeedProduct("store-04", "Tea Tree Foaming Cleanser (150ml)", "tea-tree-foaming-cleanser-150ml", "Gentle daily cleanser with Australian tea tree oil.", "facewash", "beauty", 22, null, 58, ProductStatus.ACTIVE, "BBB-CLN-02", 4.6, 29, "2025-04-09", "2026-06-30"),
+            SeedProduct("store-04", "Macadamia Body Scrub (250g)", "macadamia-body-scrub-250g", "Exfoliating body scrub with crushed macadamia shell and coconut oil.", "bodyscrub", "beauty", 26, null, 12, ProductStatus.ACTIVE, "BBB-SCR-03", 4.8, 18, "2025-08-01", "2026-07-02"),
 
-            SeedProduct("store-05", "Boulder Opal Pendant (Sterling Silver)", "boulder-opal-pendant-sterling-silver", "Certified natural boulder opal set in a sterling silver pendant. Comes with an Australian gem certificate.", "opalpendant", StoreCategory.JEWELRY, 320, null, 4, ProductStatus.ACTIVE, "OOC-PEN-01", 5.0, 12, "2025-01-30", "2026-06-11"),
-            SeedProduct("store-05", "Opal Doublet Ring", "opal-doublet-ring", "Sterling silver ring set with a Coober Pedy opal doublet.", "opalring", StoreCategory.JEWELRY, 145, null, 20, ProductStatus.ACTIVE, "OOC-RIN-02", 4.8, 33, "2025-03-18", "2026-05-19"),
-            SeedProduct("store-05", "Opal Stud Earrings", "opal-stud-earrings", "Petite opal studs in sterling silver, everyday wear.", "opalearrings", StoreCategory.JEWELRY, 210, null, 7, ProductStatus.ACTIVE, "OOC-EAR-03", 4.9, 9, "2025-09-02", "2026-04-28"),
+            SeedProduct("store-05", "Boulder Opal Pendant (Sterling Silver)", "boulder-opal-pendant-sterling-silver", "Certified natural boulder opal set in a sterling silver pendant. Comes with an Australian gem certificate.", "opalpendant", "jewelry", 320, null, 4, ProductStatus.ACTIVE, "OOC-PEN-01", 5.0, 12, "2025-01-30", "2026-06-11"),
+            SeedProduct("store-05", "Opal Doublet Ring", "opal-doublet-ring", "Sterling silver ring set with a Coober Pedy opal doublet.", "opalring", "jewelry", 145, null, 20, ProductStatus.ACTIVE, "OOC-RIN-02", 4.8, 33, "2025-03-18", "2026-05-19"),
+            SeedProduct("store-05", "Opal Stud Earrings", "opal-stud-earrings", "Petite opal studs in sterling silver, everyday wear.", "opalearrings", "jewelry", 210, null, 7, ProductStatus.ACTIVE, "OOC-EAR-03", 4.9, 9, "2025-09-02", "2026-04-28"),
 
-            SeedProduct("store-06", "USB-C Fast Charger 33W", "usb-c-fast-charger-33w", "33W PD fast charger, compatible with most Android and iPhone devices.", "fastcharger", StoreCategory.ELECTRONICS, 25, null, 140, ProductStatus.ACTIVE, "THA-CHG-01", 4.5, 312, "2025-01-05", "2026-07-15"),
-            SeedProduct("store-06", "Wireless Earbuds Pro", "wireless-earbuds-pro", "Bluetooth 5.3 earbuds with ANC and 30-hour case battery life.", "earbuds", StoreCategory.ELECTRONICS, 69, 89, 54, ProductStatus.ACTIVE, "THA-EAR-02", 4.3, 189, "2025-02-19", "2026-07-08"),
-            SeedProduct("store-06", "Adjustable Phone Stand", "adjustable-phone-stand", "360° rotating stand and kickstand for phones.", "phonestand", StoreCategory.ELECTRONICS, 12, null, 220, ProductStatus.ACTIVE, "THA-STA-03", 4.2, 98, "2025-03-11", "2026-06-20"),
-            SeedProduct("store-06", "Power Bank 10000mAh", "power-bank-10000mah", "Slim 10000mAh power bank with dual USB output and LED indicator.", "powerbank", StoreCategory.ELECTRONICS, 39, null, 0, ProductStatus.OUT_OF_STOCK, "THA-PWR-04", 4.4, 145, "2025-04-02", "2026-07-19"),
+            SeedProduct("store-06", "USB-C Fast Charger 33W", "usb-c-fast-charger-33w", "33W PD fast charger, compatible with most Android and iPhone devices.", "fastcharger", "electronics", 25, null, 140, ProductStatus.ACTIVE, "THA-CHG-01", 4.5, 312, "2025-01-05", "2026-07-15"),
+            SeedProduct("store-06", "Wireless Earbuds Pro", "wireless-earbuds-pro", "Bluetooth 5.3 earbuds with ANC and 30-hour case battery life.", "earbuds", "electronics", 69, 89, 54, ProductStatus.ACTIVE, "THA-EAR-02", 4.3, 189, "2025-02-19", "2026-07-08"),
+            SeedProduct("store-06", "Adjustable Phone Stand", "adjustable-phone-stand", "360° rotating stand and kickstand for phones.", "phonestand", "electronics", 12, null, 220, ProductStatus.ACTIVE, "THA-STA-03", 4.2, 98, "2025-03-11", "2026-06-20"),
+            SeedProduct("store-06", "Power Bank 10000mAh", "power-bank-10000mah", "Slim 10000mAh power bank with dual USB output and LED indicator.", "powerbank", "electronics", 39, null, 0, ProductStatus.OUT_OF_STOCK, "THA-PWR-04", 4.4, 145, "2025-04-02", "2026-07-19"),
 
-            SeedProduct("store-07", "Raw Australian Bush Honey (500g)", "raw-australian-bush-honey-500g", "Unprocessed native bush honey harvested from Darling Downs apiaries.", "honey", StoreCategory.GROCERY, 14, null, 90, ProductStatus.ACTIVE, "AFB-HON-01", 4.9, 61, "2025-05-25", "2026-07-03"),
-            SeedProduct("store-07", "Macadamia Nuts Roasted & Salted (300g)", "macadamia-nuts-roasted-salted-300g", "Queensland-grown macadamias, roasted and lightly salted.", "macadamias", StoreCategory.GROCERY, 12, null, 44, ProductStatus.ACTIVE, "AFB-MAC-02", 4.8, 52, "2025-06-14", "2026-06-27"),
-            SeedProduct("store-07", "Sourdough Rye Flour (2kg)", "sourdough-rye-flour-2kg", "Stone-ground rye flour, milled on the farm.", "ryeflour", StoreCategory.GROCERY, 9, null, 33, ProductStatus.ACTIVE, "AFB-FLR-03", 4.7, 40, "2025-06-14", "2026-05-16"),
-            SeedProduct("store-07", "Free-Range Farm Eggs (Dozen)", "free-range-farm-eggs-dozen", "Pasture-raised free-range eggs, collected fresh daily.", "eggs", StoreCategory.GROCERY, 8, null, 4, ProductStatus.ACTIVE, "AFB-EGG-04", 4.5, 27, "2025-07-30", "2026-07-11"),
+            SeedProduct("store-07", "Raw Australian Bush Honey (500g)", "raw-australian-bush-honey-500g", "Unprocessed native bush honey harvested from Darling Downs apiaries.", "honey", "grocery", 14, null, 90, ProductStatus.ACTIVE, "AFB-HON-01", 4.9, 61, "2025-05-25", "2026-07-03"),
+            SeedProduct("store-07", "Macadamia Nuts Roasted & Salted (300g)", "macadamia-nuts-roasted-salted-300g", "Queensland-grown macadamias, roasted and lightly salted.", "macadamias", "grocery", 12, null, 44, ProductStatus.ACTIVE, "AFB-MAC-02", 4.8, 52, "2025-06-14", "2026-06-27"),
+            SeedProduct("store-07", "Sourdough Rye Flour (2kg)", "sourdough-rye-flour-2kg", "Stone-ground rye flour, milled on the farm.", "ryeflour", "grocery", 9, null, 33, ProductStatus.ACTIVE, "AFB-FLR-03", 4.7, 40, "2025-06-14", "2026-05-16"),
+            SeedProduct("store-07", "Free-Range Farm Eggs (Dozen)", "free-range-farm-eggs-dozen", "Pasture-raised free-range eggs, collected fresh daily.", "eggs", "grocery", 8, null, 4, ProductStatus.ACTIVE, "AFB-EGG-04", 4.5, 27, "2025-07-30", "2026-07-11"),
 
-            SeedProduct("store-08", "Handwoven Seagrass Basket", "handwoven-seagrass-basket", "Natural seagrass storage basket, handwoven in Fremantle.", "seagrassbasket", StoreCategory.HOME_LIVING, 45, null, 26, ProductStatus.ACTIVE, "CHC-BAS-01", 4.6, 21, "2025-04-27", "2026-06-05"),
-            SeedProduct("store-08", "Recycled Glass Vase Set (3pc)", "recycled-glass-vase-set-3pc", "Hand-blown vases made from recycled glass, in coastal tones.", "glassvase", StoreCategory.HOME_LIVING, 38, null, 37, ProductStatus.ACTIVE, "CHC-VAS-02", 4.7, 16, "2025-05-08", "2026-06-09"),
-            SeedProduct("store-08", "Driftwood Table Runner", "driftwood-table-runner", "Hand-finished driftwood table runner, 180cm, sourced from local beaches.", "driftwoodrunner", StoreCategory.HOME_LIVING, 32, null, 19, ProductStatus.ACTIVE, "CHC-RUN-03", 4.4, 11, "2025-08-14", "2026-07-06"),
+            SeedProduct("store-08", "Handwoven Seagrass Basket", "handwoven-seagrass-basket", "Natural seagrass storage basket, handwoven in Fremantle.", "seagrassbasket", "home-living", 45, null, 26, ProductStatus.ACTIVE, "CHC-BAS-01", 4.6, 21, "2025-04-27", "2026-06-05"),
+            SeedProduct("store-08", "Recycled Glass Vase Set (3pc)", "recycled-glass-vase-set-3pc", "Hand-blown vases made from recycled glass, in coastal tones.", "glassvase", "home-living", 38, null, 37, ProductStatus.ACTIVE, "CHC-VAS-02", 4.7, 16, "2025-05-08", "2026-06-09"),
+            SeedProduct("store-08", "Driftwood Table Runner", "driftwood-table-runner", "Hand-finished driftwood table runner, 180cm, sourced from local beaches.", "driftwoodrunner", "home-living", 32, null, 19, ProductStatus.ACTIVE, "CHC-RUN-03", 4.4, 11, "2025-08-14", "2026-07-06"),
         )
 
         val ids = mutableMapOf<String, UUID>()

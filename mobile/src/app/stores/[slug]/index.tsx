@@ -90,7 +90,7 @@ export default function StoreScreen() {
         </View>
 
         <ThemedText style={styles.tagline}>{store.tagline}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="small" themeColor="textSecondary" style={styles.description}>
           {store.description}
         </ThemedText>
 
@@ -153,6 +153,7 @@ const styles = StyleSheet.create({
   messageButton: { height: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 22, lineHeight: 28 },
   tagline: { paddingHorizontal: Spacing.three },
+  description: { paddingHorizontal: Spacing.three, marginTop: 2 },
   sectionLabel: { marginTop: Spacing.three, marginHorizontal: Spacing.three },
   row: { gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   serviceRow: { marginHorizontal: Spacing.three, borderTopWidth: 1, paddingVertical: Spacing.two, gap: 2 },

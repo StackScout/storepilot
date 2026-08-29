@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
+import { Alert, StyleSheet, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
 
 import { followStore, getFollowStatus, unfollowStore } from '@/api/buyer-stores';
 import { ThemedText } from '@/components/themed-text';
@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth-store';
 import { router, type Href } from 'expo-router';
 
-export function FollowStoreButton({ storeId }: { storeId: string }) {
+export function FollowStoreButton({ storeId, style }: { storeId: string; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
@@ -32,7 +32,7 @@ export function FollowStoreButton({ storeId }: { storeId: string }) {
 
   return (
     <TouchableOpacity
-      style={[styles.button, { borderColor: theme.textSecondary }, following && { backgroundColor: theme.backgroundElement }]}
+      style={[styles.button, { borderColor: theme.textSecondary }, following && { backgroundColor: theme.backgroundElement }, style]}
       onPress={() => {
         if (!isSignedIn || role !== 'buyer') {
           router.push('/account/login' as Href);

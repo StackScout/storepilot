@@ -10,6 +10,7 @@ import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.ShippingDetails
+import com.storepilot.backend.common.security.CognitoProperties
 import com.storepilot.backend.order.Order
 import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.order.OrderStatus
@@ -55,7 +56,9 @@ class StripeServiceTest {
         bookingCancelUrlBase = "http://localhost:3000/bookings",
     )
 
-    private val service = StripeService(orderRepository, bookingRepository, storeSettingsRepository, platformConfigService, stripeProperties)
+    private val cognitoProperties = CognitoProperties()
+
+    private val service = StripeService(orderRepository, bookingRepository, storeSettingsRepository, platformConfigService, stripeProperties, cognitoProperties)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private lateinit var store: Store

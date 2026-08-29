@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
 import type { DeliveryMethod, PaymentMethod } from '@storepilot/shared-api';
@@ -77,7 +78,12 @@ export default function CheckoutScreen() {
       });
       if (paymentMethod === 'stripe') {
         const { checkoutUrl } = await getStripeCheckoutUrl(order.id);
-        await WebBrowser.openBrowserAsync(checkoutUrl);
+        // openAuthSessionAsync (not openBrowserAsync) so the in-app browser
+        // recognizes the checkout-callback deep link the backend hands
+        // Stripe (platform=mobile in getStripeCheckoutUrl) and closes
+        // itself — otherwise the buyer lands on the web app's own order
+        // page inside the browser and has to notice and tap "Done".
+        await WebBrowser.openAuthSessionAsync(checkoutUrl, Linking.createURL('checkout-callback'));
       }
       return order;
     },

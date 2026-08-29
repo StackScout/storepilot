@@ -15,8 +15,9 @@ export function getPayHereCheckoutPayload(orderId: string): Promise<Record<strin
   return apiFetch(`/api/orders/${orderId}/payhere-checkout`, { method: 'POST', skipAuth: true });
 }
 
+/** platform=mobile makes the backend hand back a deep-link success/cancel URL instead of the web app's order page — see checkout.tsx's use of openAuthSessionAsync. */
 export function getStripeCheckoutUrl(orderId: string): Promise<{ checkoutUrl: string }> {
-  return apiFetch(`/api/orders/${orderId}/stripe-checkout`, { method: 'POST', skipAuth: true });
+  return apiFetch(`/api/orders/${orderId}/stripe-checkout?platform=mobile`, { method: 'POST', skipAuth: true });
 }
 
 export function getBookingPayHereCheckoutPayload(bookingId: string): Promise<Record<string, string>> {

@@ -7,6 +7,7 @@ import com.storepilot.backend.booking.BookingTimelineEntry
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
+import com.storepilot.backend.common.security.CognitoProperties
 import com.storepilot.backend.order.Order
 import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.order.OrderStatus
@@ -44,11 +45,23 @@ class StripeService(
     private val storeSettingsRepository: StoreSettingsRepository,
     private val platformConfigService: PlatformConfigService,
     private val stripeProperties: StripeProperties,
+    private val cognitoProperties: CognitoProperties,
 ) {
     private val log = LoggerFactory.getLogger(StripeService::class.java)
 
-    /** POST /api/orders/{id}/stripe-checkout */
-    fun createCheckoutSession(orderId: UUID): StripeCheckoutSessionResponse {
+    /**
+     * POST /api/orders/{id}/stripe-checkout
+     *
+     * [mobile] mirrors AuthController's googleCallback platform handling:
+     * the web success/cancel URLs point at the web app's own order page,
+     * which means nothing to a native app with no browser chrome of its
+     * own. A mobile caller gets the app's own deep-link scheme instead, so
+     * WebBrowser.openAuthSessionAsync (see checkout.tsx) can detect the
+     * redirect and close the in-app browser itself — otherwise the buyer
+     * gets dumped on the web order-confirmation page inside the browser
+     * and has to notice and tap "Done" to get back to the app.
+     */
+    fun createCheckoutSession(orderId: UUID, mobile: Boolean = false): StripeCheckoutSessionResponse {
         val order = orderRepository.findById(orderId).orElseThrow { NotFoundException("Order $orderId not found") }
         if (order.paymentMethod != PaymentMethod.STRIPE) {
             throw ConflictException("Order $orderId is not a Stripe payment")
@@ -98,8 +111,8 @@ class StripeService(
             )
             .setClientReferenceId(orderId.toString())
             .setCustomerEmail(order.buyerEmail)
-            .setSuccessUrl("${stripeProperties.successUrlBase}/$orderId")
-            .setCancelUrl("${stripeProperties.cancelUrlBase}/$orderId")
+            .setSuccessUrl(if (mobile) "${cognitoProperties.mobileAppScheme}://checkout-callback?orderId=$orderId&status=success" else "${stripeProperties.successUrlBase}/$orderId")
+            .setCancelUrl(if (mobile) "${cognitoProperties.mobileAppScheme}://checkout-callback?orderId=$orderId&status=cancelled" else "${stripeProperties.cancelUrlBase}/$orderId")
             .build()
 
         val session = Session.create(params, requestOptions)

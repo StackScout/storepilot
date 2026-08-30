@@ -4,6 +4,7 @@ import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
+import com.storepilot.backend.common.security.CognitoProperties
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.store.StoreRepository
@@ -37,12 +38,19 @@ class StripeConnectService(
     private val notificationProperties: NotificationProperties,
     private val platformConfigService: PlatformConfigService,
     private val stripeProperties: StripeProperties,
+    private val cognitoProperties: CognitoProperties,
 ) {
     private val log = LoggerFactory.getLogger(StripeConnectService::class.java)
 
-    /** POST /api/stores/{storeId}/stripe-connect/onboard */
+    /**
+     * POST /api/stores/{storeId}/stripe-connect/onboard
+     * [mobile] mirrors StripeService.createCheckoutSession — a mobile caller
+     * gets the app's own deep-link scheme as the return/refresh URL instead
+     * of the web app's settings page, since WebBrowser.openAuthSessionAsync
+     * needs a matching scheme to close itself and hand control back.
+     */
     @Transactional
-    fun startOnboarding(storeId: UUID): StripeOnboardingResponse {
+    fun startOnboarding(storeId: UUID, mobile: Boolean = false): StripeOnboardingResponse {
         // Stripe Connect is temporarily Australia-only (accounts are created
         // with setCountry("AU") below) — UI already hides this; this is
         // defense in depth for a stale client.
@@ -69,7 +77,11 @@ class StripeConnectService(
             account.id
         }
 
-        val returnUrl = "${notificationProperties.frontendBaseUrl}/dashboard/settings"
+        val returnUrl = if (mobile) {
+            "${cognitoProperties.mobileAppScheme}://stripe-connect-callback"
+        } else {
+            "${notificationProperties.frontendBaseUrl}/dashboard/settings"
+        }
         val accountLink = AccountLink.create(
             AccountLinkCreateParams.builder()
                 .setAccount(accountId)

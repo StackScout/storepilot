@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +9,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMyStore } from '@/api/stores';
 import {
   getStoreSettings,
+  refreshStripeConnectStatus,
+  startStripeConnectOnboarding,
   updateStoreSettings,
   uploadAbnDocument,
   uploadBusinessRegDocument,
@@ -73,7 +77,15 @@ export default function StoreSettingsScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
-  const { proPlanEnabled, defaultCodEnabled: platformCodEnabled, defaultBankTransferEnabled: platformBankTransferEnabled } = usePlatformConfig();
+  const {
+    proPlanEnabled,
+    countryCode,
+    defaultCodEnabled: platformCodEnabled,
+    defaultBankTransferEnabled: platformBankTransferEnabled,
+  } = usePlatformConfig();
+  // Stripe Connect is temporarily Australia-only — see backend
+  // StripeConnectService.startOnboarding's doc comment.
+  const isAustralia = countryCode === 'AU';
   const needsBankDetails = platformCodEnabled || platformBankTransferEnabled;
 
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
@@ -99,6 +111,30 @@ export default function StoreSettingsScreen() {
       Alert.alert('Saved', 'Store settings updated.');
     },
     onError: (e) => Alert.alert('Could not save settings', e instanceof ApiError ? e.message : 'Please try again.'),
+  });
+
+  // openAuthSessionAsync (not openBrowserAsync) so the in-app browser
+  // recognizes the stripe-connect-callback deep link the backend hands
+  // Stripe (platform=mobile in startStripeConnectOnboarding) and closes
+  // itself — otherwise the seller lands on the web app's settings page
+  // inside the browser and has to notice and tap "Done". Refreshing status
+  // right after is a no-op if nothing changed (e.g. the seller backed out
+  // without finishing), and picks up a real connection immediately instead
+  // of waiting on the account.updated webhook.
+  const stripeOnboardingMutation = useMutation({
+    mutationFn: async () => {
+      const { onboardingUrl } = await startStripeConnectOnboarding(storeId!);
+      await WebBrowser.openAuthSessionAsync(onboardingUrl, Linking.createURL('stripe-connect-callback'));
+      await refreshStripeConnectStatus(storeId!).catch(() => undefined);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['store', storeId, 'settings'] }),
+    onError: () => Alert.alert("Couldn't start Stripe onboarding", 'Please try again.'),
+  });
+
+  const stripeRefreshMutation = useMutation({
+    mutationFn: () => refreshStripeConnectStatus(storeId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['store', storeId, 'settings'] }),
+    onError: () => Alert.alert("Couldn't check Stripe status", 'Please try again.'),
   });
 
   const uploadDoc = async (
@@ -201,6 +237,54 @@ export default function StoreSettingsScreen() {
           </ThemedText>
         ) : null}
 
+        {isAustralia ? (
+          <>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+              STRIPE CONNECT
+            </ThemedText>
+            {!form.stripeAccountId ? (
+              <>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Connect a Stripe account to accept card payments — buyers pay you directly and automatically, we never hold your
+                  money.
+                </ThemedText>
+                <TouchableOpacity
+                  style={[styles.stripeButton, { borderColor: theme.textSecondary }]}
+                  onPress={() => stripeOnboardingMutation.mutate()}
+                  disabled={stripeOnboardingMutation.isPending}>
+                  {stripeOnboardingMutation.isPending ? <ActivityIndicator /> : <ThemedText>Connect with Stripe</ThemedText>}
+                </TouchableOpacity>
+              </>
+            ) : !form.stripeChargesEnabled ? (
+              <>
+                <ThemedText type="small" themeColor="textSecondary">
+                  You&apos;ve started connecting a Stripe account, but onboarding isn&apos;t finished yet. If you&apos;ve already
+                  completed Stripe&apos;s form, try checking again below.
+                </ThemedText>
+                <View style={styles.stripeRow}>
+                  <TouchableOpacity
+                    style={[styles.stripeButton, styles.stripeButtonFlex, { borderColor: theme.textSecondary }]}
+                    onPress={() => stripeOnboardingMutation.mutate()}
+                    disabled={stripeOnboardingMutation.isPending}>
+                    {stripeOnboardingMutation.isPending ? <ActivityIndicator /> : <ThemedText>Finish onboarding</ThemedText>}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.stripeButton, styles.stripeButtonFlex, { borderColor: theme.textSecondary }]}
+                    onPress={() => stripeRefreshMutation.mutate()}
+                    disabled={stripeRefreshMutation.isPending}>
+                    {stripeRefreshMutation.isPending ? <ActivityIndicator /> : <ThemedText>Check again</ThemedText>}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.stripeConnected}>
+                <View style={styles.stripeDot} />
+                <ThemedText type="small">Connected — Stripe account ready to accept payments.</ThemedText>
+              </View>
+            )}
+          </>
+        ) : null}
+
         {needsBankDetails ? (
           <>
             <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
@@ -270,6 +354,11 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.one },
   disabledText: { opacity: 0.5 },
   docButton: { height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  stripeButton: { height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.three },
+  stripeButtonFlex: { flex: 1 },
+  stripeRow: { flexDirection: 'row', gap: Spacing.two },
+  stripeConnected: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  stripeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1E9E5A' },
   submit: { height: 50, borderRadius: 12, backgroundColor: '#208AEF', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.three },
   submitDisabled: { opacity: 0.6 },
   submitText: { color: '#fff', fontWeight: '700' },

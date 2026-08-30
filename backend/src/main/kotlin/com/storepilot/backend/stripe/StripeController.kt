@@ -16,8 +16,10 @@ class StripeController(
     private val stripeService: StripeService,
 ) {
     @PostMapping("/api/stores/{storeId}/stripe-connect/onboard")
-    fun startOnboarding(@PathVariable storeId: UUID): StripeOnboardingResponse =
-        stripeConnectService.startOnboarding(storeId)
+    fun startOnboarding(
+        @PathVariable storeId: UUID,
+        @RequestParam(required = false, defaultValue = "web") platform: String,
+    ): StripeOnboardingResponse = stripeConnectService.startOnboarding(storeId, mobile = platform == "mobile")
 
     /** POST /api/stores/{storeId}/stripe-connect/refresh — see StripeConnectService.refreshAccountStatus's doc comment. */
     @PostMapping("/api/stores/{storeId}/stripe-connect/refresh")

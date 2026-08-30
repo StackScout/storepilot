@@ -5,6 +5,7 @@ import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.PlatformSettings
+import com.storepilot.backend.common.security.CognitoProperties
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.seller.Seller
@@ -44,6 +45,7 @@ class StripeConnectServiceTest {
     private val notificationProperties = NotificationProperties(frontendBaseUrl = "http://localhost:3000")
     private val platformConfigService = mockk<PlatformConfigService>()
     private val stripeProperties = StripeProperties(connectClientId = "ca_test123")
+    private val cognitoProperties = CognitoProperties()
 
     private val service = StripeConnectService(
         storeRepository,
@@ -52,6 +54,7 @@ class StripeConnectServiceTest {
         notificationProperties,
         platformConfigService,
         stripeProperties,
+        cognitoProperties,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }

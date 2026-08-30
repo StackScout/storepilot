@@ -28,8 +28,17 @@ import type { SellerType, StoreCategory } from "@/types";
  * deployment's platform config country (`platform_settings.country_code`),
  * not on anything the seller chooses — see StoreSettings' doc comment on
  * the backend. Built per-render (via useMemo) since it closes over that.
+ *
+ * Bank details are only ever used for the bank-transfer payment method
+ * (shown to buyers) and an admin's manual payout reference for COD/
+ * bank-transfer money the platform doesn't otherwise touch (Stripe settles
+ * directly, never entering platform custody) — so on a deployment where
+ * neither is offered at all (see PlatformSettings' default*Enabled doc
+ * comment), asking for them at signup is pure friction for data nobody
+ * will ever read. `needsBankDetails` is that same platform-level flag,
+ * not a hardcoded country check.
  */
-function buildOnboardingSchema(isSriLanka: boolean) {
+function buildOnboardingSchema(isSriLanka: boolean, needsBankDetails: boolean) {
   return z
     .object({
       storeName: z.string().min(3, "Enter your store name"),
@@ -45,9 +54,9 @@ function buildOnboardingSchema(isSriLanka: boolean) {
       abn: z.string().optional(),
       nicNumber: z.string().optional(),
       businessRegistrationNumber: z.string().optional(),
-      bankName: z.string().min(2, "Enter your bank name"),
-      bankAccountName: z.string().min(2, "Enter the account holder name"),
-      bankAccountNumber: z.string().min(4, "Enter the account number"),
+      bankName: z.string().optional(),
+      bankAccountName: z.string().optional(),
+      bankAccountNumber: z.string().optional(),
       agreeToTerms: z.boolean().refine((v) => v, "You must agree to continue"),
     })
     .superRefine((data, ctx) => {
@@ -74,6 +83,17 @@ function buildOnboardingSchema(isSriLanka: boolean) {
           ctx.addIssue({ code: "custom", path: ["abn"], message: "Enter your ABN" });
         }
       }
+      if (needsBankDetails) {
+        if (!data.bankName || data.bankName.trim().length < 2) {
+          ctx.addIssue({ code: "custom", path: ["bankName"], message: "Enter your bank name" });
+        }
+        if (!data.bankAccountName || data.bankAccountName.trim().length < 2) {
+          ctx.addIssue({ code: "custom", path: ["bankAccountName"], message: "Enter the account holder name" });
+        }
+        if (!data.bankAccountNumber || data.bankAccountNumber.trim().length < 4) {
+          ctx.addIssue({ code: "custom", path: ["bankAccountNumber"], message: "Enter the account number" });
+        }
+      }
     });
 }
 
@@ -82,13 +102,26 @@ type OnboardingFormValues = z.infer<ReturnType<typeof buildOnboardingSchema>>;
 export default function OnboardingPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { name, platformFeePercent, countryCode, proMonthlyPriceCents, currencyCode, currencySymbol, currencyLocale } =
-    usePlatformConfig();
+  const {
+    name,
+    platformFeePercent,
+    countryCode,
+    proMonthlyPriceCents,
+    currencyCode,
+    currencySymbol,
+    currencyLocale,
+    proPlanEnabled,
+    defaultCodEnabled,
+    defaultBankTransferEnabled,
+  } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const { categories } = useCategories();
   const isSriLanka = countryCode === "LK";
   const [sellerPlan, setSellerPlan] = useState<"free" | "pro">("free");
-  const onboardingSchema = useMemo(() => buildOnboardingSchema(isSriLanka), [isSriLanka]);
+  // Bank details are only meaningful when this deployment offers cod or
+  // bank-transfer at all — see buildOnboardingSchema's doc comment.
+  const needsBankDetails = defaultCodEnabled || defaultBankTransferEnabled;
+  const onboardingSchema = useMemo(() => buildOnboardingSchema(isSriLanka, needsBankDetails), [isSriLanka, needsBankDetails]);
   const {
     register,
     handleSubmit,
@@ -151,15 +184,19 @@ export default function OnboardingPage() {
       await storesService.updateStoreSettings(store.id, {
         contactEmail: values.contactEmail,
         contactPhone: values.whatsappNumber,
-        bankName: values.bankName,
-        bankAccountName: values.bankAccountName,
-        bankAccountNumber: values.bankAccountNumber,
+        // Omitted entirely (not sent as empty strings) when this
+        // deployment doesn't ask for them — see buildOnboardingSchema's
+        // doc comment.
+        ...(needsBankDetails
+          ? { bankName: values.bankName, bankAccountName: values.bankAccountName, bankAccountNumber: values.bankAccountNumber }
+          : {}),
         sellerType: values.sellerType,
         ...(isSriLanka
           ? { nicNumber: values.nicNumber, businessRegistrationNumber: values.businessRegistrationNumber }
           : { driverLicenceNumber: values.driverLicenceNumber, abn: values.abn }),
-        codEnabled: true,
-        onlinePaymentEnabled: true,
+        // Left unset (not hardcoded true) so the backend's own
+        // platform-driven defaults apply instead — see
+        // StoreService.upsertSettings' create branch.
       });
       if (isSriLanka) {
         await storesService.uploadNicDocument(store.id, nicFile!);
@@ -435,7 +472,7 @@ export default function OnboardingPage() {
 
         <Card>
           <CardContent className="space-y-4">
-            <h2 className="font-semibold">Contact & payout details</h2>
+            <h2 className="font-semibold">{needsBankDetails ? "Contact & payout details" : "Contact"}</h2>
             <div className="space-y-1.5">
               <Label htmlFor="whatsappNumber">WhatsApp number</Label>
               <Input id="whatsappNumber" placeholder="+61 4XX XXX XXX" {...register("whatsappNumber")} />
@@ -455,36 +492,41 @@ export default function OnboardingPage() {
               ) : null}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="bankName">Bank name</Label>
-              <Input id="bankName" placeholder="e.g. Commonwealth Bank of Australia" {...register("bankName")} />
-              {errors.bankName ? <p className="text-destructive text-xs">{errors.bankName.message}</p> : null}
-            </div>
+            {needsBankDetails ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bankName">Bank name</Label>
+                  <Input id="bankName" placeholder="e.g. Commonwealth Bank of Australia" {...register("bankName")} />
+                  {errors.bankName ? <p className="text-destructive text-xs">{errors.bankName.message}</p> : null}
+                </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="bankAccountName">Account holder name</Label>
-                <Input id="bankAccountName" {...register("bankAccountName")} />
-                {errors.bankAccountName ? (
-                  <p className="text-destructive text-xs">{errors.bankAccountName.message}</p>
-                ) : null}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="bankAccountNumber">Account number</Label>
-                <Input id="bankAccountNumber" {...register("bankAccountNumber")} />
-                {errors.bankAccountNumber ? (
-                  <p className="text-destructive text-xs">{errors.bankAccountNumber.message}</p>
-                ) : null}
-              </div>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Your account holder name should match your{" "}
-              {isSriLanka ? "NIC/business registration" : "driver's licence/ABN registration"} name —
-              payouts are held until this can be confirmed.
-            </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bankAccountName">Account holder name</Label>
+                    <Input id="bankAccountName" {...register("bankAccountName")} />
+                    {errors.bankAccountName ? (
+                      <p className="text-destructive text-xs">{errors.bankAccountName.message}</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bankAccountNumber">Account number</Label>
+                    <Input id="bankAccountNumber" {...register("bankAccountNumber")} />
+                    {errors.bankAccountNumber ? (
+                      <p className="text-destructive text-xs">{errors.bankAccountNumber.message}</p>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Your account holder name should match your{" "}
+                  {isSriLanka ? "NIC/business registration" : "driver's licence/ABN registration"} name —
+                  payouts are held until this can be confirmed.
+                </p>
+              </>
+            ) : null}
           </CardContent>
         </Card>
 
+        {proPlanEnabled ? (
         <Card>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
@@ -528,6 +570,7 @@ export default function OnboardingPage() {
             </RadioGroup>
           </CardContent>
         </Card>
+        ) : null}
 
         <label className="flex items-start gap-3 text-sm">
           <Checkbox

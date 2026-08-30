@@ -68,8 +68,9 @@ const DECISION_TONES: Record<string, StatusTone> = {
 
 export default function AdminStoresPage() {
   const queryClient = useQueryClient();
-  const { countryCode } = usePlatformConfig();
+  const { countryCode, defaultCodEnabled, defaultBankTransferEnabled } = usePlatformConfig();
   const isSriLanka = countryCode === "LK";
+  const needsBankDetails = defaultCodEnabled || defaultBankTransferEnabled;
   const [rejectTarget, setRejectTarget] = useState<Store | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -209,6 +210,7 @@ export default function AdminStoresPage() {
                       store={store}
                       settings={settings}
                       isSriLanka={isSriLanka}
+                      needsBankDetails={needsBankDetails}
                       showActions
                       isApproving={approveMutation.isPending}
                       onApprove={(storeId) => approveMutation.mutate(storeId)}
@@ -258,6 +260,7 @@ export default function AdminStoresPage() {
                       store={store}
                       settings={settings}
                       isSriLanka={isSriLanka}
+                      needsBankDetails={needsBankDetails}
                       showActions={store.verificationStatus === "pending"}
                       isApproving={approveMutation.isPending}
                       onApprove={(storeId) => approveMutation.mutate(storeId)}

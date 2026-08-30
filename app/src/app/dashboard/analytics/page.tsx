@@ -8,17 +8,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PriceDisplay } from "@/components/shared/price-display";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { useSellerStoreId } from "@/hooks/use-seller-store";
 import { billingService, bookingsService } from "@/services";
 
 export default function DashboardAnalyticsPage() {
   const storeId = useSellerStoreId();
+  const { proPlanEnabled } = usePlatformConfig();
 
   const { data: planInfo, isLoading: isPlanLoading } = useQuery({
     queryKey: ["seller-plan"],
     queryFn: () => billingService.getMyPlan(),
+    enabled: proPlanEnabled,
   });
-  const isPro = planInfo?.plan === "pro";
+  // On a deployment with no Pro tier concept at all, this is free for
+  // everyone — see PlatformSettings.proPlanEnabled's doc comment.
+  const isPro = !proPlanEnabled || planInfo?.plan === "pro";
 
   const { data: analytics, isLoading: isAnalyticsLoading } = useQuery({
     queryKey: ["booking-analytics", storeId],
@@ -26,7 +31,7 @@ export default function DashboardAnalyticsPage() {
     enabled: isPro,
   });
 
-  if (isPlanLoading) return null;
+  if (proPlanEnabled && isPlanLoading) return null;
 
   if (!isPro) {
     return (

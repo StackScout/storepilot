@@ -46,7 +46,7 @@ const BOOKING_NAV_ITEMS = [
 
 export function DashboardSidebarContent() {
   const pathname = usePathname();
-  const { countryCode } = usePlatformConfig();
+  const { countryCode, proPlanEnabled } = usePlatformConfig();
   const storeId = useSellerStoreId();
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
@@ -107,7 +107,7 @@ export function DashboardSidebarContent() {
             <p className="truncate text-sm font-medium">{store?.name ?? "Your store"}</p>
             <p className="text-muted-foreground text-xs">{store?.address.city ?? ""}</p>
           </div>
-          {isPro ? (
+          {!proPlanEnabled ? null : isPro ? (
             <StatusBadge tone="warning" className="shrink-0">
               <Sparkles className="size-3" /> Pro
             </StatusBadge>

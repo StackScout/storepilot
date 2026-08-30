@@ -201,6 +201,7 @@ export default function StoreSettingsScreen() {
       businessRegistrationNumber: form.businessRegistrationNumber ? blankToUndefined(form.businessRegistrationNumber) : undefined,
       stockManagementEnabled: form.stockManagementEnabled,
       pickupEnabled: form.pickupEnabled,
+      bookingsEnabled: form.bookingsEnabled,
       gstRegistered: form.gstRegistered,
     });
   };
@@ -337,6 +338,15 @@ export default function StoreSettingsScreen() {
         </ThemedText>
         <ToggleRow label="Track stock" value={form.stockManagementEnabled} onValueChange={(v) => setForm({ ...form, stockManagementEnabled: v })} />
         <ToggleRow label="Pickup available" value={form.pickupEnabled} onValueChange={(v) => setForm({ ...form, pickupEnabled: v })} />
+
+        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+          BOOKINGS
+        </ThemedText>
+        <ToggleRow label="Offer bookable services" value={form.bookingsEnabled} onValueChange={(v) => setForm({ ...form, bookingsEnabled: v })} />
+        <ThemedText type="small" themeColor="textSecondary">
+          Adds a Services section to your storefront and a Bookings tab to this app. Manage the services themselves and your
+          availability from the web dashboard for now.
+        </ThemedText>
 
         <TouchableOpacity style={[styles.submit, saveMutation.isPending && styles.submitDisabled]} onPress={submit} disabled={saveMutation.isPending}>
           {saveMutation.isPending ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.submitText}>Save settings</ThemedText>}

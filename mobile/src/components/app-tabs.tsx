@@ -1,11 +1,25 @@
+import { useQuery } from '@tanstack/react-query';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useColorScheme } from 'react-native';
 
+import { getStoreSettings } from '@/api/store-settings';
+import { getMyStore } from '@/api/stores';
 import { Colors } from '@/constants/theme';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+
+  const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
+  const storeId = storeQuery.data?.id;
+  // Hidden until settings actually load (rather than shown-then-hidden) — mirrors the web
+  // sidebar's equivalent gate, see dashboard-sidebar.tsx's doc comment on BOOKING_NAV_ITEMS.
+  const settingsQuery = useQuery({
+    queryKey: ['store', storeId, 'settings'],
+    queryFn: () => getStoreSettings(storeId!),
+    enabled: !!storeId,
+  });
+  const bookingsEnabled = settingsQuery.data?.bookingsEnabled ?? false;
 
   return (
     <NativeTabs
@@ -27,10 +41,12 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="tag.fill" md="sell" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="bookings">
-        <NativeTabs.Trigger.Label>Bookings</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="calendar" md="calendar_month" />
-      </NativeTabs.Trigger>
+      {bookingsEnabled ? (
+        <NativeTabs.Trigger name="bookings">
+          <NativeTabs.Trigger.Label>Bookings</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon sf="calendar" md="calendar_month" />
+        </NativeTabs.Trigger>
+      ) : null}
 
       <NativeTabs.Trigger name="messages">
         <NativeTabs.Trigger.Label>Messages</NativeTabs.Trigger.Label>

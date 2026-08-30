@@ -24,16 +24,16 @@ class OrderNotifier(
     private val platformConfigService: PlatformConfigService,
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
+    private val sellerNotificationService: SellerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(OrderNotifier::class.java)
 
     /** Fired the moment a buyer places an order — see OrderService.createOrder, alongside orderConfirmed. */
     fun sellerOrderPlaced(order: Order) {
-        sendPushToSeller(
-            order,
-            title = "New order: ${order.orderNumber}",
-            body = "A new order from ${order.store.name}'s storefront just came in — ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}.",
-        )
+        val title = "New order: ${order.orderNumber}"
+        val body = "A new order from ${order.store.name}'s storefront just came in — ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}."
+        sendPushToSeller(order, title, body)
+        sellerNotificationService.notify(order.store.seller, SellerNotificationType.ORDER, title, body, order.id)
     }
 
     /** Fulfillment/delivery-time reminders — see OrderFulfillmentReminderJob / OrderDeliveryReminderJob. */
@@ -116,7 +116,10 @@ class OrderNotifier(
                 appendLine("Review and verify it from your seller dashboard.")
             },
         )
-        sendPushToSeller(order, title = "Receipt uploaded: ${order.orderNumber}", body = "A buyer uploaded a payment receipt — review it to confirm payment.")
+        val title = "Receipt uploaded: ${order.orderNumber}"
+        val pushBody = "A buyer uploaded a payment receipt — review it to confirm payment."
+        sendPushToSeller(order, title, pushBody)
+        sellerNotificationService.notify(order.store.seller, SellerNotificationType.ORDER, title, pushBody, order.id)
     }
 
     fun bankTransferVerified(order: Order, approved: Boolean, note: String?) {
@@ -186,7 +189,10 @@ class OrderNotifier(
                 appendLine("Review and respond from your seller dashboard.")
             },
         )
-        sendPushToSeller(order, title = "Return requested: ${order.orderNumber}", body = "A buyer has requested a return for order ${order.orderNumber}.")
+        val title = "Return requested: ${order.orderNumber}"
+        val pushBody = "A buyer has requested a return for order ${order.orderNumber}."
+        sendPushToSeller(order, title, pushBody)
+        sellerNotificationService.notify(order.store.seller, SellerNotificationType.ORDER, title, pushBody, order.id)
     }
 
     /** ReturnRequestService.decide — buyer notification, mirrors bankTransferVerified's approved/rejected shape. */

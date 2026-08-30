@@ -39,8 +39,9 @@ class OrderNotifierTest {
     private val platformConfigService = mockk<PlatformConfigService>()
     private val pushNotificationService = mockk<PushNotificationService>(relaxed = true)
     private val pushTokenRepository = mockk<PushTokenRepository>()
+    private val sellerNotificationService = mockk<SellerNotificationService>(relaxed = true)
 
-    private val notifier = OrderNotifier(emailService, storeSettingsRepository, notificationProperties, platformConfigService, pushNotificationService, pushTokenRepository)
+    private val notifier = OrderNotifier(emailService, storeSettingsRepository, notificationProperties, platformConfigService, pushNotificationService, pushTokenRepository, sellerNotificationService)
 
     private lateinit var seller: Seller
     private lateinit var store: Store
@@ -57,7 +58,7 @@ class OrderNotifierTest {
             name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
             currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
             flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
+            defaultBankTransferEnabled = true, proPlanEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
             timezone = "Australia/Sydney", returnWindowDays = 14,
         )
         every { pushTokenRepository.findBySellerId(any()) } returns emptyList()

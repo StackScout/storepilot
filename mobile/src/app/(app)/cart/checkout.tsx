@@ -48,14 +48,21 @@ export default function CheckoutScreen() {
   const [email, setEmail] = useState(authEmail ?? '');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
 
+  // Intersected with the platform's own ceiling (defaultCodEnabled etc. —
+  // see PlatformSettings' doc comment on the backend) so a country that
+  // only ever uses online payment doesn't show cod/bank-transfer just
+  // because an individual store happens to have them toggled on.
   const availableMethods = useMemo((): PaymentMethod[] => {
     if (!settings) return [];
     const methods: PaymentMethod[] = [];
-    if (settings.stripeEnabled && settings.stripeChargesEnabled) methods.push('stripe');
-    if (settings.codEnabled) methods.push('cod');
-    if (settings.bankTransferEnabled) methods.push('bank-transfer');
+    if (settings.stripeEnabled && settings.stripeChargesEnabled && platformConfig.defaultOnlinePaymentEnabled) methods.push('stripe');
+    if (settings.codEnabled && platformConfig.defaultCodEnabled) methods.push('cod');
+    if (settings.bankTransferEnabled && platformConfig.defaultBankTransferEnabled) methods.push('bank-transfer');
     return methods;
-  }, [settings]);
+  }, [settings, platformConfig]);
+  // Only ask the buyer to choose when there's an actual choice — with one
+  // method available it's just used directly, no section shown at all.
+  const resolvedPaymentMethod = availableMethods.length === 1 ? availableMethods[0] : paymentMethod;
 
   const total = subtotal + (deliveryMethod === 'shipping' ? platformConfig.flatShippingFee : 0);
 
@@ -72,11 +79,11 @@ export default function CheckoutScreen() {
           state: deliveryMethod === 'shipping' ? state.trim() : undefined,
           postalCode: deliveryMethod === 'shipping' ? postalCode.trim() : undefined,
         },
-        paymentMethod: paymentMethod!,
+        paymentMethod: resolvedPaymentMethod!,
         deliveryMethod,
         email: email.trim(),
       });
-      if (paymentMethod === 'stripe') {
+      if (resolvedPaymentMethod === 'stripe') {
         const { checkoutUrl } = await getStripeCheckoutUrl(order.id);
         // openAuthSessionAsync (not openBrowserAsync) so the in-app browser
         // recognizes the checkout-callback deep link the backend hands
@@ -106,7 +113,7 @@ export default function CheckoutScreen() {
 
   const needsShippingFields = deliveryMethod === 'shipping';
   const canSubmit =
-    !!paymentMethod &&
+    !!resolvedPaymentMethod &&
     !!fullName.trim() &&
     !!phone.trim() &&
     !!email.trim() &&
@@ -156,23 +163,30 @@ export default function CheckoutScreen() {
           </>
         ) : null}
 
-        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
-          PAYMENT METHOD
-        </ThemedText>
         {availableMethods.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            This store hasn&apos;t set up any payment methods yet.
-          </ThemedText>
-        ) : (
-          availableMethods.map((method) => (
-            <TouchableOpacity
-              key={method}
-              style={[styles.methodRow, { borderColor: theme.textSecondary }, paymentMethod === method && { backgroundColor: theme.backgroundElement }]}
-              onPress={() => setPaymentMethod(method)}>
-              <ThemedText type="small">{paymentMethodLabel(method)}</ThemedText>
-            </TouchableOpacity>
-          ))
-        )}
+          <>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+              PAYMENT METHOD
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              This store hasn&apos;t set up any payment methods yet.
+            </ThemedText>
+          </>
+        ) : availableMethods.length > 1 ? (
+          <>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+              PAYMENT METHOD
+            </ThemedText>
+            {availableMethods.map((method) => (
+              <TouchableOpacity
+                key={method}
+                style={[styles.methodRow, { borderColor: theme.textSecondary }, paymentMethod === method && { backgroundColor: theme.backgroundElement }]}
+                onPress={() => setPaymentMethod(method)}>
+                <ThemedText type="small">{paymentMethodLabel(method)}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </>
+        ) : null}
 
         <View style={[styles.summary, { borderColor: theme.backgroundElement }]}>
           <View style={styles.summaryRow}>
@@ -193,7 +207,15 @@ export default function CheckoutScreen() {
           style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
           disabled={!canSubmit || orderMutation.isPending}
           onPress={() => orderMutation.mutate()}>
-          <ThemedText style={styles.submitButtonText}>{orderMutation.isPending ? 'Placing order...' : 'Place order'}</ThemedText>
+          <ThemedText style={styles.submitButtonText}>
+            {orderMutation.isPending
+              ? resolvedPaymentMethod === 'stripe'
+                ? 'Continuing...'
+                : 'Placing order...'
+              : resolvedPaymentMethod === 'stripe'
+                ? 'Continue to payment'
+                : 'Place order'}
+          </ThemedText>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDateTime, formatMoney } from '@/lib/format';
+import { usePlatformConfig } from '@/lib/platform-config';
 
 function FeeCollectionRow({ item }: { item: FeeCollectionResponse }) {
   const theme = useTheme();
@@ -34,14 +35,28 @@ function FeeCollectionRow({ item }: { item: FeeCollectionResponse }) {
 
 export default function FeeCollectionsScreen() {
   const theme = useTheme();
+  const { defaultCodEnabled, defaultBankTransferEnabled } = usePlatformConfig();
+  // Fee collections only ever contain cod/bank-transfer orders — see
+  // backend PlatformSettings' default*Enabled doc comment.
+  const showFees = defaultCodEnabled || defaultBankTransferEnabled;
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
   const storeId = storeQuery.data?.id;
 
   const feesQuery = useQuery({
     queryKey: ['store', storeId, 'fee-collections'],
     queryFn: () => listStoreFeeCollections(storeId!),
-    enabled: !!storeId,
+    enabled: !!storeId && showFees,
   });
+
+  if (!showFees) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center', padding: Spacing.three }}>
+        <ThemedText themeColor="textSecondary" style={{ textAlign: 'center' }}>
+          This store doesn&apos;t use cash on delivery or bank transfer, so there are no fees to collect here.
+        </ThemedText>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>

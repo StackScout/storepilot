@@ -10,12 +10,24 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
+import { usePlatformConfig } from '@/lib/platform-config';
 
 export default function BillingScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const { proPlanEnabled } = usePlatformConfig();
 
-  const planQuery = useQuery({ queryKey: ['me', 'seller', 'plan'], queryFn: getSellerPlan });
+  const planQuery = useQuery({ queryKey: ['me', 'seller', 'plan'], queryFn: getSellerPlan, enabled: proPlanEnabled });
+
+  if (!proPlanEnabled) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center', padding: Spacing.three }}>
+        <ThemedText themeColor="textSecondary" style={{ textAlign: 'center' }}>
+          This store doesn&apos;t use seller plans.
+        </ThemedText>
+      </SafeAreaView>
+    );
+  }
 
   const upgradeMutation = useMutation({
     mutationFn: startBillingCheckout,

@@ -26,6 +26,8 @@ export interface PlatformConfig {
   defaultCodEnabled: boolean;
   defaultOnlinePaymentEnabled: boolean;
   defaultBankTransferEnabled: boolean;
+  /** Whether the seller Free/Pro tier concept exists on this deployment at all — see backend PlatformSettings.proPlanEnabled's doc comment. */
+  proPlanEnabled: boolean;
   supportEmail: string;
   companyLocation: string;
   returnWindowDays: number;
@@ -54,6 +56,7 @@ const FALLBACK_CONFIG: PlatformConfig = {
   defaultCodEnabled: true,
   defaultOnlinePaymentEnabled: false,
   defaultBankTransferEnabled: true,
+  proPlanEnabled: true,
   supportEmail: "hello@storepilot.au",
   companyLocation: "Sydney, Australia",
   returnWindowDays: 30,

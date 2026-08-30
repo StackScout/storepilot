@@ -230,4 +230,6 @@ data class StoreStatsResponse(
     val revenuePreviousPeriod: Int,
     val platformFeeCurrentPeriod: Int,
     val platformFeePreviousPeriod: Int,
+    /** Not time-windowed like the revenue/fee fields above — a live count of every order currently awaiting the seller's action, regardless of when it was placed. */
+    val pendingOrderCount: Int,
 )

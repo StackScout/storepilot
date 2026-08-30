@@ -4,6 +4,7 @@ export default function DashboardLayout() {
   return (
     <Stack>
       <Stack.Screen name="index" options={{ title: 'Dashboard' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/store" options={{ title: 'Store settings' }} />
       <Stack.Screen name="settings/profile" options={{ title: 'Store profile' }} />

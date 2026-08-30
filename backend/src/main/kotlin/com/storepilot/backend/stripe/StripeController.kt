@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -27,7 +28,10 @@ class StripeController(
 
     /** POST /api/orders/{id}/stripe-checkout — guest-reachable, same as PayHere's equivalent (order id is the credential). */
     @PostMapping("/api/orders/{id}/stripe-checkout")
-    fun checkout(@PathVariable id: UUID): StripeCheckoutSessionResponse = stripeService.createCheckoutSession(id)
+    fun checkout(
+        @PathVariable id: UUID,
+        @RequestParam(required = false, defaultValue = "web") platform: String,
+    ): StripeCheckoutSessionResponse = stripeService.createCheckoutSession(id, mobile = platform == "mobile")
 
     @PostMapping("/api/bookings/{id}/stripe-checkout")
     fun bookingCheckout(@PathVariable id: UUID): StripeCheckoutSessionResponse = stripeService.createBookingCheckoutSession(id)

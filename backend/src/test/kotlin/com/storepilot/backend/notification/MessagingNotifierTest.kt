@@ -19,8 +19,9 @@ import java.util.UUID
 class MessagingNotifierTest {
     private val pushNotificationService = mockk<PushNotificationService>(relaxed = true)
     private val pushTokenRepository = mockk<PushTokenRepository>()
+    private val sellerNotificationService = mockk<SellerNotificationService>(relaxed = true)
 
-    private val notifier = MessagingNotifier(pushNotificationService, pushTokenRepository)
+    private val notifier = MessagingNotifier(pushNotificationService, pushTokenRepository, sellerNotificationService)
 
     private lateinit var seller: Seller
     private lateinit var store: Store

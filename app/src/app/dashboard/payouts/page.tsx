@@ -16,7 +16,8 @@ import { payoutsService, storesService, ordersService } from "@/services";
 
 export default function DashboardPayoutsPage() {
   const storeId = useSellerStoreId();
-  const { name, countryCode, currencyCode, currencySymbol, currencyLocale, platformFeePercent } = usePlatformConfig();
+  const { name, countryCode, currencyCode, currencySymbol, currencyLocale, platformFeePercent, defaultCodEnabled, defaultBankTransferEnabled } =
+    usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   // Payouts only ever contain money — PayHere is LK-only (see PayoutService.getEligibleOrders'
   // doc comment), so the section is dead weight everywhere else. Stripe is the mirror image:
@@ -24,6 +25,10 @@ export default function DashboardPayoutsPage() {
   // needing a payout run, so showing it outside AU would always be an empty no-op section too.
   const showPayouts = countryCode === "LK";
   const showStripe = countryCode === "AU";
+  // Fees owed only exists for cod/bank-transfer orders (the platform never touches that money,
+  // so it tracks what the seller owes back) — dead weight on a deployment that doesn't offer
+  // either at all, see PlatformSettings' default*Enabled doc comment.
+  const showFees = defaultCodEnabled || defaultBankTransferEnabled;
 
   const { data: payouts, isLoading: isPayoutsLoading } = useQuery({
     queryKey: ["payouts", storeId],
@@ -43,10 +48,12 @@ export default function DashboardPayoutsPage() {
   const { data: feeCollections, isLoading: isFeeCollectionsLoading } = useQuery({
     queryKey: ["fee-collections", storeId],
     queryFn: () => payoutsService.listFeeCollectionsByStore(storeId),
+    enabled: showFees,
   });
   const { data: feeEligibleOrders } = useQuery({
     queryKey: ["fee-collection-eligible-orders", storeId],
     queryFn: () => payoutsService.getEligibleOrdersForFeeCollection(storeId, 0, 200),
+    enabled: showFees,
   });
   const { data: stripeSettlements, isLoading: isStripeLoading } = useQuery({
     queryKey: ["stripe-settlements", storeId],
@@ -75,7 +82,9 @@ export default function DashboardPayoutsPage() {
   return (
     <div className="max-w-6xl space-y-10">
       <div>
-        <h1 className="text-2xl font-bold">{showPayouts ? "Payouts & fees" : "Earnings & fees"}</h1>
+        <h1 className="text-2xl font-bold">
+          {showPayouts ? "Payouts & fees" : showFees ? "Earnings & fees" : "Earnings"}
+        </h1>
         <p className="text-muted-foreground text-sm">
           How money moves depends on the payment method a buyer used — each view below shows which
           direction money is moving for that method.
@@ -164,7 +173,9 @@ export default function DashboardPayoutsPage() {
         </section>
       ) : null}
 
-      {/* Fees owed — COD/bank-transfer, seller owes platform */}
+      {/* Fees owed — COD/bank-transfer, seller owes platform. Dead weight on a deployment that
+          doesn't offer either at all, see showFees above. */}
+      {showFees ? (
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Fees owed</h2>
@@ -229,6 +240,7 @@ export default function DashboardPayoutsPage() {
           </CardContent>
         </Card>
       </section>
+      ) : null}
 
       {/* Stripe — auto-settled, informational only. AU-only for the mirror-image reason: Stripe is
           unreachable at checkout outside AU, so this would always be empty elsewhere. */}

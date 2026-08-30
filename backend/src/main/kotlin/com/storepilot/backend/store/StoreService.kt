@@ -146,6 +146,7 @@ class StoreService(
                 bookingRepository.sumPlatformFeeForPaidBookings(storeId, currentFrom, now),
             platformFeePreviousPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, previousFrom, currentFrom) +
                 bookingRepository.sumPlatformFeeForPaidBookings(storeId, previousFrom, currentFrom),
+            pendingOrderCount = orderRepository.countByStoreIdAndStatus(storeId, OrderStatus.PENDING).toInt(),
         )
     }
 
@@ -325,6 +326,7 @@ class StoreService(
     }
 
     private fun upsertSettings(storeId: UUID, input: StoreSettingsInput): StoreSettingsResponse {
+        val proPlanEnabled = platformConfigService.current().proPlanEnabled
         val existing = storeSettingsRepository.findById(storeId).orElse(null)
         if (existing != null) {
             // Once a store is ACTIVE, its identity-verification fields are
@@ -362,10 +364,12 @@ class StoreService(
             // SellerPlan.kt) — force off regardless of what was requested
             // whenever the seller isn't Pro, rather than rejecting the
             // whole settings save, so editing an unrelated field never
-            // fails because of a stale/bypassed client-side toggle.
-            input.codEnabled?.let { existing.codEnabled = it && sellerPlan == SellerPlan.PRO }
+            // fails because of a stale/bypassed client-side toggle. Moot
+            // (never forced off) on a deployment with no Pro tier concept —
+            // see PlatformSettings.proPlanEnabled's doc comment.
+            input.codEnabled?.let { existing.codEnabled = it && (sellerPlan == SellerPlan.PRO || !proPlanEnabled) }
             input.onlinePaymentEnabled?.let { existing.onlinePaymentEnabled = it }
-            input.bankTransferEnabled?.let { existing.bankTransferEnabled = it && sellerPlan == SellerPlan.PRO }
+            input.bankTransferEnabled?.let { existing.bankTransferEnabled = it && (sellerPlan == SellerPlan.PRO || !proPlanEnabled) }
             // Only reachable below when the store isn't ACTIVE yet (the
             // guard above already threw otherwise) — i.e. this is still the
             // initial onboarding submission or a post-rejection resubmission.
@@ -412,7 +416,7 @@ class StoreService(
 
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         val platformConfig = platformConfigService.current()
-        val sellerIsPro = store.seller.plan == SellerPlan.PRO
+        val sellerIsPro = store.seller.plan == SellerPlan.PRO || !proPlanEnabled
         // See the equivalent gate above for why COD/bank-transfer are
         // forced off rather than rejecting the request outright.
         val codEnabled = (input.codEnabled ?: platformConfig.defaultCodEnabled) && sellerIsPro

@@ -15,10 +15,12 @@ export function ReviewsSection({
   queryKey,
   listReviews,
   createReview,
+  hideHeading,
 }: {
   queryKey: unknown[];
   listReviews: () => Promise<Review[]>;
   createReview: (input: ReviewInput) => Promise<Review>;
+  hideHeading?: boolean;
 }) {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -42,9 +44,11 @@ export function ReviewsSection({
 
   return (
     <View style={styles.container}>
-      <ThemedText type="smallBold" themeColor="textSecondary">
-        REVIEWS
-      </ThemedText>
+      {hideHeading ? null : (
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          REVIEWS
+        </ThemedText>
+      )}
 
       {canReview ? (
         <View style={styles.form}>
@@ -78,33 +82,41 @@ export function ReviewsSection({
           No reviews yet.
         </ThemedText>
       ) : (
-        (reviewsQuery.data ?? []).map((review) => (
-          <View key={review.id} style={[styles.review, { borderColor: theme.backgroundElement }]}>
-            <View style={styles.reviewHeader}>
-              <ThemedText type="smallBold">{review.buyerName}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {formatDate(review.createdAt)}
+        <View style={styles.reviewList}>
+          {(reviewsQuery.data ?? []).map((review) => (
+            <View key={review.id} style={[styles.review, { backgroundColor: theme.backgroundElement }]}>
+              <View style={styles.reviewHeader}>
+                <ThemedText type="smallBold">{review.buyerName}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {formatDate(review.createdAt)}
+                </ThemedText>
+              </View>
+              <ThemedText style={{ color: '#B98900' }}>
+                {'★'.repeat(review.rating)}
+                {'☆'.repeat(5 - review.rating)}
               </ThemedText>
+              {review.comment ? (
+                <ThemedText type="small" style={styles.reviewComment}>
+                  {review.comment}
+                </ThemedText>
+              ) : null}
             </View>
-            <ThemedText type="small" style={{ color: '#B98900' }}>
-              {'★'.repeat(review.rating)}
-              {'☆'.repeat(5 - review.rating)}
-            </ThemedText>
-            {review.comment ? <ThemedText type="small">{review.comment}</ThemedText> : null}
-          </View>
-        ))
+          ))}
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: Spacing.two },
+  container: { gap: Spacing.two, paddingHorizontal: Spacing.three },
   form: { gap: Spacing.two },
   stars: { flexDirection: 'row', gap: Spacing.half },
   input: { minHeight: 60, borderRadius: 10, padding: Spacing.two, fontSize: 14, textAlignVertical: 'top' },
   submitButton: { height: 40, borderRadius: 10, backgroundColor: '#208AEF', alignItems: 'center', justifyContent: 'center' },
   submitButtonText: { color: '#fff', fontWeight: '600' },
-  review: { borderTopWidth: 1, paddingTop: Spacing.two, gap: 4 },
+  reviewList: { gap: Spacing.two },
+  review: { borderRadius: 12, padding: Spacing.three, gap: 4 },
   reviewHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  reviewComment: { marginTop: 2, lineHeight: 20 },
 });

@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,6 +18,7 @@ import { ProductTile } from '@/components/product-tile';
 import { ReviewsSection } from '@/components/reviews-section';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, usePlatformConfig } from '@/lib/platform-config';
 import { router, type Href } from 'expo-router';
@@ -24,6 +26,7 @@ import { router, type Href } from 'expo-router';
 export default function StoreScreen() {
   const theme = useTheme();
   const platformConfig = usePlatformConfig();
+  const hrefs = useStoreHrefs();
   const { slug } = useLocalSearchParams<{ slug: string }>();
 
   const isSignedIn = useAuthStore((s) => s.isSignedIn);
@@ -42,6 +45,7 @@ export default function StoreScreen() {
   const servicesQuery = useQuery({ queryKey: ['store', store?.id, 'services'], queryFn: () => listServicesByStore(store!.id), enabled: !!store });
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
   const categoryLabel = categoriesQuery.data?.find((c) => c.wireValue === store?.category)?.name ?? store?.category;
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   if (storeQuery.isLoading || !store) {
     return (
@@ -56,27 +60,30 @@ export default function StoreScreen() {
       <Stack.Screen options={{ title: store.name }} />
       <ScrollView contentContainerStyle={styles.container}>
         {store.bannerUrl ? <Image source={{ uri: store.bannerUrl }} style={styles.banner} contentFit="cover" /> : null}
-        <View style={styles.header}>
+
+        <View style={styles.logoRow}>
           {store.logoUrl ? (
-            <Image source={{ uri: store.logoUrl }} style={[styles.logo, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
+            <Image source={{ uri: store.logoUrl }} style={[styles.logo, { backgroundColor: theme.background, borderColor: theme.background }]} contentFit="cover" />
           ) : (
-            <View style={[styles.logo, { backgroundColor: theme.backgroundElement }]} />
+            <View style={[styles.logo, { backgroundColor: theme.backgroundElement, borderColor: theme.background }]} />
           )}
-          <View style={styles.headerInfo}>
-            <ThemedText type="title" style={styles.name}>
-              {store.name}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {categoryLabel} · {store.address.city}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {store.rating.toFixed(1)} ★ ({store.reviewCount}) · {store.productCount} products
-            </ThemedText>
-          </View>
+        </View>
+
+        <View style={styles.header}>
+          <ThemedText type="title" style={styles.name}>
+            {store.name}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {categoryLabel} · {store.address.city}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.stats}>
+            {store.rating.toFixed(1)} ★ ({store.reviewCount}) · {store.productCount} products
+          </ThemedText>
+
           <View style={styles.headerActions}>
-            <FollowStoreButton storeId={store.id} />
+            <FollowStoreButton storeId={store.id} style={styles.actionButton} />
             <TouchableOpacity
-              style={[styles.messageButton, { borderColor: theme.textSecondary }]}
+              style={[styles.messageButton, styles.actionButton, { borderColor: theme.textSecondary }]}
               onPress={() => {
                 if (!isSignedIn || role !== 'buyer') {
                   router.push('/account/login' as Href);
@@ -90,9 +97,16 @@ export default function StoreScreen() {
         </View>
 
         <ThemedText style={styles.tagline}>{store.tagline}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {store.description}
-        </ThemedText>
+        {descriptionExpanded ? (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.description}>
+            {store.description}
+          </ThemedText>
+        ) : null}
+        <TouchableOpacity onPress={() => setDescriptionExpanded((v) => !v)} style={styles.readMore}>
+          <ThemedText type="small" themeColor="textSecondary" style={{ textDecorationLine: 'underline' }}>
+            {descriptionExpanded ? 'Show less' : 'Read more'}
+          </ThemedText>
+        </TouchableOpacity>
 
         {(productsQuery.data ?? []).length > 0 ? (
           <>
@@ -119,7 +133,7 @@ export default function StoreScreen() {
               <TouchableOpacity
                 key={service.id}
                 style={[styles.serviceRow, { borderColor: theme.backgroundElement }]}
-                onPress={() => router.push(`/stores/${store.slug}/services/${service.slug}` as Href)}>
+                onPress={() => router.push(hrefs.service(store.slug, service.slug))}>
                 <ThemedText type="smallBold">{service.name}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatCurrency(service.price, platformConfig)} · {service.durationMinutes} min
@@ -146,13 +160,20 @@ export default function StoreScreen() {
 const styles = StyleSheet.create({
   container: { paddingBottom: Spacing.six },
   banner: { width: '100%', height: 140 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two, padding: Spacing.three },
-  logo: { width: 64, height: 64, borderRadius: 12 },
-  headerInfo: { flex: 1, gap: 2 },
-  headerActions: { gap: Spacing.two, alignItems: 'flex-end' },
+  // Overlaps the banner by half its own height, matching the standard
+  // profile-header pattern (Etsy, Instagram, etc.) instead of a small
+  // inline logo squeezed beside the name/stats text.
+  logoRow: { paddingHorizontal: Spacing.three, marginTop: -44 },
+  logo: { width: 88, height: 88, borderRadius: 20, borderWidth: 3 },
+  header: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two, gap: 4 },
+  headerActions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
+  actionButton: { flex: 1 },
   messageButton: { height: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 22, lineHeight: 28 },
-  tagline: { paddingHorizontal: Spacing.three },
+  stats: { marginTop: 2 },
+  tagline: { paddingHorizontal: Spacing.three, marginTop: Spacing.three },
+  description: { paddingHorizontal: Spacing.three, marginTop: 2 },
+  readMore: { paddingHorizontal: Spacing.three, marginTop: 2 },
   sectionLabel: { marginTop: Spacing.three, marginHorizontal: Spacing.three },
   row: { gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   serviceRow: { marginHorizontal: Spacing.three, borderTopWidth: 1, paddingVertical: Spacing.two, gap: 2 },

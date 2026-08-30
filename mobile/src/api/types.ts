@@ -22,6 +22,8 @@ import type {
   Coupon,
   SellerPlanInfo,
   StoreSettings,
+  SellerNotification,
+  SellerNotificationSummary,
 } from "@storepilot/shared-api";
 
 export type {
@@ -42,6 +44,7 @@ export type {
   PayoutOrderRef,
   FeeCollectionOrderRef,
   CouponInput,
+  SellerNotificationType,
 } from "@storepilot/shared-api";
 
 export type StoreResponse = Store;
@@ -59,6 +62,8 @@ export type FeeCollectionResponse = FeeCollection;
 export type CouponResponse = Coupon;
 export type SellerPlanResponse = SellerPlanInfo;
 export type StoreSettingsResponse = StoreSettings;
+export type SellerNotificationResponse = SellerNotification;
+export type SellerNotificationSummaryResponse = SellerNotificationSummary;
 
 export type ApiErrorBody = {
   error: {

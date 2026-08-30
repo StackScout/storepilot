@@ -112,7 +112,13 @@ class BookingServiceTest {
         every { bookableServiceRepository.findById(requireNotNull(bookableService.id)) } returns Optional.of(bookableService)
         every { storeSettingsRepository.findById(storeId) } returns Optional.of(settings)
         every { storeAvailabilityRepository.findById(storeId) } returns Optional.of(StoreAvailability(store = store, leadTimeMinutes = 120))
-        every { platformConfigService.current() } returns mockk<PlatformSettings> { every { countryCode } returns "AU" }
+        every { platformConfigService.current() } returns mockk<PlatformSettings> {
+            every { countryCode } returns "AU"
+            every { defaultCodEnabled } returns true
+            every { defaultOnlinePaymentEnabled } returns true
+            every { defaultBankTransferEnabled } returns true
+            every { proPlanEnabled } returns true
+        }
         every { currentActor.buyerOrNull() } returns null
         every { bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(any(), any(), any(), any()) } returns emptyList()
         every { bookingRepository.save(any()) } answers {
@@ -200,7 +206,27 @@ class BookingServiceTest {
     }
 
     @Test
-    fun `createBooking rejects PayHere outside a Sri Lanka deployment`() {
+    fun `createBooking allows bank-transfer for a non-Pro seller when the deployment has no Pro tier concept`() {
+        seller.plan = SellerPlan.FREE
+        every { platformConfigService.current() } returns mockk<PlatformSettings> {
+            every { countryCode } returns "AU"
+            every { defaultCodEnabled } returns true
+            every { defaultOnlinePaymentEnabled } returns true
+            every { defaultBankTransferEnabled } returns true
+            every { proPlanEnabled } returns false
+        }
+        val result = service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "bank-transfer"))
+        assertEquals("bank-transfer", result.paymentMethod)
+    }
+
+    @Test
+    fun `createBooking rejects PayHere when the platform doesn't offer online payment`() {
+        every { platformConfigService.current() } returns mockk<PlatformSettings> {
+            every { countryCode } returns "AU"
+            every { defaultCodEnabled } returns true
+            every { defaultOnlinePaymentEnabled } returns false
+            every { defaultBankTransferEnabled } returns true
+        }
         assertThrows(ConflictException::class.java) {
             service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "payhere"))
         }

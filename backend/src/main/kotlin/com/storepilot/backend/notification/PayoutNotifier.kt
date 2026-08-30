@@ -12,24 +12,26 @@ class PayoutNotifier(
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
     private val platformConfigService: PlatformConfigService,
+    private val sellerNotificationService: SellerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(PayoutNotifier::class.java)
 
     /** PayoutService.markPaid — admin confirms the bank transfer actually went out. */
     fun payoutMarkedPaid(payout: Payout) {
-        val sellerId = payout.store.seller.id ?: return
-        val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
-        if (tokens.isEmpty()) return
-        try {
-            pushNotificationService.send(
-                tokens,
-                title = "Payout sent",
-                body = "Your payout of ${platformConfigService.current().currencyCode} ${formatMoney(payout.net)} has been paid out.",
-                data = mapOf("type" to "payout", "id" to payout.id.toString()),
-            )
-        } catch (e: Exception) {
-            log.warn("Failed to send payout push to seller {} — not failing the triggering operation", sellerId, e)
+        val title = "Payout sent"
+        val body = "Your payout of ${platformConfigService.current().currencyCode} ${formatMoney(payout.net)} has been paid out."
+        val sellerId = payout.store.seller.id
+        if (sellerId != null) {
+            val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
+            if (tokens.isNotEmpty()) {
+                try {
+                    pushNotificationService.send(tokens, title, body, data = mapOf("type" to "payout", "id" to payout.id.toString()))
+                } catch (e: Exception) {
+                    log.warn("Failed to send payout push to seller {} — not failing the triggering operation", sellerId, e)
+                }
+            }
         }
+        sellerNotificationService.notify(payout.store.seller, SellerNotificationType.PAYOUT, title, body, payout.id)
     }
 
     /** [cents] is this codebase's storage unit — see Product.price's doc comment. */

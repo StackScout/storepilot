@@ -44,7 +44,8 @@
           "cameraPermission": "StorePilot needs access to your camera to take product photos."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": false,

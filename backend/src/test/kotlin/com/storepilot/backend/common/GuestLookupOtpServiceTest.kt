@@ -31,7 +31,7 @@ class GuestLookupOtpServiceTest {
             name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
             currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
             flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
+            defaultBankTransferEnabled = true, proPlanEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
             timezone = "Australia/Sydney", returnWindowDays = 14,
         )
         every { repository.save(any()) } answers { firstArg() }

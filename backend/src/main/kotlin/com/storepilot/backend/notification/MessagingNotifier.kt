@@ -16,22 +16,24 @@ import org.springframework.stereotype.Component
 class MessagingNotifier(
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
+    private val sellerNotificationService: SellerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(MessagingNotifier::class.java)
 
     fun sellerMessageReceived(conversation: Conversation, message: Message) {
-        val sellerId = conversation.store.seller.id ?: return
-        val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
-        if (tokens.isEmpty()) return
-        try {
-            pushNotificationService.send(
-                tokens,
-                title = "New message from ${conversation.buyer.name}",
-                body = message.body.take(120),
-                data = mapOf("type" to "conversation", "id" to conversation.id.toString()),
-            )
-        } catch (e: Exception) {
-            log.warn("Failed to send message push to seller {} — not failing the triggering operation", sellerId, e)
+        val title = "New message from ${conversation.buyer.name}"
+        val body = message.body.take(120)
+        val sellerId = conversation.store.seller.id
+        if (sellerId != null) {
+            val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
+            if (tokens.isNotEmpty()) {
+                try {
+                    pushNotificationService.send(tokens, title, body, data = mapOf("type" to "conversation", "id" to conversation.id.toString()))
+                } catch (e: Exception) {
+                    log.warn("Failed to send message push to seller {} — not failing the triggering operation", sellerId, e)
+                }
+            }
         }
+        sellerNotificationService.notify(conversation.store.seller, SellerNotificationType.CONVERSATION, title, body, conversation.id)
     }
 }

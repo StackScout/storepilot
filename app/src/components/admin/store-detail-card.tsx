@@ -28,6 +28,7 @@ export function StoreDetailCard({
   store,
   settings,
   isSriLanka,
+  needsBankDetails = true,
   showActions = false,
   onApprove,
   onReject,
@@ -36,6 +37,8 @@ export function StoreDetailCard({
   store: Store;
   settings: StoreSettings | null;
   isSriLanka: boolean;
+  /** Whether this deployment offers cod/bank-transfer at all — see PlatformSettings' default*Enabled doc comment. Defaults true so existing callers that don't pass it keep today's behavior. */
+  needsBankDetails?: boolean;
   showActions?: boolean;
   onApprove?: (storeId: string) => void;
   onReject?: (store: Store) => void;
@@ -88,12 +91,14 @@ export function StoreDetailCard({
           </dd>
           {!isSriLanka && settings?.abn ? <AbnVerificationBadge abn={settings.abn} /> : null}
         </div>
+        {needsBankDetails ? (
         <div>
           <dt className="text-muted-foreground">Bank account</dt>
           <dd className="font-medium">
             {settings ? `${settings.bankName} · ${settings.bankAccountNumber}` : "—"}
           </dd>
         </div>
+        ) : null}
         <div>
           <dt className="text-muted-foreground">Contact</dt>
           <dd className="font-medium">{settings?.contactEmail ?? "—"}</dd>

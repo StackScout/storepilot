@@ -18,6 +18,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api-client';
+import { usePlatformConfig } from '@/lib/platform-config';
 
 function Field({ label, value, onChangeText, editable = true, keyboardType }: {
   label: string;
@@ -72,6 +73,8 @@ export default function StoreSettingsScreen() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const { proPlanEnabled, defaultCodEnabled: platformCodEnabled, defaultBankTransferEnabled: platformBankTransferEnabled } = usePlatformConfig();
+  const needsBankDetails = platformCodEnabled || platformBankTransferEnabled;
 
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
   const storeId = storeQuery.data?.id;
@@ -149,9 +152,13 @@ export default function StoreSettingsScreen() {
       bankAccountName: blankToUndefined(form.bankAccountName),
       bankAccountNumber: blankToUndefined(form.bankAccountNumber),
       bankName: blankToUndefined(form.bankName),
-      codEnabled: form.codEnabled,
+      // Hidden (not just disabled) below when the platform doesn't offer
+      // the method at all — clamp here too so a stale true value from
+      // before the platform setting changed never gets resubmitted just
+      // because its toggle isn't rendered to switch off.
+      codEnabled: platformCodEnabled && form.codEnabled,
       onlinePaymentEnabled: form.onlinePaymentEnabled,
-      bankTransferEnabled: form.bankTransferEnabled,
+      bankTransferEnabled: platformBankTransferEnabled && form.bankTransferEnabled,
       abn: form.abn ? blankToUndefined(form.abn) : undefined,
       driverLicenceNumber: form.driverLicenceNumber ? blankToUndefined(form.driverLicenceNumber) : undefined,
       nicNumber: form.nicNumber ? blankToUndefined(form.nicNumber) : undefined,
@@ -181,19 +188,29 @@ export default function StoreSettingsScreen() {
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
           PAYMENT METHODS
         </ThemedText>
-        <ToggleRow label="Cash on delivery" value={form.codEnabled} onValueChange={(v) => setForm({ ...form, codEnabled: v })} />
+        {platformCodEnabled ? (
+          <ToggleRow label="Cash on delivery" value={form.codEnabled} onValueChange={(v) => setForm({ ...form, codEnabled: v })} />
+        ) : null}
         <ToggleRow label="Online payment (card)" value={form.onlinePaymentEnabled} onValueChange={(v) => setForm({ ...form, onlinePaymentEnabled: v })} />
-        <ToggleRow label="Bank transfer" value={form.bankTransferEnabled} onValueChange={(v) => setForm({ ...form, bankTransferEnabled: v })} />
-        <ThemedText type="small" themeColor="textSecondary">
-          Cash on delivery and bank transfer require the Pro plan — the server ignores these toggles on the Free plan.
-        </ThemedText>
+        {platformBankTransferEnabled ? (
+          <ToggleRow label="Bank transfer" value={form.bankTransferEnabled} onValueChange={(v) => setForm({ ...form, bankTransferEnabled: v })} />
+        ) : null}
+        {proPlanEnabled && (platformCodEnabled || platformBankTransferEnabled) ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            Cash on delivery and bank transfer require the Pro plan — the server ignores these toggles on the Free plan.
+          </ThemedText>
+        ) : null}
 
-        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
-          BANK DETAILS
-        </ThemedText>
-        <Field label="Bank name" value={form.bankName} onChangeText={(v) => setForm({ ...form, bankName: v })} />
-        <Field label="Account name" value={form.bankAccountName} onChangeText={(v) => setForm({ ...form, bankAccountName: v })} />
-        <Field label="Account number" value={form.bankAccountNumber} onChangeText={(v) => setForm({ ...form, bankAccountNumber: v })} />
+        {needsBankDetails ? (
+          <>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
+              BANK DETAILS
+            </ThemedText>
+            <Field label="Bank name" value={form.bankName} onChangeText={(v) => setForm({ ...form, bankName: v })} />
+            <Field label="Account name" value={form.bankAccountName} onChangeText={(v) => setForm({ ...form, bankAccountName: v })} />
+            <Field label="Account number" value={form.bankAccountNumber} onChangeText={(v) => setForm({ ...form, bankAccountNumber: v })} />
+          </>
+        ) : null}
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
           TAX &amp; IDENTITY

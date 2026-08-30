@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,34 +47,57 @@ const urlOrEmpty = z
   .trim()
   .refine((v) => v === "" || z.string().url().safeParse(v).success, "Enter a valid URL");
 
-const settingsSchema = z
-  .object({
-    contactEmail: z.string().email("Enter a valid email"),
-    contactPhone: z.string().min(9, "Enter a valid phone number"),
-    bankName: z.string().min(2, "Enter a bank name"),
-    bankAccountName: z.string().min(2, "Enter the account holder name"),
-    bankAccountNumber: z.string().min(4, "Enter the account number"),
-    codEnabled: z.boolean(),
-    onlinePaymentEnabled: z.boolean(),
-    bankTransferEnabled: z.boolean(),
-    stripeEnabled: z.boolean(),
-    stockManagementEnabled: z.boolean(),
-    pickupEnabled: z.boolean(),
-    bookingsEnabled: z.boolean(),
-    gstRegistered: z.boolean(),
-    facebookUrl: urlOrEmpty,
-    instagramUrl: urlOrEmpty,
-    tiktokUrl: urlOrEmpty,
-  })
-  .refine(
-    (data) => data.codEnabled || data.onlinePaymentEnabled || data.bankTransferEnabled || data.stripeEnabled,
-    {
-      message: "Enable at least one payment method so buyers can check out",
-      path: ["bankTransferEnabled"],
-    },
-  );
+/**
+ * Bank details are only meaningful when this deployment offers cod or
+ * bank-transfer at all (see PlatformSettings' default*Enabled doc comment
+ * on the backend) — required when it does, dropped entirely otherwise, so
+ * a seller on a Stripe-only deployment (who was never asked for them at
+ * onboarding either — see onboarding/page.tsx) isn't blocked from saving
+ * any other settings change by an empty required field for data nobody
+ * reads.
+ */
+function buildSettingsSchema(needsBankDetails: boolean) {
+  return z
+    .object({
+      contactEmail: z.string().email("Enter a valid email"),
+      contactPhone: z.string().min(9, "Enter a valid phone number"),
+      bankName: z.string().optional(),
+      bankAccountName: z.string().optional(),
+      bankAccountNumber: z.string().optional(),
+      codEnabled: z.boolean(),
+      onlinePaymentEnabled: z.boolean(),
+      bankTransferEnabled: z.boolean(),
+      stripeEnabled: z.boolean(),
+      stockManagementEnabled: z.boolean(),
+      pickupEnabled: z.boolean(),
+      bookingsEnabled: z.boolean(),
+      gstRegistered: z.boolean(),
+      facebookUrl: urlOrEmpty,
+      instagramUrl: urlOrEmpty,
+      tiktokUrl: urlOrEmpty,
+    })
+    .refine(
+      (data) => data.codEnabled || data.onlinePaymentEnabled || data.bankTransferEnabled || data.stripeEnabled,
+      {
+        message: "Enable at least one payment method so buyers can check out",
+        path: ["bankTransferEnabled"],
+      },
+    )
+    .superRefine((data, ctx) => {
+      if (!needsBankDetails) return;
+      if (!data.bankName || data.bankName.trim().length < 2) {
+        ctx.addIssue({ code: "custom", path: ["bankName"], message: "Enter a bank name" });
+      }
+      if (!data.bankAccountName || data.bankAccountName.trim().length < 2) {
+        ctx.addIssue({ code: "custom", path: ["bankAccountName"], message: "Enter the account holder name" });
+      }
+      if (!data.bankAccountNumber || data.bankAccountNumber.trim().length < 4) {
+        ctx.addIssue({ code: "custom", path: ["bankAccountNumber"], message: "Enter the account number" });
+      }
+    });
+}
 
-type SettingsFormValues = z.infer<typeof settingsSchema>;
+type SettingsFormValues = z.infer<ReturnType<typeof buildSettingsSchema>>;
 
 const changeRequestSchema = z.object({
   sellerType: z.enum(["individual", "business"]),
@@ -97,7 +120,15 @@ export default function DashboardSettingsPage() {
 function DashboardSettingsForm() {
   const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
-  const { countryCode, currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const {
+    countryCode,
+    currencyCode,
+    currencySymbol,
+    currencyLocale,
+    proPlanEnabled,
+    defaultCodEnabled: platformCodEnabled,
+    defaultBankTransferEnabled: platformBankTransferEnabled,
+  } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   const isSriLanka = countryCode === "LK";
   // PayHere and Stripe are each temporarily restricted to their home
@@ -105,6 +136,8 @@ function DashboardSettingsForm() {
   // below, and checkout-form.tsx's matching gate on the buyer side.
   const isAustralia = countryCode === "AU";
   const searchParams = useSearchParams();
+  const needsBankDetails = platformCodEnabled || platformBankTransferEnabled;
+  const settingsSchema = useMemo(() => buildSettingsSchema(needsBankDetails), [needsBankDetails]);
 
   const { data: settings, isLoading: isSettingsLoading } = useQuery({
     queryKey: ["store-settings", storeId],
@@ -138,7 +171,13 @@ function DashboardSettingsForm() {
     queryFn: () => billingService.getMyPlan(),
     refetchOnMount: "always",
   });
-  const isPro = planInfo?.plan === "pro";
+  // On a deployment with no Pro tier concept at all (see
+  // PlatformSettings.proPlanEnabled's doc comment), every seller is
+  // treated as if they were Pro — the Plan card disappears entirely below,
+  // and every other isPro check here (COD/bank-transfer checkboxes, "Pro"
+  // badges) is naturally moot since there's no Free tier to distinguish
+  // from.
+  const isPro = !proPlanEnabled || planInfo?.plan === "pro";
 
   const isLoading = isSettingsLoading || isStoreLoading || isPlanLoading;
 
@@ -272,6 +311,13 @@ function DashboardSettingsForm() {
   const mutation = useMutation({
     mutationFn: async (values: SettingsFormValues) => {
       const { facebookUrl, instagramUrl, tiktokUrl, ...settingsValues } = values;
+      // The checkboxes above are hidden (not just disabled) when the
+      // platform doesn't offer the method at all — clamp here too so a
+      // stale true value from before the platform setting changed never
+      // gets resubmitted just because its checkbox isn't rendered to
+      // uncheck it.
+      settingsValues.codEnabled = platformCodEnabled && settingsValues.codEnabled;
+      settingsValues.bankTransferEnabled = platformBankTransferEnabled && settingsValues.bankTransferEnabled;
       await Promise.all([
         storesService.updateStoreSettings(storeId, settingsValues),
         storesService.updateStoreProfile(storeId, { facebookUrl, instagramUrl, tiktokUrl }),
@@ -440,6 +486,7 @@ function DashboardSettingsForm() {
         <p className="text-muted-foreground text-sm">Contact info, payouts and payment methods.</p>
       </div>
 
+      {proPlanEnabled ? (
       <Card>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -492,6 +539,7 @@ function DashboardSettingsForm() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-4">
@@ -562,6 +610,7 @@ function DashboardSettingsForm() {
           </CardContent>
         </Card>
 
+        {needsBankDetails ? (
         <Card>
           <CardContent className="space-y-4">
             <h2 className="font-semibold">Payout bank account</h2>
@@ -586,6 +635,7 @@ function DashboardSettingsForm() {
             </div>
           </CardContent>
         </Card>
+        ) : null}
 
         <Card>
           <CardContent className="space-y-4">
@@ -690,6 +740,7 @@ function DashboardSettingsForm() {
         <Card>
           <CardContent className="space-y-4">
             <h2 className="font-semibold">Payment methods</h2>
+            {platformCodEnabled ? (
             <label className={cn("flex items-start gap-3", !isPro && "cursor-not-allowed opacity-60")}>
               <Checkbox
                 checked={codEnabled}
@@ -710,6 +761,7 @@ function DashboardSettingsForm() {
                 </span>
               </span>
             </label>
+            ) : null}
             {isSriLanka ? (
             <label className="flex items-start gap-3">
               <Checkbox
@@ -724,6 +776,7 @@ function DashboardSettingsForm() {
               </span>
             </label>
             ) : null}
+            {platformBankTransferEnabled ? (
             <label className={cn("flex items-start gap-3", !isPro && "cursor-not-allowed opacity-60")}>
               <Checkbox
                 checked={bankTransferEnabled}
@@ -745,6 +798,7 @@ function DashboardSettingsForm() {
                 </span>
               </span>
             </label>
+            ) : null}
             {isAustralia && settings?.stripeChargesEnabled ? (
               <label className="flex items-start gap-3">
                 <Checkbox

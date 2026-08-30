@@ -182,6 +182,8 @@ export interface StoreStats {
   revenuePreviousPeriod: number;
   platformFeeCurrentPeriod: number;
   platformFeePreviousPeriod: number;
+  /** Not time-windowed like the fields above — a live count of every order currently awaiting the seller's action. */
+  pendingOrderCount: number;
 }
 
 /** GET /api/stores/{storeId}/follow */

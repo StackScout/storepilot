@@ -1,8 +1,9 @@
 import { apiFetch, apiFetchForm } from '@/lib/api-client';
 import type { OrderResponse, OrderStatus, PageResponse } from '@/api/types';
 
-export function listStoreOrders(storeId: string, page = 0, size = 20): Promise<PageResponse<OrderResponse>> {
-  return apiFetch<PageResponse<OrderResponse>>(`/api/stores/${storeId}/orders?page=${page}&size=${size}`);
+export function listStoreOrders(storeId: string, page = 0, size = 20, status?: OrderStatus): Promise<PageResponse<OrderResponse>> {
+  const statusParam = status ? `&status=${status}` : '';
+  return apiFetch<PageResponse<OrderResponse>>(`/api/stores/${storeId}/orders?page=${page}&size=${size}${statusParam}`);
 }
 
 export function getOrder(id: string): Promise<OrderResponse> {

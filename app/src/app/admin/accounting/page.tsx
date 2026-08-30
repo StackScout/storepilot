@@ -42,11 +42,15 @@ interface EligibleFeeStore {
 
 export default function AdminAccountingPage() {
   const queryClient = useQueryClient();
-  const { countryCode, currencyCode, currencySymbol, currencyLocale } = usePlatformConfig();
+  const { countryCode, currencyCode, currencySymbol, currencyLocale, defaultCodEnabled, defaultBankTransferEnabled } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
   // Payouts only ever contain PayHere-funded money (LK-only) — see PayoutService.getEligibleOrders'
   // doc comment. Outside LK this tab would always be empty, so hide it rather than show dead UI.
   const showPayouts = countryCode === "LK";
+  // Fee collections only ever contain cod/bank-transfer orders (the platform never touches that
+  // money) — dead weight on a deployment that doesn't offer either at all, see PlatformSettings'
+  // default*Enabled doc comment.
+  const showFees = defaultCodEnabled || defaultBankTransferEnabled;
   const [payoutToMarkPaid, setPayoutToMarkPaid] = useState<string | null>(null);
   const [bankReference, setBankReference] = useState("");
   const [feeCollectionToMarkCollected, setFeeCollectionToMarkCollected] = useState<string | null>(null);
@@ -93,6 +97,7 @@ export default function AdminAccountingPage() {
 
   const { data: eligibleFeeStores, isLoading: eligibleFeeLoading } = useQuery<EligibleFeeStore[]>({
     queryKey: ["admin-eligible-fee-stores"],
+    enabled: showFees,
     queryFn: async () => {
       const stores = await storesService.adminListStores("active");
       const enriched = await Promise.all(
@@ -117,6 +122,7 @@ export default function AdminAccountingPage() {
   const { data: allFeeCollections, isLoading: feeCollectionsLoading } = useQuery({
     queryKey: ["admin-fee-collections"],
     queryFn: () => payoutsService.adminListFeeCollections(),
+    enabled: showFees,
   });
 
   const { data: stripeSettlements, isLoading: stripeSettlementsLoading } = useQuery({
@@ -251,9 +257,11 @@ export default function AdminAccountingPage() {
                 <Wallet className="size-3.5" /> Payouts
               </TabsTrigger>
             ) : null}
-            <TabsTrigger value="fee-collections">
-              <ReceiptText className="size-3.5" /> Fee collections
-            </TabsTrigger>
+            {showFees ? (
+              <TabsTrigger value="fee-collections">
+                <ReceiptText className="size-3.5" /> Fee collections
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value="stripe">
               <CreditCard className="size-3.5" /> Stripe settlements
             </TabsTrigger>
@@ -355,6 +363,7 @@ export default function AdminAccountingPage() {
           </TabsContent>
         ) : null}
 
+        {showFees ? (
         <TabsContent value="fee-collections">
           <Card>
             <CardContent className="space-y-4">
@@ -447,6 +456,7 @@ export default function AdminAccountingPage() {
             </CardContent>
           </Card>
         </TabsContent>
+        ) : null}
 
         <TabsContent value="stripe">
           <Card>
@@ -493,9 +503,9 @@ export default function AdminAccountingPage() {
           <Card>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground text-xs">
-                Buyer return requests across every store. PayHere refunds need admin confirmation here — the
-                platform&apos;s own merchant account is the one holding that money. Every other payment method is
-                self-attested by the seller on the order page.
+                {showPayouts
+                  ? "Buyer return requests across every store. PayHere refunds need admin confirmation here — the platform's own merchant account is the one holding that money. Every other payment method is self-attested by the seller on the order page."
+                  : "Buyer return requests across every store, self-attested by the seller on the order page."}
               </p>
               {returnsLoading ? (
                 <TableRowSkeleton columns={5} />

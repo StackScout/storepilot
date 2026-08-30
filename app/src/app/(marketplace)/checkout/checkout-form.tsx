@@ -107,13 +107,17 @@ export function CheckoutForm() {
 
   const { session } = useAuthSession();
   const isSignedInBuyer = session.signedIn && session.role === "buyer";
-  const { name, countryCode, currencyCode, currencySymbol, currencyLocale, flatShippingFee } = usePlatformConfig();
+  const {
+    name,
+    currencyCode,
+    currencySymbol,
+    currencyLocale,
+    flatShippingFee,
+    defaultCodEnabled,
+    defaultOnlinePaymentEnabled,
+    defaultBankTransferEnabled,
+  } = usePlatformConfig();
   const currency = { code: currencyCode, symbol: currencySymbol, locale: currencyLocale };
-  // PayHere and Stripe are each temporarily restricted to their home
-  // market — PayHere (Sri Lanka) and Stripe (Australia) — see checkout's
-  // paymentMethodEnabled below.
-  const isSriLanka = countryCode === "LK";
-  const isAustralia = countryCode === "AU";
   const { data: states } = useStates();
 
   const { data: buyer } = useQuery({
@@ -148,24 +152,28 @@ export function CheckoutForm() {
     enabled: !!cart.storeId,
   });
   const pickupEnabled = storeSettings?.pickupEnabled ?? false;
-  const codEnabled = storeSettings?.codEnabled ?? true;
-  // PayHere is temporarily Sri Lanka-only, regardless of the store's own
-  // toggle — see the isSriLanka/isAustralia comment above.
-  const onlinePaymentEnabled = isSriLanka && (storeSettings?.onlinePaymentEnabled ?? true);
-  // Off by default while settings load, matching the backend's own default —
-  // unlike COD/PayHere this is opt-in, so it shouldn't flash on then off.
-  const bankTransferEnabled = storeSettings?.bankTransferEnabled ?? false;
-  // Stripe needs both the seller's own toggle AND a fully-connected account
-  // (stripeChargesEnabled, synced from Stripe via webhook) — never offer it
-  // just because the seller flipped the switch before finishing onboarding.
-  // Also temporarily Australia-only, same as PayHere/Sri Lanka above.
-  const stripeEnabled = isAustralia && ((storeSettings?.stripeEnabled && storeSettings?.stripeChargesEnabled) ?? false);
+  // Each intersected with the platform's own ceiling (defaultCodEnabled
+  // etc. — admin-editable, see PlatformSettings' doc comment on the
+  // backend) so a country that only ever uses online payment doesn't show
+  // cod/bank-transfer just because an individual store happens to have
+  // them toggled on. PayHere and Stripe share the platform's single
+  // "online payment" flag since only one is ever wired up per deployment
+  // (PayHere for LK, Stripe for AU).
+  const codEnabled = defaultCodEnabled && (storeSettings?.codEnabled ?? true);
+  const onlinePaymentEnabled = defaultOnlinePaymentEnabled && (storeSettings?.onlinePaymentEnabled ?? true);
+  const bankTransferEnabled = defaultBankTransferEnabled && (storeSettings?.bankTransferEnabled ?? false);
+  // Stripe also needs both the seller's own toggle AND a fully-connected
+  // account (stripeChargesEnabled, synced from Stripe via webhook) — never
+  // offer it just because the seller flipped the switch before finishing
+  // onboarding.
+  const stripeEnabled = defaultOnlinePaymentEnabled && ((storeSettings?.stripeEnabled && storeSettings?.stripeChargesEnabled) ?? false);
   const paymentMethodEnabled: Record<PaymentMethod, boolean> = {
     cod: codEnabled,
     payhere: onlinePaymentEnabled,
     "bank-transfer": bankTransferEnabled,
     stripe: stripeEnabled,
   };
+  const enabledMethodCount = Object.values(paymentMethodEnabled).filter(Boolean).length;
 
   const {
     register,
@@ -612,14 +620,19 @@ export function CheckoutForm() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="space-y-4">
-              <h2 className="font-semibold">Payment method</h2>
-              {!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled && !stripeEnabled ? (
+          {enabledMethodCount === 0 ? (
+            <Card>
+              <CardContent className="space-y-4">
+                <h2 className="font-semibold">Payment method</h2>
                 <p className="text-destructive text-sm">
                   This store isn&apos;t accepting payments right now. Please check back later.
                 </p>
-              ) : (
+              </CardContent>
+            </Card>
+          ) : enabledMethodCount === 1 ? null : (
+          <Card>
+            <CardContent className="space-y-4">
+              <h2 className="font-semibold">Payment method</h2>
               <RadioGroup
                 value={paymentMethod}
                 onValueChange={(v) => setValue("paymentMethod", v as PaymentMethod)}
@@ -694,8 +707,12 @@ export function CheckoutForm() {
                 </Label>
                 ) : null}
               </RadioGroup>
-              )}
-              {paymentMethod === "bank-transfer" && storeSettings ? (
+            </CardContent>
+          </Card>
+          )}
+          {paymentMethod === "bank-transfer" && storeSettings ? (
+            <Card>
+              <CardContent>
                 <div className="bg-muted/50 space-y-1 rounded-lg border p-3.5 text-sm">
                   <p className="font-medium">Transfer the total to:</p>
                   <p>{storeSettings.bankName}</p>
@@ -706,9 +723,9 @@ export function CheckoutForm() {
                     confirmation page — the seller confirms your order once they&apos;ve verified it.
                   </p>
                 </div>
-              ) : null}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         <Card className="h-fit lg:sticky lg:top-20">
@@ -837,7 +854,13 @@ export function CheckoutForm() {
               }
             >
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Place order
+              {paymentMethod === "stripe" || paymentMethod === "payhere"
+                ? mutation.isPending
+                  ? "Continuing..."
+                  : "Continue to payment"
+                : mutation.isPending
+                  ? "Placing order..."
+                  : "Place order"}
             </Button>
             {errors.agreeToTerms ? (
               <p className="text-destructive text-center text-xs">{errors.agreeToTerms.message}</p>

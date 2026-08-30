@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { type Href, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import type { Store } from '@storepilot/shared-api';
@@ -8,16 +8,18 @@ import type { Store } from '@storepilot/shared-api';
 import { listCategories } from '@/api/categories';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 
 export function StoreTile({ store }: { store: Store }) {
   const theme = useTheme();
   const router = useRouter();
+  const hrefs = useStoreHrefs();
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
   const categoryLabel = categoriesQuery.data?.find((c) => c.wireValue === store.category)?.name ?? store.category;
 
   return (
-    <TouchableOpacity style={styles.container} onPress={() => router.push(`/stores/${store.slug}` as Href)}>
+    <TouchableOpacity style={styles.container} onPress={() => router.push(hrefs.store(store.slug))}>
       {store.logoUrl ? (
         <Image source={{ uri: store.logoUrl }} style={[styles.logo, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
       ) : (

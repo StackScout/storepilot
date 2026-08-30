@@ -1,28 +1,35 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getStoreBySlug } from '@/api/buyer-stores';
 import { listProductsByStore } from '@/api/buyer-products';
 import { createProductReview, listProductReviews } from '@/api/buyer-reviews';
+import { ExpandableSection } from '@/components/expandable-section';
 import { ReviewsSection } from '@/components/reviews-section';
 import { ThemedText } from '@/components/themed-text';
 import { WishlistButton } from '@/components/wishlist-button';
 import { Spacing } from '@/constants/theme';
 import { useCart } from '@/hooks/use-cart';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, usePlatformConfig } from '@/lib/platform-config';
 
 export default function ProductScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const hrefs = useStoreHrefs();
   const platformConfig = usePlatformConfig();
   const { slug, productSlug } = useLocalSearchParams<{ slug: string; productSlug: string }>();
   const { cart, addItem, replaceCartWithItem } = useCart();
   const [quantity, setQuantity] = useState(1);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [reviewsExpanded, setReviewsExpanded] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const reviewsY = useRef(0);
 
   const storeQuery = useQuery({ queryKey: ['store', slug], queryFn: () => getStoreBySlug(slug!), enabled: !!slug });
   const store = storeQuery.data;
@@ -44,7 +51,10 @@ export default function ProductScreen() {
   const handleAddToCart = () => {
     const added = addItem(product, quantity);
     if (added) {
-      Alert.alert('Added to cart', `${product.name} added to your cart.`);
+      Alert.alert('Added to cart', `${product.name} added to your cart.`, [
+        { text: 'Continue shopping', style: 'cancel' },
+        { text: 'View cart', onPress: () => router.push('/cart' as Href) },
+      ]);
       return;
     }
     Alert.alert(
@@ -52,19 +62,33 @@ export default function ProductScreen() {
       `Your cart has items from ${cart.storeName}. Adding this will start a new cart from ${product.storeName}.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Replace cart', onPress: () => replaceCartWithItem(product, quantity) },
+        {
+          text: 'Replace cart',
+          onPress: () => {
+            replaceCartWithItem(product, quantity);
+            Alert.alert('Added to cart', `${product.name} added to your cart.`, [
+              { text: 'Continue shopping', style: 'cancel' },
+              { text: 'View cart', onPress: () => router.push('/cart' as Href) },
+            ]);
+          },
+        },
       ],
     );
+  };
+
+  const scrollToReviews = () => {
+    setReviewsExpanded(true);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: reviewsY.current, animated: true }));
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
       <Stack.Screen options={{ title: product.name }} />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.container}>
         <Image source={{ uri: product.images[0]?.url }} style={[styles.image, { backgroundColor: theme.backgroundElement }]} contentFit="cover" />
 
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.push(`/stores/${product.storeSlug}` as Href)}>
+          <TouchableOpacity onPress={() => router.push(hrefs.store(product.storeSlug))}>
             <ThemedText type="small" themeColor="textSecondary">
               {product.storeName}
             </ThemedText>
@@ -75,9 +99,11 @@ export default function ProductScreen() {
         <ThemedText type="title" style={styles.name}>
           {product.name}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {product.rating.toFixed(1)} ★ ({product.reviewCount})
-        </ThemedText>
+        <TouchableOpacity onPress={scrollToReviews}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {product.rating.toFixed(1)} ★ ({product.reviewCount})
+          </ThemedText>
+        </TouchableOpacity>
 
         <View style={styles.priceRow}>
           <ThemedText type="title" style={styles.price}>
@@ -97,8 +123,6 @@ export default function ProductScreen() {
             Only {product.stockQuantity} left in stock
           </ThemedText>
         ) : null}
-
-        <ThemedText style={styles.description}>{product.description}</ThemedText>
 
         {!outOfStock ? (
           <View style={styles.addRow}>
@@ -120,11 +144,20 @@ export default function ProductScreen() {
           </View>
         ) : null}
 
-        <ReviewsSection
-          queryKey={['product', product.id, 'reviews']}
-          listReviews={() => listProductReviews(product.id)}
-          createReview={(input) => createProductReview(product.id, input)}
-        />
+        <ExpandableSection title="Description" expanded={descriptionExpanded} onToggle={() => setDescriptionExpanded((v) => !v)}>
+          <ThemedText themeColor="textSecondary">{product.description}</ThemedText>
+        </ExpandableSection>
+
+        <View onLayout={(e) => (reviewsY.current = e.nativeEvent.layout.y)}>
+          <ExpandableSection title="Ratings and reviews" expanded={reviewsExpanded} onToggle={() => setReviewsExpanded((v) => !v)}>
+            <ReviewsSection
+              queryKey={['product', product.id, 'reviews']}
+              listReviews={() => listProductReviews(product.id)}
+              createReview={(input) => createProductReview(product.id, input)}
+              hideHeading
+            />
+          </ExpandableSection>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -138,7 +171,6 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
   price: { fontSize: 24, lineHeight: 30 },
   strike: { textDecorationLine: 'line-through' },
-  description: { marginTop: Spacing.two },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginTop: Spacing.two },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   stepperButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

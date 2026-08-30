@@ -77,10 +77,8 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AnimatedSplashOverlay />
-        {/* `stores` is a sibling of the tab group, not nested inside it, so it presents as a full-screen stack push layered over the tab bar — Native Tabs only makes routes navigable when they live inside a trigger's own directory tree, and store/product/service detail pages are reached from both the Home and Search tabs, so they can't belong to just one. */}
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(app)" />
-          <Stack.Screen name="stores" />
         </Stack>
         {/* Drawn as an overlay (like AnimatedSplashOverlay above), never swapped in for the Stack — unmounting the whole navigator on every lock/unlock caused "state update on a component that hasn't mounted yet" from its in-flight async init, and would also reset in-app navigation state on every background/foreground cycle. */}
         {isHydrated && isLocked ? <BiometricLockScreen /> : null}

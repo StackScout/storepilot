@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useCart } from '@/hooks/use-cart';
 import { useCartReconciliation } from '@/hooks/use-cart-reconciliation';
+import { useStoreHrefs } from '@/hooks/use-store-href';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, usePlatformConfig } from '@/lib/platform-config';
 import type { Href } from 'expo-router';
@@ -15,6 +16,7 @@ import type { Href } from 'expo-router';
 export default function CartScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const hrefs = useStoreHrefs();
   const platformConfig = usePlatformConfig();
   const { cart, subtotal, isHydrated, updateQuantity, removeItem } = useCart();
   useCartReconciliation();
@@ -61,7 +63,7 @@ export default function CartScreen() {
             ) : (
               <TouchableOpacity
                 style={[styles.thumb, { backgroundColor: theme.backgroundElement }]}
-                onPress={() => router.push(`/stores/${cart.storeSlug}/products/${item.productSlug}` as Href)}>
+                onPress={() => router.push(hrefs.product(cart.storeSlug!, item.productSlug))}>
                 <Image source={{ uri: item.productImageUrl }} style={styles.thumbImage} contentFit="cover" />
               </TouchableOpacity>
             )}
@@ -71,7 +73,7 @@ export default function CartScreen() {
                   {item.productName}
                 </ThemedText>
               ) : (
-                <TouchableOpacity onPress={() => router.push(`/stores/${cart.storeSlug}/products/${item.productSlug}` as Href)}>
+                <TouchableOpacity onPress={() => router.push(hrefs.product(cart.storeSlug!, item.productSlug))}>
                   <ThemedText type="smallBold" numberOfLines={2}>
                     {item.productName}
                   </ThemedText>

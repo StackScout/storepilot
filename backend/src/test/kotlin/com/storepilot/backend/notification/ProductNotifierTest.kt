@@ -26,8 +26,9 @@ class ProductNotifierTest {
     private val notificationProperties = NotificationProperties(frontendBaseUrl = "https://storepilot.au")
     private val pushNotificationService = mockk<PushNotificationService>(relaxed = true)
     private val pushTokenRepository = mockk<PushTokenRepository>()
+    private val sellerNotificationService = mockk<SellerNotificationService>(relaxed = true)
 
-    private val notifier = ProductNotifier(emailService, storeSettingsRepository, notificationProperties, pushNotificationService, pushTokenRepository)
+    private val notifier = ProductNotifier(emailService, storeSettingsRepository, notificationProperties, pushNotificationService, pushTokenRepository, sellerNotificationService)
 
     private lateinit var seller: Seller
     private lateinit var store: Store

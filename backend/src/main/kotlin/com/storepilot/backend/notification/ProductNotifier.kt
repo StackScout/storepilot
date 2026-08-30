@@ -13,6 +13,7 @@ class ProductNotifier(
     private val notificationProperties: NotificationProperties,
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
+    private val sellerNotificationService: SellerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(ProductNotifier::class.java)
 
@@ -32,7 +33,10 @@ class ProductNotifier(
                 appendLine("Restock it from your seller dashboard: ${productUrl(product)}")
             },
         )
-        sendPushToSeller(product, title = "Low stock: ${product.name}", body = "Only ${product.stockQuantity} left in stock — restock it soon.")
+        val pushTitle = "Low stock: ${product.name}"
+        val pushBody = "Only ${product.stockQuantity} left in stock — restock it soon."
+        sendPushToSeller(product, pushTitle, pushBody)
+        sellerNotificationService.notify(product.store.seller, SellerNotificationType.PRODUCT, pushTitle, pushBody, product.id)
     }
 
     private fun sendPushToSeller(product: Product, title: String, body: String) {

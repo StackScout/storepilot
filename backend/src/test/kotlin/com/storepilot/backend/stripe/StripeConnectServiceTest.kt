@@ -87,6 +87,7 @@ class StripeConnectServiceTest {
             defaultCodEnabled = true,
             defaultOnlinePaymentEnabled = false,
             defaultBankTransferEnabled = true,
+            proPlanEnabled = true,
             supportEmail = "hello@storepilot.au",
             companyLocation = "Sydney, Australia",
             timezone = "Australia/Sydney",

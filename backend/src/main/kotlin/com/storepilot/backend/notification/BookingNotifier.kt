@@ -21,16 +21,16 @@ class BookingNotifier(
     private val platformConfigService: PlatformConfigService,
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
+    private val sellerNotificationService: SellerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(BookingNotifier::class.java)
 
     /** Fired the moment a buyer books a slot — see BookingService.createBooking. */
     fun sellerBookingCreated(booking: Booking) {
-        sendPushToSeller(
-            booking,
-            title = "New booking: ${booking.serviceName}",
-            body = "${booking.buyerName} booked ${booking.serviceName} for ${formatScheduledTime(booking)}.",
-        )
+        val title = "New booking: ${booking.serviceName}"
+        val body = "${booking.buyerName} booked ${booking.serviceName} for ${formatScheduledTime(booking)}."
+        sendPushToSeller(booking, title, body)
+        sellerNotificationService.notify(booking.store.seller, SellerNotificationType.BOOKING, title, body, booking.id)
     }
 
     /** Fired by SellerBookingReminderJob, StoreSettings.sellerBookingReminderMinutesBefore before scheduledStart. */

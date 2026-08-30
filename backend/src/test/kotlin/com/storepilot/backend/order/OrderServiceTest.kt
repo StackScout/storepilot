@@ -137,7 +137,13 @@ class OrderServiceTest {
         }
     }
 
-    private fun platformSettings(countryCode: String = "AU") = PlatformSettings(
+    private fun platformSettings(
+        countryCode: String = "AU",
+        onlinePaymentEnabled: Boolean = false,
+        codEnabled: Boolean = true,
+        bankTransferEnabled: Boolean = true,
+        proPlanEnabled: Boolean = true,
+    ) = PlatformSettings(
         name = "StorePilot",
         tagline = "tagline",
         countryName = "Australia",
@@ -148,9 +154,10 @@ class OrderServiceTest {
         platformFeePercent = BigDecimal("3.5"),
         flatShippingFee = 1000,
         proMonthlyPriceCents = 2900,
-        defaultCodEnabled = true,
-        defaultOnlinePaymentEnabled = false,
-        defaultBankTransferEnabled = true,
+        defaultCodEnabled = codEnabled,
+        defaultOnlinePaymentEnabled = onlinePaymentEnabled,
+        defaultBankTransferEnabled = bankTransferEnabled,
+        proPlanEnabled = proPlanEnabled,
         supportEmail = "hello@storepilot.au",
         companyLocation = "Sydney, Australia",
         timezone = "Australia/Sydney",
@@ -282,15 +289,41 @@ class OrderServiceTest {
     }
 
     @Test
-    fun `createOrder rejects PayHere outside Sri Lanka`() {
-        every { platformConfigService.current() } returns platformSettings(countryCode = "AU")
+    fun `createOrder allows COD for a non-Pro seller when the deployment has no Pro tier concept`() {
+        seller.plan = SellerPlan.FREE
+        every { platformConfigService.current() } returns platformSettings(proPlanEnabled = false)
+        val result = service.createOrder(checkoutInput(paymentMethod = "cod"))
+        assertEquals("cod", result.paymentMethod)
+    }
+
+    @Test
+    fun `createOrder rejects PayHere when the platform doesn't offer online payment`() {
+        // onlinePaymentEnabled = false is the fixture default.
         assertThrows(ConflictException::class.java) { service.createOrder(checkoutInput(paymentMethod = "payhere")) }
     }
 
     @Test
-    fun `createOrder rejects Stripe outside Australia`() {
-        every { platformConfigService.current() } returns platformSettings(countryCode = "LK")
+    fun `createOrder rejects Stripe when the platform doesn't offer online payment`() {
         assertThrows(ConflictException::class.java) { service.createOrder(checkoutInput(paymentMethod = "stripe")) }
+    }
+
+    @Test
+    fun `createOrder allows Stripe when the platform offers online payment`() {
+        every { platformConfigService.current() } returns platformSettings(onlinePaymentEnabled = true)
+        val result = service.createOrder(checkoutInput(paymentMethod = "stripe"))
+        assertEquals("stripe", result.paymentMethod)
+    }
+
+    @Test
+    fun `createOrder rejects COD when the platform doesn't offer it`() {
+        every { platformConfigService.current() } returns platformSettings(codEnabled = false)
+        assertThrows(ConflictException::class.java) { service.createOrder(checkoutInput(paymentMethod = "cod")) }
+    }
+
+    @Test
+    fun `createOrder rejects bank transfer when the platform doesn't offer it`() {
+        every { platformConfigService.current() } returns platformSettings(bankTransferEnabled = false)
+        assertThrows(ConflictException::class.java) { service.createOrder(checkoutInput(paymentMethod = "bank-transfer")) }
     }
 
     @Test

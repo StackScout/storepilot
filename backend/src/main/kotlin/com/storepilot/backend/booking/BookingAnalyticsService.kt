@@ -2,6 +2,7 @@ package com.storepilot.backend.booking
 
 import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.seller.SellerPlan
@@ -15,7 +16,10 @@ import kotlin.math.round
  * Booking analytics — a Pro-only add-on (see docs/feature-epics.md's
  * "premium booking analytics" backlog item), gated by SellerPlan.PRO the
  * same way COD/bank-transfer payment methods are, just applied to an
- * entire read endpoint rather than one request field.
+ * entire read endpoint rather than one request field. The gate itself is
+ * skipped on a deployment with no Pro tier concept at all — see
+ * PlatformSettings.proPlanEnabled's doc comment — so this becomes free for
+ * every seller rather than a feature nobody can ever unlock.
  *
  * Aggregated in-memory over the store's full booking list rather than via
  * SQL aggregate queries — this is a small-business marketplace where a
@@ -31,12 +35,15 @@ class BookingAnalyticsService(
     private val bookingRepository: BookingRepository,
     private val storeRepository: StoreRepository,
     private val currentActor: CurrentActor,
+    private val platformConfigService: PlatformConfigService,
 ) {
     fun getAnalytics(storeId: UUID): BookingAnalyticsResponse {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         val seller = currentActor.requireSeller()
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
-        if (seller.plan != SellerPlan.PRO) throw ForbiddenException("Booking analytics is a Pro feature — upgrade to view it")
+        if (platformConfigService.current().proPlanEnabled && seller.plan != SellerPlan.PRO) {
+            throw ForbiddenException("Booking analytics is a Pro feature — upgrade to view it")
+        }
 
         val bookings = bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
         val completed = bookings.filter { it.status == BookingStatus.COMPLETED }

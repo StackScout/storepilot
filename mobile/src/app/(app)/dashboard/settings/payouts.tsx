@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDateTime, formatMoney } from '@/lib/format';
+import { usePlatformConfig } from '@/lib/platform-config';
 
 function PayoutRow({ item }: { item: PayoutResponse }) {
   const theme = useTheme();
@@ -34,14 +35,28 @@ function PayoutRow({ item }: { item: PayoutResponse }) {
 
 export default function PayoutsScreen() {
   const theme = useTheme();
+  const { countryCode } = usePlatformConfig();
+  // Payouts only ever contain PayHere-funded money (LK-only) — see
+  // backend PayoutService.getEligibleOrders' doc comment.
+  const showPayouts = countryCode === 'LK';
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
   const storeId = storeQuery.data?.id;
 
   const payoutsQuery = useQuery({
     queryKey: ['store', storeId, 'payouts'],
     queryFn: () => listStorePayouts(storeId!),
-    enabled: !!storeId,
+    enabled: !!storeId && showPayouts,
   });
+
+  if (!showPayouts) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center', padding: Spacing.three }}>
+        <ThemedText themeColor="textSecondary" style={{ textAlign: 'center' }}>
+          This store doesn&apos;t use payouts.
+        </ThemedText>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>

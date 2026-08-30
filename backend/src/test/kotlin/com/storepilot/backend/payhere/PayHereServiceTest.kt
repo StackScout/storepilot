@@ -82,6 +82,7 @@ class PayHereServiceTest {
             defaultCodEnabled = true,
             defaultOnlinePaymentEnabled = false,
             defaultBankTransferEnabled = true,
+            proPlanEnabled = true,
             supportEmail = "hello@storepilot.au",
             companyLocation = "Colombo",
             timezone = "Asia/Colombo",

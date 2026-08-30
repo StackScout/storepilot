@@ -2,6 +2,8 @@ package com.storepilot.backend.booking
 
 import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.common.ForbiddenException
+import com.storepilot.backend.common.PlatformConfigService
+import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
@@ -23,13 +26,22 @@ class BookingAnalyticsServiceTest {
     private val bookingRepository = mockk<BookingRepository>()
     private val storeRepository = mockk<StoreRepository>()
     private val currentActor = mockk<CurrentActor>()
+    private val platformConfigService = mockk<PlatformConfigService>()
 
-    private val service = BookingAnalyticsService(bookingRepository, storeRepository, currentActor)
+    private val service = BookingAnalyticsService(bookingRepository, storeRepository, currentActor, platformConfigService)
 
     private val storeId: UUID = UUID.randomUUID()
     private val sellerId: UUID = UUID.randomUUID()
     private lateinit var seller: Seller
     private lateinit var store: Store
+
+    private fun platformSettings(proPlanEnabled: Boolean) = PlatformSettings(
+        name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
+        currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
+        flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
+        defaultBankTransferEnabled = true, proPlanEnabled = proPlanEnabled, supportEmail = "hello@storepilot.au",
+        companyLocation = "Sydney, Australia", timezone = "Australia/Sydney", returnWindowDays = 14,
+    )
 
     @BeforeEach
     fun setUp() {
@@ -43,6 +55,7 @@ class BookingAnalyticsServiceTest {
 
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { currentActor.requireSeller() } returns seller
+        every { platformConfigService.current() } returns platformSettings(proPlanEnabled = true)
     }
 
     private fun booking(
@@ -77,6 +90,14 @@ class BookingAnalyticsServiceTest {
         every { seller.plan } returns SellerPlan.FREE
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns emptyList()
         assertThrows(ForbiddenException::class.java) { service.getAnalytics(storeId) }
+    }
+
+    @Test
+    fun `getAnalytics allows a non-Pro seller when the deployment has no Pro tier concept`() {
+        every { seller.plan } returns SellerPlan.FREE
+        every { platformConfigService.current() } returns platformSettings(proPlanEnabled = false)
+        every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns emptyList()
+        service.getAnalytics(storeId)
     }
 
     @Test

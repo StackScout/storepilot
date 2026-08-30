@@ -263,17 +263,26 @@ class OrderService(
         // let a non-Pro seller turn these two on in the first place, but a
         // seller who downgrades after enabling them (or a stale client
         // submitting a payment method the settings toggle wouldn't offer)
-        // must still be blocked here, not just hidden in the UI.
-        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO) {
+        // must still be blocked here, not just hidden in the UI. Skipped
+        // entirely on a deployment with no Pro tier concept (see
+        // PlatformSettings.proPlanEnabled's doc comment).
+        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO && platformConfig.proPlanEnabled) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
-        // PayHere is Sri Lanka-specific, Stripe is Australia-specific — each
-        // is temporarily disabled outside its home market. UI already hides
-        // both accordingly; this is defense in depth for a stale client.
-        if (paymentMethod == PaymentMethod.PAYHERE && platformConfig.countryCode != "LK") {
+        // Platform-wide ceiling, admin-configurable (see PlatformSettings'
+        // default*Enabled doc comments) — independent of and in addition to
+        // each store's own toggle above. UI already hides a method the
+        // platform doesn't offer; this is defense in depth for a stale
+        // client. PayHere/Stripe are both "online payment" — only one is
+        // ever wired up per deployment (PayHere for LK, Stripe for AU), so
+        // a single flag covers whichever this deployment uses.
+        if ((paymentMethod == PaymentMethod.PAYHERE || paymentMethod == PaymentMethod.STRIPE) && !platformConfig.defaultOnlinePaymentEnabled) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
-        if (paymentMethod == PaymentMethod.STRIPE && platformConfig.countryCode != "AU") {
+        if (paymentMethod == PaymentMethod.COD && !platformConfig.defaultCodEnabled) {
+            throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
+        }
+        if (paymentMethod == PaymentMethod.BANK_TRANSFER && !platformConfig.defaultBankTransferEnabled) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
         // Both start unpaid: COD flips to paid on delivery (see updateStatus),

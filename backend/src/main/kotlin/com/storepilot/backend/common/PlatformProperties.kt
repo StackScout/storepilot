@@ -55,6 +55,8 @@ data class PlatformProperties(
     val defaultCodEnabled: Boolean = true,
     val defaultOnlinePaymentEnabled: Boolean = false,
     val defaultBankTransferEnabled: Boolean = true,
+    /** See PlatformSettings.proPlanEnabled's doc comment. Defaults on, matching every deployment's behavior before this flag existed. */
+    val proPlanEnabled: Boolean = true,
     val supportEmail: String = "hello@storepilot.au",
     val companyLocation: String = "Sydney, Australia",
     /**

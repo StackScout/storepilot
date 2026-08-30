@@ -40,6 +40,7 @@ class PlatformSettingsSeeder(
                 defaultCodEnabled = platformProperties.defaultCodEnabled,
                 defaultOnlinePaymentEnabled = platformProperties.defaultOnlinePaymentEnabled,
                 defaultBankTransferEnabled = platformProperties.defaultBankTransferEnabled,
+                proPlanEnabled = platformProperties.proPlanEnabled,
                 supportEmail = platformProperties.supportEmail,
                 companyLocation = platformProperties.companyLocation,
                 timezone = platformProperties.timezone,

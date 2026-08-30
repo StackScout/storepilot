@@ -195,13 +195,21 @@ class BookingService(
         // Same defense-in-depth as OrderService.createOrder — bank-transfer
         // and "Pay at venue" (COD) are Pro-only for bookings too, mirroring
         // the confirmed product decision (see docs/features/bookings.md).
-        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO) {
+        // Skipped on a deployment with no Pro tier concept — see
+        // PlatformSettings.proPlanEnabled's doc comment.
+        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO && platformConfig.proPlanEnabled) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
-        if (paymentMethod == PaymentMethod.PAYHERE && platformConfig.countryCode != "LK") {
+        // Platform-wide ceiling, admin-configurable — same mechanism as
+        // OrderService.createOrder, see PlatformSettings' default*Enabled
+        // doc comments.
+        if ((paymentMethod == PaymentMethod.PAYHERE || paymentMethod == PaymentMethod.STRIPE) && !platformConfig.defaultOnlinePaymentEnabled) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
-        if (paymentMethod == PaymentMethod.STRIPE && platformConfig.countryCode != "AU") {
+        if (paymentMethod == PaymentMethod.COD && !platformConfig.defaultCodEnabled) {
+            throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
+        }
+        if (paymentMethod == PaymentMethod.BANK_TRANSFER && !platformConfig.defaultBankTransferEnabled) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
 

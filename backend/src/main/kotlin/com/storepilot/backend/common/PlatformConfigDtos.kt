@@ -17,9 +17,22 @@ data class PlatformConfigResponse(
     val defaultCodEnabled: Boolean,
     val defaultOnlinePaymentEnabled: Boolean,
     val defaultBankTransferEnabled: Boolean,
+    val proPlanEnabled: Boolean,
     val supportEmail: String,
     val companyLocation: String,
     val returnWindowDays: Int,
+)
+
+/** PATCH /api/admin/platform-config/payment-methods body — see PlatformSettings' default*Enabled doc comments for what these actually gate. */
+data class PlatformPaymentMethodsInput(
+    val codEnabled: Boolean,
+    val onlinePaymentEnabled: Boolean,
+    val bankTransferEnabled: Boolean,
+)
+
+/** PATCH /api/admin/platform-config/pro-plan body — see PlatformSettings.proPlanEnabled's doc comment. */
+data class PlatformProPlanInput(
+    val enabled: Boolean,
 )
 
 fun PlatformSettings.toResponse(): PlatformConfigResponse =
@@ -37,6 +50,7 @@ fun PlatformSettings.toResponse(): PlatformConfigResponse =
         defaultCodEnabled = defaultCodEnabled,
         defaultOnlinePaymentEnabled = defaultOnlinePaymentEnabled,
         defaultBankTransferEnabled = defaultBankTransferEnabled,
+        proPlanEnabled = proPlanEnabled,
         supportEmail = supportEmail,
         companyLocation = companyLocation,
         returnWindowDays = returnWindowDays,

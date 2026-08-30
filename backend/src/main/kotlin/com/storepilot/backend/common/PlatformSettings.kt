@@ -40,12 +40,45 @@ class PlatformSettings(
     /** Cents — see SellerPlan.kt. */
     @Column(name = "pro_monthly_price_cents", nullable = false)
     var proMonthlyPriceCents: Int,
+    /**
+     * Dual purpose: (1) the seed default handed to a new store's own
+     * StoreSettings toggle at onboarding (StoreService.create) when the
+     * seller doesn't specify one, and (2) — since this deployment is
+     * admin-editable via PATCH /api/admin/platform-config/payment-methods
+     * (see PlatformConfigController) — the platform-wide ceiling on
+     * whether this payment method can be used at all in this
+     * country/deployment, enforced in OrderService.createOrder regardless
+     * of what an individual store has toggled on. A store's own toggle
+     * only decides whether *that store* accepts the method; this decides
+     * whether the method exists in this market at all (e.g. an AU
+     * deployment turning this off for cod/bank-transfer since it only
+     * ever uses Stripe).
+     */
     @Column(name = "default_cod_enabled", nullable = false)
     var defaultCodEnabled: Boolean,
+    /** See [defaultCodEnabled]'s doc comment — same dual role, for Stripe/PayHere (whichever this deployment's country wires up as "online payment"). */
     @Column(name = "default_online_payment_enabled", nullable = false)
     var defaultOnlinePaymentEnabled: Boolean,
+    /** See [defaultCodEnabled]'s doc comment — same dual role, for bank transfer. */
     @Column(name = "default_bank_transfer_enabled", nullable = false)
     var defaultBankTransferEnabled: Boolean,
+    /**
+     * Whether the seller Free/Pro tier concept exists at all on this
+     * deployment — admin-editable via PATCH
+     * /api/admin/platform-config/pro-plan (see PlatformConfigController).
+     * When false: every Pro-only gate (SellerPlan.PRO checks in
+     * OrderService/BookingService/StoreService for cod/bank-transfer, and
+     * BookingAnalyticsService's premium-analytics check) is bypassed
+     * platform-wide, and every Pro-plan UI surface (onboarding's plan
+     * picker, the billing/upgrade pages, sidebar Pro badges, inline
+     * "Pro-only" captions) is hidden on web and mobile — see
+     * usePlatformConfig()'s proPlanEnabled. Added for deployments (e.g.
+     * AU) that don't use tiered seller plans at all, so a feature doesn't
+     * end up permanently locked behind an upgrade path nobody can take
+     * (there being no billing UI to take it from).
+     */
+    @Column(name = "pro_plan_enabled", nullable = false)
+    var proPlanEnabled: Boolean,
     @Column(name = "support_email", nullable = false)
     var supportEmail: String,
     @Column(name = "company_location", nullable = false)

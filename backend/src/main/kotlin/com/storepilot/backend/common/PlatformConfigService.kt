@@ -18,4 +18,25 @@ class PlatformConfigService(
     fun current(): PlatformSettings =
         repository.findAll().firstOrNull()
             ?: error("platform_settings has no row — DataSeeder should have created one at startup")
+
+    /** PATCH /api/admin/platform-config/payment-methods — the admin-editable path this class's own doc comment anticipated. */
+    @Transactional
+    fun updatePaymentMethods(input: PlatformPaymentMethodsInput): PlatformSettings {
+        require(input.codEnabled || input.onlinePaymentEnabled || input.bankTransferEnabled) {
+            "At least one payment method must stay enabled"
+        }
+        val settings = current()
+        settings.defaultCodEnabled = input.codEnabled
+        settings.defaultOnlinePaymentEnabled = input.onlinePaymentEnabled
+        settings.defaultBankTransferEnabled = input.bankTransferEnabled
+        return repository.save(settings)
+    }
+
+    /** PATCH /api/admin/platform-config/pro-plan — see PlatformSettings.proPlanEnabled's doc comment. */
+    @Transactional
+    fun updateProPlanEnabled(input: PlatformProPlanInput): PlatformSettings {
+        val settings = current()
+        settings.proPlanEnabled = input.enabled
+        return repository.save(settings)
+    }
 }

@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { apiFetch } from '@/lib/api-client';
 import type { AuthSessionResponse } from '@/api/types';
+import { tokenStorage } from '@/lib/secure-storage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -73,6 +74,21 @@ export function mfaChallenge(email: string, session: string, code: string): Prom
 
 export function getSession(): Promise<AuthSessionResponse> {
   return apiFetch<AuthSessionResponse>('/api/auth/session');
+}
+
+/**
+ * Forces a fresh access token, then re-reads the session off of it —
+ * needed right after a mutation grants a new Cognito group (onboarding's
+ * createStore granting "seller") since the token already in hand was
+ * issued before that and still reports the old (or no) role. Mirrors the
+ * web app's authService.refresh() + cleared-query-cache pattern.
+ */
+export async function refreshSession(): Promise<AuthSessionResponse> {
+  const refreshToken = await tokenStorage.getRefreshToken();
+  if (!refreshToken) throw new Error('No refresh token present');
+  const refreshed = await apiFetch<AuthSessionResponse>('/api/auth/refresh', { method: 'POST', body: { refreshToken }, skipAuth: true });
+  if (refreshed.accessToken) await tokenStorage.setAccessToken(refreshed.accessToken);
+  return getSession();
 }
 
 export function logout(): Promise<void> {

@@ -58,6 +58,9 @@ export default function AccountScreen() {
               Track an order or booking without signing in
             </ThemedText>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.trackLink} onPress={() => router.push('/account/register-seller' as Href)}>
+            <ThemedText type="small">Sell on StorePilot</ThemedText>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -123,6 +126,7 @@ export default function AccountScreen() {
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
           ACCOUNT
         </ThemedText>
+        <AccountLink label="Sell on StorePilot" onPress={() => router.push('/account/onboarding' as Href)} />
         <TouchableOpacity style={[styles.button, { borderColor: theme.textSecondary }]} onPress={handleExport}>
           <ThemedText themeColor="textSecondary">Export my data</ThemedText>
         </TouchableOpacity>

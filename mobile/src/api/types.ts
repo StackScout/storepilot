@@ -45,6 +45,15 @@ export type {
   FeeCollectionOrderRef,
   CouponInput,
   SellerNotificationType,
+  StoreApplicationInput,
+  SellerType,
+  StoreAvailability,
+  WeeklyAvailabilityRule,
+  WeeklyAvailabilityInput,
+  AvailabilityException,
+  AvailabilityExceptionInput,
+  BookingAnalytics,
+  AbnLookupResult,
 } from "@storepilot/shared-api";
 
 export type StoreResponse = Store;

@@ -75,9 +75,17 @@ export function LoginScreen({ showRegisterLink = false }: { showRegisterLink?: b
           name: result.name ?? null,
         });
         // A seller sign-in swaps the whole root tree out from under this
-        // screen automatically (see _layout.tsx); a buyer sign-in just
-        // needs to dismiss back to wherever this was opened from.
-        if (result.role !== 'seller' && router.canGoBack()) router.back();
+        // screen automatically (see _layout.tsx). A groupless role is
+        // unambiguous — only a seller-track account that registered but
+        // never finished onboarding can have one (buyers get "buyer" at
+        // registration time) — so resume onboarding instead of dismissing.
+        // Any other role (a plain buyer sign-in, the common case here)
+        // just dismisses back to wherever this was opened from.
+        if (!result.role) {
+          router.replace('/account/onboarding' as Href);
+        } else if (result.role !== 'seller' && router.canGoBack()) {
+          router.back();
+        }
       } else {
         setError('Sign-in did not complete — please try again.');
       }

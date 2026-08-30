@@ -6,7 +6,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** A simple bottom-sheet list picker — no native dependency needed for a single-select dropdown like this. Used for state/province selection. */
+export type SelectOption = { label: string; value: string };
+
+/** A simple bottom-sheet list picker — no native dependency needed for a single-select dropdown like this. Used for state/province, category, etc. selection. */
 export function SelectField({
   placeholder,
   value,
@@ -15,16 +17,20 @@ export function SelectField({
 }: {
   placeholder: string;
   value: string;
-  options: string[];
+  /** Plain strings are shorthand for `{ label: s, value: s }` (e.g. state/province, where the display name is the value). */
+  options: string[] | SelectOption[];
   onChange: (value: string) => void;
 }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
+  const normalized: SelectOption[] = options.map((o) => (typeof o === 'string' ? { label: o, value: o } : o));
+  const selectedLabel = normalized.find((o) => o.value === value)?.label;
+
   return (
     <>
       <TouchableOpacity style={[styles.field, { backgroundColor: theme.backgroundElement }]} onPress={() => setOpen(true)}>
-        <ThemedText style={!value ? { color: theme.textSecondary } : undefined}>{value || placeholder}</ThemedText>
+        <ThemedText style={!value ? { color: theme.textSecondary } : undefined}>{selectedLabel || placeholder}</ThemedText>
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
@@ -41,16 +47,16 @@ export function SelectField({
               </View>
               <FlatList
                 style={styles.list}
-                data={options}
-                keyExtractor={(item) => item}
+                data={normalized}
+                keyExtractor={(item) => item.value}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={[styles.option, { borderColor: theme.backgroundElement }]}
                     onPress={() => {
-                      onChange(item);
+                      onChange(item.value);
                       setOpen(false);
                     }}>
-                    <ThemedText style={item === value ? { fontWeight: '700' } : undefined}>{item}</ThemedText>
+                    <ThemedText style={item.value === value ? { fontWeight: '700' } : undefined}>{item.label}</ThemedText>
                   </TouchableOpacity>
                 )}
               />

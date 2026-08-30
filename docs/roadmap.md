@@ -173,6 +173,13 @@ and are now confirmed resolved; others are newly fixed as of this pass.
 - **A trend/period comparison** on `StatCard` (`trend`/`trendDirection`
   props exist, unused everywhere).
 - **Store follow/unfollow, wishlists, saved searches.**
+- **A storefront preview step in mobile onboarding** — before a seller taps
+  "Submit application" (`mobile/src/app/(app)/account/onboarding.tsx`), show
+  a rough preview of what their store page will look like to buyers, built
+  from the store name/tagline/description/category they just entered.
+  Onboarding today is pure form with no visual feedback on either platform;
+  this was floated as a mobile-specific nice-to-have, not a gap versus web
+  (web's `/onboarding` doesn't have this either) — not started.
 
 ## Technical debt
 

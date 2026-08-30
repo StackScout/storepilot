@@ -15,6 +15,11 @@ export default function DashboardLayout() {
       <Stack.Screen name="settings/coupons/new" options={{ title: 'New coupon', presentation: 'modal' }} />
       <Stack.Screen name="settings/mfa" options={{ title: 'Two-factor authentication' }} />
       <Stack.Screen name="settings/account" options={{ title: 'Account' }} />
+      <Stack.Screen name="services/index" options={{ title: 'Services' }} />
+      <Stack.Screen name="services/new" options={{ title: 'New service', presentation: 'modal' }} />
+      <Stack.Screen name="services/[id]" options={{ title: 'Edit service' }} />
+      <Stack.Screen name="availability" options={{ title: 'Availability' }} />
+      <Stack.Screen name="analytics" options={{ title: 'Booking analytics' }} />
     </Stack>
   );
 }

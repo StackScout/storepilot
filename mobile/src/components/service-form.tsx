@@ -10,6 +10,7 @@ import type { BookableServiceResponse } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { usePlatformConfig } from '@/lib/platform-config';
 
 export type ServiceFormValue = BookableServiceFormInput & { newImageUris: string[] };
 
@@ -27,44 +28,56 @@ export function ServiceForm({
   onSubmit: (value: ServiceFormValue) => void;
 }) {
   const theme = useTheme();
+  const { currencyCode } = usePlatformConfig();
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories, staleTime: 5 * 60_000 });
-  // A service's category is locked to its store's own approved category —
-  // same rule as ProductForm — so this is a read-only label, not a picker.
+  // A service's category is locked to its store's own approved category — same rule as ProductForm.
   const categoryLabel = categoriesQuery.data?.find((c) => c.wireValue === initial.category)?.name ?? initial.category;
+
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description);
-  const category = initial.category;
   const [price, setPrice] = useState(String(initial.price / 100));
   const [durationMinutes, setDurationMinutes] = useState(String(initial.durationMinutes));
   const [bufferMinutes, setBufferMinutes] = useState(String(initial.bufferMinutes));
-  const [isActive, setIsActive] = useState(initial.status === 'active');
+  const [isActive, setIsActive] = useState(initial.status !== 'draft');
   const [newImageUris, setNewImageUris] = useState<string[]>([]);
 
   const pickImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to add photos.');
+      Alert.alert('Permission needed', 'Allow photo library access to add service images.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 5, quality: 0.8 });
-    if (!result.canceled) setNewImageUris(result.assets.map((a) => a.uri));
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: 5,
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setNewImageUris(result.assets.map((a) => a.uri));
+    }
   };
 
   const handleSubmit = () => {
     const priceCents = Math.round(parseFloat(price || '0') * 100);
     const duration = parseInt(durationMinutes || '0', 10);
-    const buffer = parseInt(bufferMinutes || '0', 10) || 0;
-    if (!name.trim() || !description.trim() || !priceCents || !duration) {
-      Alert.alert('Missing details', 'Fill in name, description, price, and duration at least.');
+    const buffer = parseInt(bufferMinutes || '0', 10);
+    const hasExistingImages = (existingImages?.length ?? 0) > 0;
+    if (!name.trim() || description.trim().length < 10 || !priceCents || !duration) {
+      Alert.alert('Missing details', 'Fill in name, a description (min 10 characters), price, and duration at least.');
+      return;
+    }
+    if (newImageUris.length === 0 && !hasExistingImages) {
+      Alert.alert('Add a photo', 'Add at least one image before saving.');
       return;
     }
     onSubmit({
       name: name.trim(),
       description: description.trim(),
-      category,
+      category: initial.category,
       price: priceCents,
       durationMinutes: duration,
-      bufferMinutes: buffer,
+      bufferMinutes: Number.isNaN(buffer) ? 0 : buffer,
       status: isActive ? 'active' : 'draft',
       newImageUris,
     });
@@ -101,12 +114,13 @@ export function ServiceForm({
       />
       <TextInput
         style={[styles.input, styles.multiline, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        placeholder="Description"
+        placeholder="Describe what's included in this service..."
         placeholderTextColor={theme.textSecondary}
         multiline
         value={description}
         onChangeText={setDescription}
       />
+
       <View style={[styles.categoryLocked, { backgroundColor: theme.backgroundElement }]}>
         <ThemedText type="small" themeColor="textSecondary">
           Category
@@ -115,11 +129,11 @@ export function ServiceForm({
       </View>
 
       <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>
-        PRICE &amp; DURATION
+        PRICING &amp; SCHEDULING
       </ThemedText>
       <TextInput
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        placeholder="Price"
+        placeholder={`Price (${currencyCode})`}
         placeholderTextColor={theme.textSecondary}
         keyboardType="decimal-pad"
         value={price}
@@ -135,7 +149,7 @@ export function ServiceForm({
       />
       <TextInput
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        placeholder="Buffer between bookings (minutes, optional)"
+        placeholder="Buffer after, minutes (gap before the next slot)"
         placeholderTextColor={theme.textSecondary}
         keyboardType="number-pad"
         value={bufferMinutes}

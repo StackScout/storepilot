@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { logout } from '@/api/auth';
+import { getStoreSettings } from '@/api/store-settings';
+import { getMyStore } from '@/api/stores';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { usePlatformConfig } from '@/lib/platform-config';
@@ -13,6 +16,9 @@ const BASE_LINKS: { label: string; path: string }[] = [
   { label: 'Store settings', path: '/dashboard/settings/store' },
   { label: 'Store profile', path: '/dashboard/settings/profile' },
   { label: 'Billing', path: '/dashboard/settings/billing' },
+  { label: 'Services', path: '/dashboard/services' },
+  { label: 'Availability', path: '/dashboard/availability' },
+  { label: 'Booking analytics', path: '/dashboard/analytics' },
   { label: 'Payouts', path: '/dashboard/settings/payouts' },
   { label: 'Fee collections', path: '/dashboard/settings/fee-collections' },
   { label: 'Coupons', path: '/dashboard/settings/coupons' },
@@ -25,6 +31,14 @@ export default function SettingsHubScreen() {
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
   const { proPlanEnabled, countryCode, defaultCodEnabled, defaultBankTransferEnabled } = usePlatformConfig();
+  const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
+  const storeId = storeQuery.data?.id;
+  const settingsQuery = useQuery({
+    queryKey: ['store', storeId, 'settings'],
+    queryFn: () => getStoreSettings(storeId!),
+    enabled: !!storeId,
+  });
+  const bookingsEnabled = settingsQuery.data?.bookingsEnabled ?? false;
   // Payouts only ever contain PayHere-funded money (LK-only) — see
   // backend PayoutService.getEligibleOrders' doc comment; everywhere else
   // this screen would always be empty.
@@ -37,6 +51,9 @@ export default function SettingsHubScreen() {
     if (l.path === '/dashboard/settings/billing') return proPlanEnabled;
     if (l.path === '/dashboard/settings/payouts') return showPayouts;
     if (l.path === '/dashboard/settings/fee-collections') return showFees;
+    if (l.path === '/dashboard/services' || l.path === '/dashboard/availability' || l.path === '/dashboard/analytics') {
+      return bookingsEnabled;
+    }
     return true;
   });
 

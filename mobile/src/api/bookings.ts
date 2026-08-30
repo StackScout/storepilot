@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api-client';
-import type { BookingResponse, BookingStatus, PageResponse } from '@/api/types';
+import type { BookingAnalytics, BookingResponse, BookingStatus, PageResponse } from '@/api/types';
 
 /** No pagination UI on the seller dashboard yet — size=200 keeps today's "show everything" behavior. */
 export async function listStoreBookings(storeId: string): Promise<BookingResponse[]> {
@@ -22,4 +22,9 @@ export function verifyBookingBankTransfer(id: string, approved: boolean, note?: 
     method: 'POST',
     body: { approved, note },
   });
+}
+
+/** GET /stores/:storeId/booking-analytics — Pro-only, see backend BookingAnalyticsService's doc comment. */
+export function getBookingAnalytics(storeId: string): Promise<BookingAnalytics> {
+  return apiFetch<BookingAnalytics>(`/api/stores/${storeId}/booking-analytics`);
 }

@@ -115,7 +115,7 @@ class StoreServiceTest {
         every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
-    private fun australiaSettings() = PlatformSettings(
+    private fun australiaSettings(proPlanEnabled: Boolean = true) = PlatformSettings(
         name = "StorePilot",
         tagline = "tagline",
         countryName = "Australia",
@@ -129,6 +129,7 @@ class StoreServiceTest {
         defaultCodEnabled = true,
         defaultOnlinePaymentEnabled = false,
         defaultBankTransferEnabled = true,
+        proPlanEnabled = proPlanEnabled,
         supportEmail = "hello@storepilot.au",
         companyLocation = "Sydney, Australia",
         timezone = "Australia/Sydney",
@@ -270,6 +271,22 @@ class StoreServiceTest {
 
         assertFalse(result.codEnabled)
         assertFalse(result.bankTransferEnabled)
+    }
+
+    @Test
+    fun `updateSettingsAsSeller lets a non-Pro seller enable COD and bank transfer when the deployment has no Pro tier concept`() {
+        seller.plan = SellerPlan.FREE
+        every { platformConfigService.current() } returns australiaSettings(proPlanEnabled = false)
+        every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
+        every { storeSettingsRepository.save(any()) } answers { firstArg() }
+
+        val result = service.updateSettingsAsSeller(
+            storeId,
+            StoreSettingsInput(driverLicenceNumber = "DL999", bankTransferEnabled = true, onlinePaymentEnabled = true),
+        )
+
+        assertTrue(result.codEnabled)
+        assertTrue(result.bankTransferEnabled)
     }
 
     @Test
@@ -742,10 +759,12 @@ class StoreServiceTest {
         every { bookingRepository.sumServicePriceForPaidBookings(any(), any(), any()) } returns 500
         every { orderRepository.sumPlatformFeeForPaidOrders(any(), any(), any()) } returns 50
         every { bookingRepository.sumPlatformFeeForPaidBookings(any(), any(), any()) } returns 25
+        every { orderRepository.countByStoreIdAndStatus(storeId, OrderStatus.PENDING) } returns 3L
 
         val result = service.getStats(storeId)
 
         assertEquals(1500, result.revenueCurrentPeriod)
         assertEquals(75, result.platformFeeCurrentPeriod)
+        assertEquals(3, result.pendingOrderCount)
     }
 }

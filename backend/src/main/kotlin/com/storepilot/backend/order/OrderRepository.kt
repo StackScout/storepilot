@@ -14,6 +14,9 @@ interface OrderRepository : JpaRepository<Order, UUID> {
 
     fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus): List<Order>
 
+    /** Used by StoreService.getStats for the seller dashboard's pending-order count. */
+    fun countByStoreIdAndStatus(storeId: UUID, status: OrderStatus): Long
+
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Order>
 
     fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus, pageable: Pageable): Page<Order>

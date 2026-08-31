@@ -14,6 +14,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
@@ -113,7 +114,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    fun `sendMessage from the seller increments the buyer's unread count`() {
+    fun `sendMessage from the seller increments the buyer's unread count and notifies the buyer`() {
         every { currentActor.buyerOrNull() } returns null
         every { currentActor.sellerOrNull() } returns seller
         every { conversationRepository.findById(conversationId) } returns Optional.of(conversation)
@@ -121,12 +122,15 @@ class MessagingServiceTest {
             firstArg<Message>().apply { id = UUID.randomUUID(); createdAt = Instant.now() }
         }
         every { conversationRepository.save(any()) } answers { firstArg() }
+        every { messagingNotifier.buyerMessageReceived(any(), any()) } just Runs
 
         val response = service.sendMessage(conversationId, SendMessageInput("Hello back"))
 
         assertEquals("seller", response.senderType)
         assertEquals(1, conversation.buyerUnreadCount)
         assertEquals(0, conversation.sellerUnreadCount)
+        verify { messagingNotifier.buyerMessageReceived(conversation, any()) }
+        verify(exactly = 0) { messagingNotifier.sellerMessageReceived(any(), any()) }
     }
 
     @Test

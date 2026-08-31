@@ -6,9 +6,11 @@ import { apiFetch } from './api-client';
 
 /**
  * Backend counterpart: backend/.../notification/PushToken.kt + PushTokenController
- * (POST/DELETE /api/me/seller/push-tokens). See ExpoPushNotificationService
- * for how these tokens get used — this app never talks to Apple/Google
- * directly, only to Expo's push relay via the backend.
+ * (POST/DELETE /api/me/seller/push-tokens), mirrored for buyers by
+ * BuyerPushToken.kt + BuyerPushTokenController (/api/me/buyer/push-tokens).
+ * See ExpoPushNotificationService for how these tokens get used — this app
+ * never talks to Apple/Google directly, only to Expo's push relay via the
+ * backend.
  *
  * IMPORTANT: this project has no EAS projectId configured yet (no eas.json,
  * no app.json extra.eas.projectId) — getExpoPushTokenAsync needs one to
@@ -96,12 +98,13 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 }
 
-/** Called on sign-in and on every app-foreground while signed in — a no-op (not an error) wherever registerForPushNotificationsAsync returns null. */
-export async function syncPushToken(): Promise<void> {
+/** Called on sign-in and on every app-foreground while signed in — a no-op (not an error) wherever registerForPushNotificationsAsync returns null, or [role] has no push-token endpoint (admin, or null mid-onboarding). */
+export async function syncPushToken(role: string | null): Promise<void> {
+  if (role !== 'seller' && role !== 'buyer') return;
   const token = await registerForPushNotificationsAsync();
   if (!token) return;
   try {
-    await apiFetch('/api/me/seller/push-tokens', {
+    await apiFetch(`/api/me/${role}/push-tokens`, {
       method: 'POST',
       body: { token, platform: Platform.OS },
     });
@@ -111,11 +114,12 @@ export async function syncPushToken(): Promise<void> {
 }
 
 /** Called on sign-out, before tokens are cleared (the call needs a still-valid session to authenticate). Best-effort — a failure here must never block sign-out. */
-export async function clearPushToken(): Promise<void> {
+export async function clearPushToken(role: string | null): Promise<void> {
+  if (role !== 'seller' && role !== 'buyer') return;
   const token = await registerForPushNotificationsAsync();
   if (!token) return;
   try {
-    await apiFetch('/api/me/seller/push-tokens', {
+    await apiFetch(`/api/me/${role}/push-tokens`, {
       method: 'DELETE',
       body: { token },
     });

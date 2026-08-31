@@ -317,8 +317,13 @@ class BookingService(
             BookingTimelineEntry(booking = booking, status = status, label = STATUS_LABELS.getValue(status), timestamp = Instant.now(), note = input.note),
         )
         val saved = bookingRepository.save(booking)
-        if (status == BookingStatus.CONFIRMED) bookingNotifier.bookingConfirmed(saved)
-        if (status == BookingStatus.CANCELLED) bookingNotifier.bookingCancelled(saved)
+        when (status) {
+            BookingStatus.CONFIRMED -> bookingNotifier.bookingConfirmed(saved)
+            BookingStatus.COMPLETED -> bookingNotifier.bookingCompleted(saved)
+            BookingStatus.CANCELLED -> bookingNotifier.bookingCancelled(saved)
+            BookingStatus.NO_SHOW -> bookingNotifier.bookingNoShow(saved)
+            BookingStatus.PENDING -> Unit
+        }
         return publishBookingEvent(saved)
     }
 
@@ -394,6 +399,15 @@ class BookingService(
         )
         val saved = bookingRepository.save(booking)
         bookingNotifier.bookingCancelled(saved)
+        // Only notify the seller when they weren't the one who cancelled —
+        // derived from the actual authenticated identity (never trusted
+        // from the request body), since this endpoint is reachable by
+        // either party (see this method's doc comment) with no explicit
+        // "who's cancelling" field.
+        val cancellingSeller = currentActor.sellerOrNull()?.takeIf { storeAccessService.isOperationalAccess(booking.store, it) }
+        if (cancellingSeller == null) {
+            bookingNotifier.sellerNotifiedOfBuyerCancellation(saved)
+        }
         return publishBookingEvent(saved)
     }
 

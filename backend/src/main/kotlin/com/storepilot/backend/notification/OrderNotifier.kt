@@ -2,6 +2,7 @@ package com.storepilot.backend.notification
 
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.order.Order
+import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.returns.ReturnRequest
 import com.storepilot.backend.store.StoreSettingsRepository
 import org.slf4j.LoggerFactory
@@ -25,6 +26,8 @@ class OrderNotifier(
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
     private val sellerNotificationService: SellerNotificationService,
+    private val buyerPushTokenRepository: BuyerPushTokenRepository,
+    private val buyerNotificationService: BuyerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(OrderNotifier::class.java)
 
@@ -58,6 +61,28 @@ class OrderNotifier(
         } catch (e: Exception) {
             log.warn("Failed to send order push to seller {} (title=\"{}\") — not failing the triggering operation", sellerId, title, e)
         }
+    }
+
+    /**
+     * Push + notification-center entry for the buyer, mirroring
+     * sendPushToSeller/sellerNotificationService.notify's pairing. A no-op
+     * when [order] was placed as a guest checkout (order.buyer is only
+     * populated for a signed-in buyer) — guests still get the email sent
+     * alongside this call, just no push/in-app entry, since there's no
+     * account to attach one to.
+     */
+    private fun notifyBuyer(order: Order, title: String, body: String) {
+        val buyer = order.buyer ?: return
+        val buyerId = buyer.id ?: return
+        val tokens = buyerPushTokenRepository.findByBuyerId(buyerId).map { it.token }
+        if (tokens.isNotEmpty()) {
+            try {
+                pushNotificationService.send(tokens, title, body, data = mapOf("type" to "order", "id" to order.id.toString()))
+            } catch (e: Exception) {
+                log.warn("Failed to send order push to buyer {} (title=\"{}\") — not failing the triggering operation", buyerId, title, e)
+            }
+        }
+        buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, title, body, order.id)
     }
 
     /**
@@ -97,6 +122,7 @@ class OrderNotifier(
                 appendLine("Track your order: ${orderUrl(order)}")
             },
         )
+        notifyBuyer(order, title = "Order placed", body = "Your order ${order.orderNumber} from ${order.store.name} is confirmed.")
     }
 
     fun receiptUploaded(order: Order) {
@@ -142,6 +168,15 @@ class OrderNotifier(
             appendLine(orderUrl(order))
         }
         sendSafely(to = order.buyerEmail, subject = subject, body = body)
+        notifyBuyer(
+            order,
+            title = if (approved) "Payment confirmed" else "Payment receipt rejected",
+            body = if (approved) {
+                "Your payment for order ${order.orderNumber} is confirmed."
+            } else {
+                "Your payment receipt for order ${order.orderNumber} couldn't be verified."
+            },
+        )
     }
 
     /** [courierReceiptFile] (if any) is attached directly from the just-uploaded file — cheaper and simpler than reading it back from storage. */
@@ -166,6 +201,60 @@ class OrderNotifier(
             },
             attachment = attachment,
         )
+        notifyBuyer(order, title = "Order shipped", body = "${order.store.name} shipped your order ${order.orderNumber}.")
+    }
+
+    /** OrderService.updateStatus — seller marks the order CONFIRMED (distinct from orderConfirmed, which fires when the buyer first places it). */
+    fun orderConfirmedBySeller(order: Order) {
+        sendSafely(
+            to = order.buyerEmail,
+            subject = "Your order ${order.orderNumber} has been confirmed",
+            body = buildString {
+                appendLine("${order.store.name} has confirmed your order ${order.orderNumber}.")
+                appendLine()
+                appendLine("Track your order: ${orderUrl(order)}")
+            },
+        )
+        notifyBuyer(order, title = "Order confirmed", body = "${order.store.name} confirmed your order ${order.orderNumber}.")
+    }
+
+    /** OrderService.updateStatus — seller marks the order DELIVERED. */
+    fun orderDelivered(order: Order) {
+        sendSafely(
+            to = order.buyerEmail,
+            subject = "Your order ${order.orderNumber} has been delivered",
+            body = buildString {
+                appendLine("Your order ${order.orderNumber} from ${order.store.name} has been delivered.")
+                appendLine()
+                appendLine("View your order: ${orderUrl(order)}")
+            },
+        )
+        notifyBuyer(order, title = "Order delivered", body = "Your order ${order.orderNumber} from ${order.store.name} has been delivered.")
+    }
+
+    /** OrderService.updateStatus — seller cancels the order (after payment was already taken, unlike orderCancelledByBuyer's pre-payment path). */
+    fun orderCancelledBySeller(order: Order) {
+        sendSafely(
+            to = order.buyerEmail,
+            subject = "Your order ${order.orderNumber} was cancelled",
+            body = buildString {
+                appendLine("${order.store.name} has cancelled your order ${order.orderNumber}.")
+                if (order.paymentStatus == PaymentStatus.REFUNDED) {
+                    appendLine("Your payment has been refunded.")
+                }
+                appendLine()
+                appendLine(orderUrl(order))
+            },
+        )
+        notifyBuyer(order, title = "Order cancelled", body = "${order.store.name} cancelled your order ${order.orderNumber}.")
+    }
+
+    /** OrderService.cancelBankTransferOrder — the buyer cancels their own still-unpaid order; seller-facing, mirrors sellerOrderPlaced's push+in-app-only shape (no email — not urgent/actionable). */
+    fun orderCancelledByBuyer(order: Order) {
+        val title = "Order cancelled: ${order.orderNumber}"
+        val body = "The buyer cancelled order ${order.orderNumber} before paying."
+        sendPushToSeller(order, title, body)
+        sellerNotificationService.notify(order.store.seller, SellerNotificationType.ORDER, title, body, order.id)
     }
 
     /** ReturnRequestService.create — seller notification, mirrors receiptUploaded's "seller needs to act" shape. */
@@ -216,6 +305,15 @@ class OrderNotifier(
             appendLine(orderUrl(order))
         }
         sendSafely(to = order.buyerEmail, subject = subject, body = body)
+        notifyBuyer(
+            order,
+            title = if (approved) "Return approved" else "Return declined",
+            body = if (approved) {
+                "Your return for order ${order.orderNumber} was approved."
+            } else {
+                "Your return for order ${order.orderNumber} was declined."
+            },
+        )
     }
 
     /** ReturnRequestService.completeRefund — buyer notification once the refund has actually gone through (immediately for Stripe, or once a seller/admin confirms it for every other payment method). */
@@ -233,6 +331,7 @@ class OrderNotifier(
                 appendLine(orderUrl(order))
             },
         )
+        notifyBuyer(order, title = "Refund complete", body = "Your refund for order ${order.orderNumber} has been processed.")
     }
 
     fun receiptReminder(order: Order) {

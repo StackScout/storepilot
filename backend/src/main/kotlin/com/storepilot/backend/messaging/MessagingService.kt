@@ -112,6 +112,7 @@ class MessagingService(
         if (side == SenderType.BUYER) conversation.sellerUnreadCount += 1 else conversation.buyerUnreadCount += 1
         conversationRepository.save(conversation)
         if (side == SenderType.BUYER) messagingNotifier.sellerMessageReceived(conversation, message)
+        if (side == SenderType.SELLER) messagingNotifier.buyerMessageReceived(conversation, message)
         return message.toResponse()
     }
 

@@ -20,8 +20,10 @@ class MessagingNotifierTest {
     private val pushNotificationService = mockk<PushNotificationService>(relaxed = true)
     private val pushTokenRepository = mockk<PushTokenRepository>()
     private val sellerNotificationService = mockk<SellerNotificationService>(relaxed = true)
+    private val buyerPushTokenRepository = mockk<BuyerPushTokenRepository>()
+    private val buyerNotificationService = mockk<BuyerNotificationService>(relaxed = true)
 
-    private val notifier = MessagingNotifier(pushNotificationService, pushTokenRepository, sellerNotificationService)
+    private val notifier = MessagingNotifier(pushNotificationService, pushTokenRepository, sellerNotificationService, buyerPushTokenRepository, buyerNotificationService)
 
     private lateinit var seller: Seller
     private lateinit var store: Store
@@ -39,9 +41,10 @@ class MessagingNotifierTest {
         buyer = Buyer(name = "Jane Buyer", email = "buyer@example.com").apply { id = UUID.randomUUID() }
         conversation = Conversation(store = store, buyer = buyer).apply { id = UUID.randomUUID() }
         every { pushTokenRepository.findBySellerId(any()) } returns emptyList()
+        every { buyerPushTokenRepository.findByBuyerId(any()) } returns emptyList()
     }
 
-    private fun message(body: String) = Message(conversation = conversation, senderType = SenderType.BUYER, body = body).apply { id = UUID.randomUUID() }
+    private fun message(body: String, senderType: SenderType = SenderType.BUYER) = Message(conversation = conversation, senderType = senderType, body = body).apply { id = UUID.randomUUID() }
 
     @Test
     fun `sellerMessageReceived pushes every registered device with a truncated preview`() {
@@ -72,5 +75,37 @@ class MessagingNotifierTest {
         every { pushNotificationService.send(any(), any(), any(), any()) } throws RuntimeException("Expo is down")
 
         notifier.sellerMessageReceived(conversation, message("Hi there"))
+    }
+
+    @Test
+    fun `buyerMessageReceived pushes every registered device with a truncated preview`() {
+        every { buyerPushTokenRepository.findByBuyerId(buyer.id!!) } returns listOf(BuyerPushToken(buyer = buyer, token = "buyer-token", platform = "ios").apply { id = UUID.randomUUID() })
+        val longBody = "x".repeat(200)
+
+        notifier.buyerMessageReceived(conversation, message(longBody, senderType = SenderType.SELLER))
+
+        verify {
+            pushNotificationService.send(
+                listOf("buyer-token"),
+                match { it.contains("Handicrafts Store") },
+                match { it.length == 120 },
+                mapOf("type" to "conversation", "id" to conversation.id.toString()),
+            )
+        }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.CONVERSATION, any(), any(), conversation.id) }
+    }
+
+    @Test
+    fun `buyerMessageReceived does nothing when the buyer has no registered devices`() {
+        notifier.buyerMessageReceived(conversation, message("Hi there", senderType = SenderType.SELLER))
+        verify(exactly = 0) { pushNotificationService.send(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `buyerMessageReceived swallows a push failure`() {
+        every { buyerPushTokenRepository.findByBuyerId(buyer.id!!) } returns listOf(BuyerPushToken(buyer = buyer, token = "buyer-token", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushNotificationService.send(any(), any(), any(), any()) } throws RuntimeException("Expo is down")
+
+        notifier.buyerMessageReceived(conversation, message("Hi there", senderType = SenderType.SELLER))
     }
 }

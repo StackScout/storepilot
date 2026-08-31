@@ -386,11 +386,41 @@ class BookingServiceTest {
             buyerEmail = "jane@example.com",
         ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
         every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
+        every { currentActor.sellerOrNull() } returns null
 
         val response = service.cancelBooking(requireNotNull(booking.id), CancelBookingInput(reason = "Change of plans"))
 
         assertEquals("cancelled", response.status)
         assertEquals("Change of plans", response.cancellationReason)
+        verify { bookingNotifier.sellerNotifiedOfBuyerCancellation(any()) }
+    }
+
+    @Test
+    fun `cancelBooking doesn't notify the seller when the seller themselves cancelled`() {
+        val booking = Booking(
+            bookingNumber = "BK-AU-20260101-1010",
+            store = store,
+            service = bookableService,
+            serviceName = "Haircut",
+            servicePrice = 5000,
+            serviceDurationMinutes = 30,
+            scheduledStart = Instant.now().plusSeconds(3 * 60 * 60),
+            scheduledEnd = Instant.now().plusSeconds(3 * 60 * 60 + 1800),
+            platformFee = 100,
+            total = 5000,
+            status = BookingStatus.PENDING,
+            paymentMethod = PaymentMethod.STRIPE,
+            paymentStatus = PaymentStatus.UNPAID,
+            buyerName = "Jane",
+            buyerPhone = "+61400000002",
+            buyerEmail = "jane@example.com",
+        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
+        every { currentActor.sellerOrNull() } returns seller
+
+        service.cancelBooking(requireNotNull(booking.id), CancelBookingInput(reason = "Can't make it"))
+
+        verify(exactly = 0) { bookingNotifier.sellerNotifiedOfBuyerCancellation(any()) }
     }
 
     @Test
@@ -635,6 +665,7 @@ class BookingServiceTest {
     fun `cancelBooking refunds a paid Stripe booking`() {
         val b = booking(status = BookingStatus.CONFIRMED, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID, scheduledStart = Instant.now().plusSeconds(3 * 60 * 60))
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
+        every { currentActor.sellerOrNull() } returns null
 
         val response = service.cancelBooking(b.id!!, CancelBookingInput(reason = "Change of plans"))
 

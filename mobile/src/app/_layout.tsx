@@ -12,20 +12,32 @@ import { useAuthStore } from '@/store/auth-store';
 
 SplashScreen.preventAutoHideAsync();
 
-/** Maps a push notification's data payload (see e.g. BookingNotifier.sellerBookingCreated's `data` map) to the screen it should open. Cast to Href, not typed-routes-inferred: unlike an inline `router.push(\`/bookings/${id}\`)`, a template literal built inside a separate function and returned loses Expo Router's static Href narrowing. */
+/**
+ * Maps a push notification's data payload (see e.g. BookingNotifier.sellerBookingCreated's
+ * `data` map) to the screen it should open. Cast to Href, not
+ * typed-routes-inferred: unlike an inline `router.push(\`/bookings/${id}\`)`,
+ * a template literal built inside a separate function and returned loses
+ * Expo Router's static Href narrowing.
+ *
+ * Buyer and seller notifications share the same (type, id) vocabulary (see
+ * BuyerNotificationType/SellerNotificationType's doc comments) but resolve
+ * to different routes — only one role is ever signed in at a time, so the
+ * currently signed-in role (not the payload) decides which tree a tap opens.
+ */
 function routeForNotification(data: Record<string, unknown>): Href | null {
   const type = data.type;
   const id = data.id;
   if (typeof type !== 'string') return null;
+  const isBuyer = useAuthStore.getState().role === 'buyer';
   switch (type) {
     case 'order':
-      return `/orders/${id}` as Href;
+      return (isBuyer ? `/account/orders/${id}` : `/orders/${id}`) as Href;
     case 'booking':
-      return `/bookings/${id}` as Href;
+      return (isBuyer ? `/account/bookings/${id}` : `/bookings/${id}`) as Href;
     case 'product':
       return `/products/${id}` as Href;
     case 'conversation':
-      return `/messages/${id}` as Href;
+      return (isBuyer ? `/account/messages/${id}` : `/messages/${id}`) as Href;
     case 'payout':
       return '/dashboard/settings/payouts' as Href;
     default:
@@ -51,7 +63,7 @@ export default function RootLayout() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && useAuthStore.getState().isSignedIn) {
-        void syncPushToken();
+        void syncPushToken(useAuthStore.getState().role);
       } else if (state === 'background') {
         useAuthStore.getState().lock();
       }

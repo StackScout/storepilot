@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { deleteBuyerAccount, exportBuyerData } from '@/api/buyer-account';
 import { listMyBookings } from '@/api/buyer-bookings';
 import { listMyOrders } from '@/api/buyer-orders';
+import { getBuyerNotificationsSummary } from '@/api/buyer-notifications';
 import { logout } from '@/api/auth';
 import { BiometricLockToggle } from '@/components/biometric-lock-toggle';
 import { ThemedText } from '@/components/themed-text';
@@ -36,6 +37,13 @@ export default function AccountScreen() {
 
   const ordersQuery = useQuery({ queryKey: ['me', 'orders'], queryFn: listMyOrders, enabled: isBuyer });
   const bookingsQuery = useQuery({ queryKey: ['me', 'bookings'], queryFn: listMyBookings, enabled: isBuyer });
+  const notificationsSummaryQuery = useQuery({
+    queryKey: ['me', 'buyer', 'notifications', 'summary'],
+    queryFn: getBuyerNotificationsSummary,
+    enabled: isBuyer,
+    refetchInterval: 30000,
+  });
+  const unreadNotifications = notificationsSummaryQuery.data?.unreadCount ?? 0;
 
   if (!isBuyer) {
     return (
@@ -110,6 +118,10 @@ export default function AccountScreen() {
         <AccountLink label={`Order history (${ordersQuery.data?.length ?? 0})`} onPress={() => router.push('/account/orders' as Href)} />
         <AccountLink label={`Booking history (${bookingsQuery.data?.length ?? 0})`} onPress={() => router.push('/account/bookings' as Href)} />
         <AccountLink label="Messages" onPress={() => router.push('/account/messages' as Href)} />
+        <AccountLink
+          label={unreadNotifications > 0 ? `Notifications (${unreadNotifications} unread)` : 'Notifications'}
+          onPress={() => router.push('/account/notifications' as Href)}
+        />
         <AccountLink label="Wishlist" onPress={() => router.push('/account/wishlist' as Href)} />
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionLabel}>

@@ -4,6 +4,7 @@ export default function AccountLayout() {
   return (
     <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
       <Stack.Screen name="index" options={{ title: 'Account' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="login" options={{ title: 'Sign in', presentation: 'modal' }} />
       <Stack.Screen name="register" options={{ title: 'Create account', presentation: 'modal' }} />
       <Stack.Screen name="register-seller" options={{ title: 'Start selling', presentation: 'modal' }} />

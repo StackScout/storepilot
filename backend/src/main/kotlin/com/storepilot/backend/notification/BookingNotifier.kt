@@ -22,6 +22,8 @@ class BookingNotifier(
     private val pushNotificationService: PushNotificationService,
     private val pushTokenRepository: PushTokenRepository,
     private val sellerNotificationService: SellerNotificationService,
+    private val buyerPushTokenRepository: BuyerPushTokenRepository,
+    private val buyerNotificationService: BuyerNotificationService,
 ) {
     private val log = LoggerFactory.getLogger(BookingNotifier::class.java)
 
@@ -53,6 +55,29 @@ class BookingNotifier(
         }
     }
 
+    /** Push + notification-center entry for the buyer — mirrors OrderNotifier.notifyBuyer, see its doc comment for the guest-checkout no-op case. */
+    private fun notifyBuyer(booking: Booking, title: String, body: String) {
+        val buyer = booking.buyer ?: return
+        val buyerId = buyer.id ?: return
+        val tokens = buyerPushTokenRepository.findByBuyerId(buyerId).map { it.token }
+        if (tokens.isNotEmpty()) {
+            try {
+                pushNotificationService.send(tokens, title, body, data = mapOf("type" to "booking", "id" to booking.id.toString()))
+            } catch (e: Exception) {
+                log.warn("Failed to send booking push to buyer {} (title=\"{}\") — not failing the triggering operation", buyerId, title, e)
+            }
+        }
+        buyerNotificationService.notify(buyer, BuyerNotificationType.BOOKING, title, body, booking.id)
+    }
+
+    /** BookingService.cancelBooking — the buyer cancels their own booking; seller-facing, mirrors OrderNotifier.orderCancelledByBuyer's push+in-app-only shape. */
+    fun sellerNotifiedOfBuyerCancellation(booking: Booking) {
+        val title = "Booking cancelled: ${booking.serviceName}"
+        val body = "${booking.buyerName} cancelled their booking for ${formatScheduledTime(booking)}."
+        sendPushToSeller(booking, title, body)
+        sellerNotificationService.notify(booking.store.seller, SellerNotificationType.BOOKING, title, body, booking.id)
+    }
+
     fun bookingCreated(booking: Booking) {
         val platformConfig = platformConfigService.current()
         sendSafely(
@@ -69,6 +94,7 @@ class BookingNotifier(
                 appendLine("View your booking: ${bookingUrl(booking)}")
             },
         )
+        notifyBuyer(booking, title = "Booking requested", body = "Your booking for ${booking.serviceName} at ${formatScheduledTime(booking)} has been requested.")
     }
 
     fun bookingConfirmed(booking: Booking) {
@@ -84,6 +110,35 @@ class BookingNotifier(
                 appendLine("View your booking: ${bookingUrl(booking)}")
             },
         )
+        notifyBuyer(booking, title = "Booking confirmed", body = "${booking.store.name} confirmed your booking for ${formatScheduledTime(booking)}.")
+    }
+
+    /** BookingService.updateStatus — seller marks the booking COMPLETED. */
+    fun bookingCompleted(booking: Booking) {
+        sendSafely(
+            to = booking.buyerEmail,
+            subject = "Booking ${booking.bookingNumber} completed",
+            body = buildString {
+                appendLine("Your appointment for ${booking.serviceName} with ${booking.store.name} is complete.")
+                appendLine()
+                appendLine("View your booking: ${bookingUrl(booking)}")
+            },
+        )
+        notifyBuyer(booking, title = "Booking completed", body = "Your appointment for ${booking.serviceName} with ${booking.store.name} is complete.")
+    }
+
+    /** BookingService.updateStatus — seller marks the booking NO_SHOW. */
+    fun bookingNoShow(booking: Booking) {
+        sendSafely(
+            to = booking.buyerEmail,
+            subject = "Booking ${booking.bookingNumber} marked as a no-show",
+            body = buildString {
+                appendLine("${booking.store.name} marked your booking for ${booking.serviceName} (${formatScheduledTime(booking)}) as a no-show.")
+                appendLine()
+                appendLine("Contact the store if you think this is a mistake: ${bookingUrl(booking)}")
+            },
+        )
+        notifyBuyer(booking, title = "Marked as no-show", body = "${booking.store.name} marked your booking for ${booking.serviceName} as a no-show.")
     }
 
     fun bookingCancelled(booking: Booking) {
@@ -102,6 +157,7 @@ class BookingNotifier(
                 appendLine(bookingUrl(booking))
             },
         )
+        notifyBuyer(booking, title = "Booking cancelled", body = "Your booking for ${booking.serviceName} with ${booking.store.name} was cancelled.")
     }
 
     fun bookingReminder(booking: Booking) {

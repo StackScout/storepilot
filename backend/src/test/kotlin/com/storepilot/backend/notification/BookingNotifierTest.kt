@@ -4,6 +4,7 @@ import com.storepilot.backend.booking.BookableService
 import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.booking.ServiceStatus
+import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.order.PaymentMethod
@@ -31,16 +32,23 @@ class BookingNotifierTest {
     private val pushNotificationService = mockk<PushNotificationService>(relaxed = true)
     private val pushTokenRepository = mockk<PushTokenRepository>()
     private val sellerNotificationService = mockk<SellerNotificationService>(relaxed = true)
+    private val buyerPushTokenRepository = mockk<BuyerPushTokenRepository>()
+    private val buyerNotificationService = mockk<BuyerNotificationService>(relaxed = true)
 
-    private val notifier = BookingNotifier(emailService, notificationProperties, platformConfigService, pushNotificationService, pushTokenRepository, sellerNotificationService)
+    private val notifier = BookingNotifier(
+        emailService, notificationProperties, platformConfigService, pushNotificationService,
+        pushTokenRepository, sellerNotificationService, buyerPushTokenRepository, buyerNotificationService,
+    )
 
     private lateinit var seller: Seller
     private lateinit var store: Store
     private lateinit var service: BookableService
+    private lateinit var buyer: Buyer
 
     @BeforeEach
     fun setUp() {
         seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
+        buyer = Buyer(email = "buyer@example.com", name = "Jane Buyer").apply { id = UUID.randomUUID() }
         store = Store(
             seller = seller, slug = "store", name = "Studio", tagline = "tagline", description = "description",
             category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
@@ -56,14 +64,15 @@ class BookingNotifierTest {
             timezone = "Australia/Sydney", returnWindowDays = 14,
         )
         every { pushTokenRepository.findBySellerId(any()) } returns emptyList()
+        every { buyerPushTokenRepository.findByBuyerId(any()) } returns emptyList()
     }
 
-    private fun booking(cancellationReason: String? = null) = Booking(
+    private fun booking(cancellationReason: String? = null, buyer: Buyer? = null) = Booking(
         bookingNumber = "BK-1001", store = store, service = service, serviceName = service.name, servicePrice = service.price,
         serviceDurationMinutes = service.durationMinutes, scheduledStart = Instant.now().plus(2, ChronoUnit.DAYS),
         scheduledEnd = Instant.now().plus(2, ChronoUnit.DAYS).plusSeconds(1800), platformFee = 175, total = 5000,
         status = BookingStatus.PENDING, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID,
-        buyerName = "Jane Buyer", buyerPhone = "+61400000002", buyerEmail = "buyer@example.com", cancellationReason = cancellationReason,
+        buyerName = "Jane Buyer", buyerPhone = "+61400000002", buyerEmail = "buyer@example.com", buyer = buyer, cancellationReason = cancellationReason,
     ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
 
     @Test
@@ -153,5 +162,64 @@ class BookingNotifierTest {
     fun `an email send failure never propagates`() {
         every { emailService.send(any(), any(), any()) } throws RuntimeException("SES is down")
         notifier.bookingReminder(booking())
+    }
+
+    @Test
+    fun `bookingConfirmed pushes and records a notification for a signed-in buyer`() {
+        val b = booking(buyer = buyer)
+        every { buyerPushTokenRepository.findByBuyerId(buyer.id!!) } returns listOf(
+            BuyerPushToken(buyer = buyer, token = "buyer-token", platform = "ios").apply { id = UUID.randomUUID() },
+        )
+
+        notifier.bookingConfirmed(b)
+
+        verify { pushNotificationService.send(listOf("buyer-token"), any(), any(), mapOf("type" to "booking", "id" to b.id.toString())) }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.BOOKING, any(), any(), b.id) }
+    }
+
+    @Test
+    fun `bookingConfirmed does nothing for a guest checkout with no buyer account`() {
+        notifier.bookingConfirmed(booking(buyer = null))
+        verify(exactly = 0) { buyerNotificationService.notify(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `bookingCompleted emails and notifies the buyer`() {
+        val b = booking(buyer = buyer)
+
+        notifier.bookingCompleted(b)
+
+        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("completed") }, body = any()) }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.BOOKING, match { it.contains("completed") }, any(), b.id) }
+    }
+
+    @Test
+    fun `bookingNoShow emails and notifies the buyer`() {
+        val b = booking(buyer = buyer)
+
+        notifier.bookingNoShow(b)
+
+        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("no-show") }, body = any()) }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.BOOKING, any(), any(), b.id) }
+    }
+
+    @Test
+    fun `bookingCancelled notifies the buyer in addition to emailing them`() {
+        val b = booking(buyer = buyer)
+
+        notifier.bookingCancelled(b)
+
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.BOOKING, match { it.contains("cancelled") }, any(), b.id) }
+    }
+
+    @Test
+    fun `sellerNotifiedOfBuyerCancellation pushes and records a notification for the seller`() {
+        val b = booking(buyer = buyer)
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "seller-token", platform = "ios").apply { id = UUID.randomUUID() })
+
+        notifier.sellerNotifiedOfBuyerCancellation(b)
+
+        verify { pushNotificationService.send(listOf("seller-token"), match { it.contains(b.serviceName) }, any(), any()) }
+        verify { sellerNotificationService.notify(seller, SellerNotificationType.BOOKING, any(), any(), b.id) }
     }
 }

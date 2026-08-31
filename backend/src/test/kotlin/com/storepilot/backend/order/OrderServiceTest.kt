@@ -438,10 +438,11 @@ class OrderServiceTest {
         val result = service.updateStatus(order.id!!, OrderStatusUpdateInput(status = "confirmed"), null)
 
         assertEquals("confirmed", result.status)
+        verify { orderNotifier.orderConfirmedBySeller(any()) }
     }
 
     @Test
-    fun `updateStatus marks a COD order paid on delivery`() {
+    fun `updateStatus marks a COD order paid on delivery and notifies the buyer`() {
         val order = pendingOrder(paymentMethod = PaymentMethod.COD)
         order.status = OrderStatus.SHIPPED
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
@@ -449,16 +450,18 @@ class OrderServiceTest {
         val result = service.updateStatus(order.id!!, OrderStatusUpdateInput(status = "delivered"), null)
 
         assertEquals("paid", result.paymentStatus)
+        verify { orderNotifier.orderDelivered(any()) }
     }
 
     @Test
-    fun `updateStatus restores stock when an order is cancelled`() {
+    fun `updateStatus restores stock and notifies the buyer when an order is cancelled`() {
         val order = pendingOrder()
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
 
         service.updateStatus(order.id!!, OrderStatusUpdateInput(status = "cancelled"), null)
 
         verify { productService.restoreStock(listOf(productId to 1)) }
+        verify { orderNotifier.orderCancelledBySeller(any()) }
     }
 
     @Test
@@ -621,6 +624,7 @@ class OrderServiceTest {
 
         assertEquals("cancelled", result.status)
         assertTrue(result.timeline.last().note!!.contains("before a payment receipt"))
+        verify { orderNotifier.orderCancelledByBuyer(any()) }
     }
 
     @Test

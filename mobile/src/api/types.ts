@@ -24,6 +24,8 @@ import type {
   StoreSettings,
   SellerNotification,
   SellerNotificationSummary,
+  BuyerNotification,
+  BuyerNotificationSummary,
   StoreStaffMember,
   StoreStaffInvite,
   StaffInviteDetails,
@@ -81,6 +83,8 @@ export type SellerPlanResponse = SellerPlanInfo;
 export type StoreSettingsResponse = StoreSettings;
 export type SellerNotificationResponse = SellerNotification;
 export type SellerNotificationSummaryResponse = SellerNotificationSummary;
+export type BuyerNotificationResponse = BuyerNotification;
+export type BuyerNotificationSummaryResponse = BuyerNotificationSummary;
 
 export type ApiErrorBody = {
   error: {

@@ -1,5 +1,6 @@
 package com.storepilot.backend.notification
 
+import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.ShippingDetails
@@ -40,15 +41,22 @@ class OrderNotifierTest {
     private val pushNotificationService = mockk<PushNotificationService>(relaxed = true)
     private val pushTokenRepository = mockk<PushTokenRepository>()
     private val sellerNotificationService = mockk<SellerNotificationService>(relaxed = true)
+    private val buyerPushTokenRepository = mockk<BuyerPushTokenRepository>()
+    private val buyerNotificationService = mockk<BuyerNotificationService>(relaxed = true)
 
-    private val notifier = OrderNotifier(emailService, storeSettingsRepository, notificationProperties, platformConfigService, pushNotificationService, pushTokenRepository, sellerNotificationService)
+    private val notifier = OrderNotifier(
+        emailService, storeSettingsRepository, notificationProperties, platformConfigService, pushNotificationService,
+        pushTokenRepository, sellerNotificationService, buyerPushTokenRepository, buyerNotificationService,
+    )
 
     private lateinit var seller: Seller
     private lateinit var store: Store
+    private lateinit var buyer: Buyer
 
     @BeforeEach
     fun setUp() {
         seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
+        buyer = Buyer(email = "buyer@example.com", name = "Buyer").apply { id = UUID.randomUUID() }
         store = Store(
             seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
             category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
@@ -62,6 +70,7 @@ class OrderNotifierTest {
             timezone = "Australia/Sydney", returnWindowDays = 14,
         )
         every { pushTokenRepository.findBySellerId(any()) } returns emptyList()
+        every { buyerPushTokenRepository.findByBuyerId(any()) } returns emptyList()
     }
 
     private fun order(
@@ -69,10 +78,12 @@ class OrderNotifierTest {
         gstAmount: Int? = null,
         trackingNumber: String? = null,
         courierServiceName: String? = null,
+        buyer: Buyer? = null,
+        paymentStatus: PaymentStatus = PaymentStatus.PAID,
     ) = Order(
         orderNumber = "AU-1001", store = store, subtotal = 1000, deliveryMethod = DeliveryMethod.SHIPPING,
-        shippingFee = 0, platformFee = 35, total = 1000, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID,
-        shipping = ShippingDetails(), buyerEmail = "buyer@example.com", sellerAbn = sellerAbn, gstAmount = gstAmount,
+        shippingFee = 0, platformFee = 35, total = 1000, paymentMethod = PaymentMethod.STRIPE, paymentStatus = paymentStatus,
+        shipping = ShippingDetails(), buyerEmail = "buyer@example.com", buyer = buyer, sellerAbn = sellerAbn, gstAmount = gstAmount,
         trackingNumber = trackingNumber, courierServiceName = courierServiceName, fulfillmentTimeHours = 48, deliveryTimeHours = 120,
     ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
 
@@ -305,5 +316,107 @@ class OrderNotifierTest {
         every { emailService.send(any(), any(), any(), any()) } throws RuntimeException("SES is down")
 
         notifier.receiptReminder(o)
+    }
+
+    @Test
+    fun `orderConfirmed pushes and records a notification for a signed-in buyer`() {
+        val o = order(buyer = buyer)
+        every { buyerPushTokenRepository.findByBuyerId(buyer.id!!) } returns listOf(
+            BuyerPushToken(buyer = buyer, token = "buyer-token", platform = "ios").apply { id = UUID.randomUUID() },
+        )
+
+        notifier.orderConfirmed(o)
+
+        verify { pushNotificationService.send(listOf("buyer-token"), any(), any(), mapOf("type" to "order", "id" to o.id.toString())) }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, any(), any(), o.id) }
+    }
+
+    @Test
+    fun `orderConfirmed does nothing for a guest checkout with no buyer account`() {
+        val o = order(buyer = null)
+
+        notifier.orderConfirmed(o)
+
+        verify(exactly = 0) { buyerNotificationService.notify(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `orderShipped notifies the buyer alongside the email`() {
+        val o = order(trackingNumber = "TRACK123", courierServiceName = "AusPost", buyer = buyer)
+
+        notifier.orderShipped(o, null)
+
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("shipped") }, any(), o.id) }
+    }
+
+    @Test
+    fun `orderConfirmedBySeller emails and notifies the buyer`() {
+        val o = order(buyer = buyer)
+
+        notifier.orderConfirmedBySeller(o)
+
+        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("confirmed") }, body = any(), attachment = null) }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("confirmed") }, any(), o.id) }
+    }
+
+    @Test
+    fun `orderDelivered emails and notifies the buyer`() {
+        val o = order(buyer = buyer)
+
+        notifier.orderDelivered(o)
+
+        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("delivered") }, body = any(), attachment = null) }
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("delivered") }, any(), o.id) }
+    }
+
+    @Test
+    fun `orderCancelledBySeller mentions the refund when the order was paid`() {
+        val o = order(buyer = buyer, paymentStatus = PaymentStatus.REFUNDED)
+        val bodySlot = slot<String>()
+
+        notifier.orderCancelledBySeller(o)
+
+        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("cancelled") }, body = capture(bodySlot), attachment = null) }
+        assertTrue(bodySlot.captured.contains("refunded"))
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, any(), any(), o.id) }
+    }
+
+    @Test
+    fun `orderCancelledByBuyer pushes and records a notification for the seller, not the buyer`() {
+        val o = order(buyer = buyer)
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "seller-token", platform = "ios").apply { id = UUID.randomUUID() })
+
+        notifier.orderCancelledByBuyer(o)
+
+        verify { pushNotificationService.send(listOf("seller-token"), match { it.contains(o.orderNumber) }, any(), any()) }
+        verify { sellerNotificationService.notify(seller, SellerNotificationType.ORDER, any(), any(), o.id) }
+        verify(exactly = 0) { buyerNotificationService.notify(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `bankTransferVerified notifies the buyer in addition to emailing them`() {
+        val o = order(buyer = buyer)
+
+        notifier.bankTransferVerified(o, approved = true, note = null)
+
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("confirmed") }, any(), o.id) }
+    }
+
+    @Test
+    fun `returnDecided notifies the buyer in addition to emailing them`() {
+        val o = order(buyer = buyer)
+
+        notifier.returnDecided(o, approved = false, note = "Item wasn't damaged")
+
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("declined") }, any(), o.id) }
+    }
+
+    @Test
+    fun `returnRefunded notifies the buyer in addition to emailing them`() {
+        val o = order(buyer = buyer)
+
+        notifier.returnRefunded(o, refundReference = "re_12345")
+
+        verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, any(), any(), o.id) }
     }
 }

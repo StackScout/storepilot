@@ -30,7 +30,7 @@ type AuthState = {
  * never in this in-memory/React-state store, so they can't leak via a
  * debugger inspecting store state or a crash report.
  */
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   isHydrated: false,
   isSignedIn: false,
   role: null,
@@ -50,7 +50,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     await tokenStorage.setTokens(accessToken, refreshToken);
     set({ isSignedIn: true, role, email, name });
     // Best-effort, fire-and-forget — a slow/failed push registration must never delay sign-in.
-    void syncPushToken();
+    void syncPushToken(role);
   },
 
   updateAccessToken: async (accessToken: string) => {
@@ -61,8 +61,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     // Must run before tokenStorage.clear() — unregistering needs the
-    // still-valid session to authenticate the DELETE call.
-    await clearPushToken();
+    // still-valid session to authenticate the DELETE call. Reads role from
+    // get() since set({ role: null }) below happens after.
+    await clearPushToken(get().role);
     await tokenStorage.clear();
     set({ isSignedIn: false, role: null, email: null, name: null, isLocked: false });
   },

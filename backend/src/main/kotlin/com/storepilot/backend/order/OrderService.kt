@@ -445,8 +445,12 @@ class OrderService(
             ),
         )
         val saved = orderRepository.save(order)
-        if (status == OrderStatus.SHIPPED) {
-            orderNotifier.orderShipped(saved, courierReceipt)
+        when (status) {
+            OrderStatus.CONFIRMED -> orderNotifier.orderConfirmedBySeller(saved)
+            OrderStatus.SHIPPED -> orderNotifier.orderShipped(saved, courierReceipt)
+            OrderStatus.DELIVERED -> orderNotifier.orderDelivered(saved)
+            OrderStatus.CANCELLED -> orderNotifier.orderCancelledBySeller(saved)
+            OrderStatus.PENDING -> Unit
         }
         return publishOrderEvent(saved)
     }
@@ -563,7 +567,9 @@ class OrderService(
                 },
             ),
         )
-        return publishOrderEvent(orderRepository.save(order))
+        val saved = orderRepository.save(order)
+        orderNotifier.orderCancelledByBuyer(saved)
+        return publishOrderEvent(saved)
     }
 
     private fun generateOrderNumber(now: Instant, countryCode: String): String {

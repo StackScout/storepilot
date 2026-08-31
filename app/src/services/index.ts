@@ -20,3 +20,4 @@ export * as messagingService from "./messaging.service";
 export * as sellerAccountService from "./seller-account.service";
 export * as categoriesService from "./categories.service";
 export * as platformConfigService from "./platform-config.service";
+export * as storeStaffService from "./store-staff.service";

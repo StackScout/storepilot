@@ -4,6 +4,8 @@ import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.store.StoreAccessService
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.stripe.StripeProperties
 import com.stripe.model.Customer
 import com.stripe.model.Subscription
@@ -38,8 +40,10 @@ class SellerBillingServiceTest {
         billingSuccessUrlBase = "http://localhost:3000/dashboard/settings",
         billingCancelUrlBase = "http://localhost:3000/dashboard/settings",
     )
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
+    private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = SellerBillingService(sellerRepository, currentActor, platformConfigService, stripeProperties)
+    private val service = SellerBillingService(sellerRepository, platformConfigService, stripeProperties, storeAccessService)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
 

@@ -64,6 +64,21 @@ export function login(email: string, password: string): Promise<AuthSessionRespo
   });
 }
 
+/**
+ * POST /api/staff/accept-invite — redeems a store-owner-issued invite
+ * token, creating the Cognito user + Seller + StoreStaffMember row and
+ * signing the new staff member straight in. Unlike register()/verifyEmail(),
+ * there's no separate email-verification round trip — the invite link
+ * itself already proved the invitee controls that inbox.
+ */
+export function acceptStaffInvite(token: string, password: string, name?: string): Promise<AuthSessionResponse> {
+  return apiFetch<AuthSessionResponse>('/api/staff/accept-invite', {
+    method: 'POST',
+    body: { token, password, name },
+    skipAuth: true,
+  });
+}
+
 export function mfaChallenge(email: string, session: string, code: string): Promise<AuthSessionResponse> {
   return apiFetch<AuthSessionResponse>('/api/auth/mfa/challenge', {
     method: 'POST',

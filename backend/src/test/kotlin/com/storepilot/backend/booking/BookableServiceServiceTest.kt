@@ -8,8 +8,10 @@ import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreAddress
 import com.storepilot.backend.store.StoreRepository
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
@@ -34,8 +36,10 @@ class BookableServiceServiceTest {
     private val currentActor = mockk<CurrentActor>()
     private val fileStorageService = mockk<FileStorageService>(relaxed = true)
     private val categoryRepository = mockk<CategoryRepository>()
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
+    private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = BookableServiceService(serviceRepository, bookingRepository, storeRepository, currentActor, fileStorageService, categoryRepository)
+    private val service = BookableServiceService(serviceRepository, bookingRepository, storeRepository, currentActor, fileStorageService, categoryRepository, storeAccessService)
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()

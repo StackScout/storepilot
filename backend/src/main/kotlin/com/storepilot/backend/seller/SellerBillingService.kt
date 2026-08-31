@@ -2,7 +2,7 @@ package com.storepilot.backend.seller
 
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.PlatformConfigService
-import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.stripe.StripeProperties
 import com.stripe.model.Customer
 import com.stripe.model.Subscription
@@ -32,15 +32,15 @@ private val ACTIVE_SUBSCRIPTION_STATUSES = setOf("active", "trialing")
 @Transactional(readOnly = true)
 class SellerBillingService(
     private val sellerRepository: SellerRepository,
-    private val currentActor: CurrentActor,
     private val platformConfigService: PlatformConfigService,
     private val stripeProperties: StripeProperties,
+    private val storeAccessService: StoreAccessService,
 ) {
     private val log = LoggerFactory.getLogger(SellerBillingService::class.java)
 
     /** GET /api/me/seller/plan */
     fun currentPlan(): SellerPlanResponse {
-        val seller = currentActor.requireSeller()
+        val seller = storeAccessService.requireOwnerSeller()
         val config = platformConfigService.current()
         return seller.toPlanResponse(config.proMonthlyPriceCents, config.currencyCode)
     }
@@ -48,7 +48,7 @@ class SellerBillingService(
     /** POST /api/me/seller/billing/checkout — reuses the seller's Stripe Customer across repeat checkouts (e.g. resubscribing after a cancellation) instead of creating a new one every time. */
     @Transactional
     fun startCheckout(): CheckoutUrlResponse {
-        val seller = currentActor.requireSeller()
+        val seller = storeAccessService.requireOwnerSeller()
         if (seller.plan == SellerPlan.PRO) throw ConflictException("Already on the Pro plan")
 
         val customerId = seller.stripeCustomerId ?: run {
@@ -102,7 +102,7 @@ class SellerBillingService(
     /** POST /api/me/seller/billing/cancel — keeps Pro access through the period already paid for (standard SaaS UX), not an immediate downgrade. */
     @Transactional
     fun cancelAtPeriodEnd(): SellerPlanResponse {
-        val seller = currentActor.requireSeller()
+        val seller = storeAccessService.requireOwnerSeller()
         val subscriptionId = seller.stripeSubscriptionId
             ?: throw ConflictException("No active Pro subscription to cancel")
         val subscription = Subscription.retrieve(subscriptionId).update(mapOf("cancel_at_period_end" to true))
@@ -124,7 +124,7 @@ class SellerBillingService(
      */
     @Transactional
     fun refreshFromStripe(): SellerPlanResponse {
-        val seller = currentActor.requireSeller()
+        val seller = storeAccessService.requireOwnerSeller()
         val subscription = seller.stripeSubscriptionId?.let { Subscription.retrieve(it) }
             ?: seller.stripeCustomerId?.let { customerId ->
                 Subscription.list(SubscriptionListParams.builder().setCustomer(customerId).setLimit(1L).build())

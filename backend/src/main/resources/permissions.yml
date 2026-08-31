@@ -30,6 +30,14 @@ endpoint-permissions:
     - path: "/api/auth/**"
       access: PUBLIC
 
+    # Lets the accept-invite page render/submit before the invitee is authenticated — see StoreStaffService.
+    - method: GET
+      path: "/api/staff/invites/*"
+      access: PUBLIC
+    - method: POST
+      path: "/api/staff/accept-invite"
+      access: PUBLIC
+
     # Full store settings (bank details, NIC/ABN, contact info, verification
     # documents) is owner-only — must be matched before the broader GET
     # /api/stores/** permitAll below, since rules are first-match-wins.
@@ -65,6 +73,17 @@ endpoint-permissions:
     # pending verification-change-request status is not public.
     - method: GET
       path: "/api/stores/*/verification-change-requests/current"
+      access: SELLER
+
+    # Staff roster/invites are not public — owner-only enforcement itself
+    # happens inside StoreStaffService (see permissions.yml's own header
+    # comment on the two-layer model); this coarse SELLER gate just keeps
+    # them off the broader GET /api/stores/** permitAll rule below.
+    - method: GET
+      path: "/api/stores/*/staff"
+      access: SELLER
+    - method: GET
+      path: "/api/stores/*/staff/invites"
       access: SELLER
 
     # Public marketplace browsing.
@@ -376,6 +395,16 @@ endpoint-permissions:
       access: SELLER
     - method: GET
       path: "/api/stores/*/stripe-settlements"
+      access: SELLER
+
+    - method: POST
+      path: "/api/stores/*/staff/invite"
+      access: SELLER
+    - method: DELETE
+      path: "/api/stores/*/staff/*"
+      access: SELLER
+    - method: DELETE
+      path: "/api/stores/*/staff/invites/*"
       access: SELLER
 
     - method: PATCH

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useColorScheme } from 'react-native';
 
-import { getStoreSettings } from '@/api/store-settings';
+import { getPublicStoreSettings } from '@/api/buyer-stores';
 import { getMyStore } from '@/api/stores';
 import { Colors } from '@/constants/theme';
 
@@ -15,8 +15,8 @@ export default function AppTabs() {
   // Hidden until settings actually load (rather than shown-then-hidden) — mirrors the web
   // sidebar's equivalent gate, see dashboard-sidebar.tsx's doc comment on BOOKING_NAV_ITEMS.
   const settingsQuery = useQuery({
-    queryKey: ['store', storeId, 'settings'],
-    queryFn: () => getStoreSettings(storeId!),
+    queryKey: ['store', storeId, 'public-settings'],
+    queryFn: () => getPublicStoreSettings(storeId!),
     enabled: !!storeId,
   });
   const bookingsEnabled = settingsQuery.data?.bookingsEnabled ?? false;

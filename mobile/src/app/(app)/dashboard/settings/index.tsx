@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { logout } from '@/api/auth';
-import { getStoreSettings } from '@/api/store-settings';
+import { getPublicStoreSettings } from '@/api/buyer-stores';
 import { getMyStore } from '@/api/stores';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -15,6 +15,7 @@ import { useAuthStore } from '@/store/auth-store';
 const BASE_LINKS: { label: string; path: string }[] = [
   { label: 'Store settings', path: '/dashboard/settings/store' },
   { label: 'Store profile', path: '/dashboard/settings/profile' },
+  { label: 'Staff', path: '/dashboard/settings/staff' },
   { label: 'Billing', path: '/dashboard/settings/billing' },
   { label: 'Services', path: '/dashboard/services' },
   { label: 'Availability', path: '/dashboard/availability' },
@@ -26,6 +27,17 @@ const BASE_LINKS: { label: string; path: string }[] = [
   { label: 'Account', path: '/dashboard/settings/account' },
 ];
 
+// Financial/sensitive links an owner sees but a staff member never should —
+// mirrors the backend's operational-vs-financial endpoint split.
+const OWNER_ONLY_PATHS = new Set([
+  '/dashboard/settings/store',
+  '/dashboard/settings/staff',
+  '/dashboard/settings/billing',
+  '/dashboard/analytics',
+  '/dashboard/settings/payouts',
+  '/dashboard/settings/fee-collections',
+]);
+
 export default function SettingsHubScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -33,9 +45,13 @@ export default function SettingsHubScreen() {
   const { proPlanEnabled, countryCode, defaultCodEnabled, defaultBankTransferEnabled } = usePlatformConfig();
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
   const storeId = storeQuery.data?.id;
+  const role = storeQuery.data?.role ?? 'owner';
+  // The buyer-safe public-settings subset, not the owner-only full
+  // settings — bookingsEnabled needs to be readable by staff too, and this
+  // carries the exact same value either way.
   const settingsQuery = useQuery({
-    queryKey: ['store', storeId, 'settings'],
-    queryFn: () => getStoreSettings(storeId!),
+    queryKey: ['store', storeId, 'public-settings'],
+    queryFn: () => getPublicStoreSettings(storeId!),
     enabled: !!storeId,
   });
   const bookingsEnabled = settingsQuery.data?.bookingsEnabled ?? false;
@@ -48,6 +64,7 @@ export default function SettingsHubScreen() {
   // PlatformSettings' default*Enabled doc comment.
   const showFees = defaultCodEnabled || defaultBankTransferEnabled;
   const links = BASE_LINKS.filter((l) => {
+    if (role === 'staff' && OWNER_ONLY_PATHS.has(l.path)) return false;
     if (l.path === '/dashboard/settings/billing') return proPlanEnabled;
     if (l.path === '/dashboard/settings/payouts') return showPayouts;
     if (l.path === '/dashboard/settings/fee-collections') return showFees;

@@ -9,8 +9,10 @@ import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreAddress
 import com.storepilot.backend.store.StoreRepository
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -39,6 +41,8 @@ class AvailabilityServiceTest {
     private val storeRepository = mockk<StoreRepository>()
     private val currentActor = mockk<CurrentActor>()
     private val platformConfigService = mockk<PlatformConfigService>()
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
+    private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
     private val service = AvailabilityService(
         storeAvailabilityRepository,
@@ -50,6 +54,7 @@ class AvailabilityServiceTest {
         storeRepository,
         currentActor,
         platformConfigService,
+        storeAccessService,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }

@@ -1,10 +1,10 @@
 package com.storepilot.backend.booking
 
-import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -34,6 +34,7 @@ class AvailabilityService(
     private val storeRepository: StoreRepository,
     private val currentActor: CurrentActor,
     private val platformConfigService: PlatformConfigService,
+    private val storeAccessService: StoreAccessService,
 ) {
     private val zoneId: ZoneId get() = ZoneId.of(platformConfigService.current().timezone)
 
@@ -230,8 +231,7 @@ class AvailabilityService(
         bookableServiceRepository.findById(serviceId).orElseThrow { NotFoundException("Service $serviceId not found") }
 
     private fun requireOwnership(store: Store) {
-        val seller = currentActor.requireSeller()
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store ${store.id}")
+        storeAccessService.requireOperationalAccess(store)
     }
 }
 

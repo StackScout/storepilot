@@ -2,7 +2,6 @@ package com.storepilot.backend.booking
 
 import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
-import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.requireCategory
@@ -12,6 +11,7 @@ import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
@@ -34,6 +34,7 @@ class BookableServiceService(
     private val currentActor: CurrentActor,
     private val fileStorageService: FileStorageService,
     private val categoryRepository: CategoryRepository,
+    private val storeAccessService: StoreAccessService,
 ) {
     fun getById(id: UUID): BookableServiceResponse {
         val service = serviceRepository.findById(id).orElseThrow { NotFoundException("Service $id not found") }
@@ -129,8 +130,7 @@ class BookableServiceService(
         storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
 
     private fun requireOwnership(store: Store) {
-        val seller = currentActor.requireSeller()
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store ${store.id}")
+        storeAccessService.requireOperationalAccess(store)
     }
 
     /** A service's category is locked to the store's own approved category — identical rule to ProductService. */
@@ -140,12 +140,14 @@ class BookableServiceService(
         }
     }
 
-    private fun isOwnedByCurrentSeller(store: Store): Boolean = currentActor.sellerOrNull()?.id == store.seller.id
+    private fun isOwnedByCurrentSeller(store: Store): Boolean {
+        val seller = currentActor.sellerOrNull() ?: return false
+        return storeAccessService.isOperationalAccess(store, seller)
+    }
 
     private fun isOwnedByCurrentSeller(storeId: UUID): Boolean {
-        val seller = currentActor.sellerOrNull() ?: return false
         val store = storeRepository.findById(storeId).orElse(null) ?: return false
-        return store.seller.id == seller.id
+        return isOwnedByCurrentSeller(store)
     }
 
     private fun uniqueSlug(storeId: UUID, name: String): String {

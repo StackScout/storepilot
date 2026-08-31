@@ -23,7 +23,7 @@ import { Logo } from "@/components/shared/logo";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { useSellerRole, useSellerStoreId } from "@/hooks/use-seller-store";
 import { storesService, billingService } from "@/services";
 
 const NAV_ITEMS = [
@@ -48,24 +48,29 @@ export function DashboardSidebarContent() {
   const pathname = usePathname();
   const { countryCode, proPlanEnabled } = usePlatformConfig();
   const storeId = useSellerStoreId();
+  const role = useSellerRole();
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
     queryFn: () => storesService.getStoreById(storeId),
     staleTime: 0,
   });
+  // The buyer-safe public-settings subset, not the owner-only full
+  // settings — bookingsEnabled needs to be readable by staff too, and this
+  // carries the exact same value either way.
   const { data: settings } = useQuery({
-    queryKey: ["store-settings", storeId],
-    queryFn: () => storesService.getStoreSettings(storeId),
+    queryKey: ["store-public-settings", storeId],
+    queryFn: () => storesService.getPublicStoreSettings(storeId),
     staleTime: 0,
   });
   const { data: planInfo } = useQuery({
     queryKey: ["seller-plan"],
     queryFn: () => billingService.getMyPlan(),
+    enabled: role === "owner",
   });
   const isPro = planInfo?.plan === "pro";
-  const navItems = settings?.bookingsEnabled
-    ? [...NAV_ITEMS.slice(0, 3), ...BOOKING_NAV_ITEMS, ...NAV_ITEMS.slice(3)]
-    : NAV_ITEMS;
+  const navItems = (
+    settings?.bookingsEnabled ? [...NAV_ITEMS.slice(0, 3), ...BOOKING_NAV_ITEMS, ...NAV_ITEMS.slice(3)] : NAV_ITEMS
+  ).filter((item) => role === "owner" || (item.href !== "/dashboard/payouts" && item.href !== "/dashboard/settings" && item.href !== "/dashboard/analytics"));
 
   return (
     <div className="flex h-full flex-col">
@@ -107,7 +112,7 @@ export function DashboardSidebarContent() {
             <p className="truncate text-sm font-medium">{store?.name ?? "Your store"}</p>
             <p className="text-muted-foreground text-xs">{store?.address.city ?? ""}</p>
           </div>
-          {!proPlanEnabled ? null : isPro ? (
+          {!proPlanEnabled || role !== "owner" ? null : isPro ? (
             <StatusBadge tone="warning" className="shrink-0">
               <Sparkles className="size-3" /> Pro
             </StatusBadge>

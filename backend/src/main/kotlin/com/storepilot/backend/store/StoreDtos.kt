@@ -37,6 +37,8 @@ data class StoreResponse(
     val facebookUrl: String?,
     val instagramUrl: String?,
     val tiktokUrl: String?,
+    /** Only ever populated by GET /api/me/store ("owner" or "staff", relative to the caller) — null everywhere else (public listings, admin views, other sellers). See StoreStaffMember.kt's doc comment. */
+    val role: String? = null,
 )
 
 /** Mirrors src/types/store.ts's StoreSettings. */

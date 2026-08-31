@@ -41,6 +41,8 @@ export interface Store {
   facebookUrl?: string;
   instagramUrl?: string;
   tiktokUrl?: string;
+  /** Only ever populated by GET /api/me/store, relative to the caller — undefined everywhere else (public listings, admin views, other sellers). */
+  role?: "owner" | "staff";
 }
 
 /** Input for PATCH /api/stores/{id}/profile — seller-editable public social links. */

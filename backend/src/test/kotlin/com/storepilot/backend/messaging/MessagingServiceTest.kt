@@ -6,7 +6,9 @@ import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.notification.MessagingNotifier
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -26,8 +28,10 @@ class MessagingServiceTest {
     private val storeRepository = mockk<StoreRepository>()
     private val currentActor = mockk<CurrentActor>()
     private val messagingNotifier = mockk<MessagingNotifier>()
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
+    private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = MessagingService(conversationRepository, messageRepository, storeRepository, currentActor, messagingNotifier)
+    private val service = MessagingService(conversationRepository, messageRepository, storeRepository, currentActor, messagingNotifier, storeAccessService)
 
     private val storeId: UUID = UUID.randomUUID()
     private val sellerId: UUID = UUID.randomUUID()

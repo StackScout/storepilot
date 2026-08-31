@@ -8,6 +8,7 @@ export default function DashboardLayout() {
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/store" options={{ title: 'Store settings' }} />
       <Stack.Screen name="settings/profile" options={{ title: 'Store profile' }} />
+      <Stack.Screen name="settings/staff" options={{ title: 'Staff' }} />
       <Stack.Screen name="settings/billing" options={{ title: 'Billing' }} />
       <Stack.Screen name="settings/payouts" options={{ title: 'Payouts' }} />
       <Stack.Screen name="settings/fee-collections" options={{ title: 'Fee collections' }} />

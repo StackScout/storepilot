@@ -18,6 +18,7 @@ import com.storepilot.backend.coupon.CouponService
 import com.storepilot.backend.notification.OrderNotifier
 import com.storepilot.backend.product.ProductService
 import com.storepilot.backend.seller.SellerPlan
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.stripe.StripeService
@@ -83,6 +84,7 @@ class OrderService(
     private val guestLookupOtpService: GuestLookupOtpService,
     private val sseHub: SseHub,
     private val couponService: CouponService,
+    private val storeAccessService: StoreAccessService,
 ) {
     /** Fan-out to any subscribers on GET /api/orders/{id}/events — call after every write that changes what the buyer/seller sees on the order. */
     private fun publishOrderEvent(order: Order): OrderResponse {
@@ -93,9 +95,8 @@ class OrderService(
 
     /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
     fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
-        val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        storeAccessService.requireOperationalAccess(store)
 
         val statusEnum = status?.let { wireValueOf<OrderStatus>(it) }
         val pageable = PageRequest.of(page, size)
@@ -572,7 +573,6 @@ class OrderService(
     }
 
     private fun requireSellerOwnsOrder(order: Order) {
-        val seller = currentActor.requireSeller()
-        if (order.store.seller.id != seller.id) throw ForbiddenException("You don't own order ${order.id}")
+        storeAccessService.requireOperationalAccess(order.store)
     }
 }

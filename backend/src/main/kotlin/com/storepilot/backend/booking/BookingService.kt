@@ -1,7 +1,6 @@
 package com.storepilot.backend.booking
 
 import com.storepilot.backend.common.ConflictException
-import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
@@ -17,6 +16,7 @@ import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.order.ReceiptStorageService
 import com.storepilot.backend.seller.SellerPlan
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.storepilot.backend.stripe.StripeService
@@ -79,6 +79,7 @@ class BookingService(
     private val guestLookupOtpService: GuestLookupOtpService,
     private val sseHub: SseHub,
     private val couponService: CouponService,
+    private val storeAccessService: StoreAccessService,
 ) {
     /** Fan-out to any subscribers on GET /api/bookings/{id}/events — mirrors OrderService.publishOrderEvent. */
     private fun publishBookingEvent(booking: Booking): BookingResponse {
@@ -89,9 +90,8 @@ class BookingService(
 
     /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/bookings uses the paged overload below. */
     fun listByStore(storeId: UUID, status: String?): List<BookingResponse> {
-        val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        storeAccessService.requireOperationalAccess(store)
         val statusEnum = status?.let { wireValueOf<BookingStatus>(it) }
         val bookings = bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
         return (if (statusEnum != null) bookings.filter { it.status == statusEnum } else bookings)
@@ -100,9 +100,8 @@ class BookingService(
 
     /** Paged sibling of the above — GET /api/stores/{storeId}/bookings itself. Pushes the optional status filter into SQL (unlike the unpaged version above) so pagination is correct against the filtered set, not the full one. */
     fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<BookingResponse> {
-        val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        storeAccessService.requireOperationalAccess(store)
         val statusEnum = status?.let { wireValueOf<BookingStatus>(it) }
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         val bookings = if (statusEnum != null) {
@@ -415,7 +414,6 @@ class BookingService(
     }
 
     private fun requireSellerOwnsBooking(booking: Booking) {
-        val seller = currentActor.requireSeller()
-        if (booking.store.seller.id != seller.id) throw ForbiddenException("You don't own booking ${booking.id}")
+        storeAccessService.requireOperationalAccess(booking.store)
     }
 }

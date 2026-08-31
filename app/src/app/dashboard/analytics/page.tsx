@@ -2,17 +2,33 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, CalendarClock, DollarSign, Repeat, Sparkles, UserX } from "lucide-react";
+import { Ban, CalendarClock, DollarSign, Lock, Repeat, Sparkles, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PriceDisplay } from "@/components/shared/price-display";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { useSellerRole, useSellerStoreId } from "@/hooks/use-seller-store";
 import { billingService, bookingsService } from "@/services";
 
 export default function DashboardAnalyticsPage() {
+  const role = useSellerRole();
+  if (role === "staff") {
+    return (
+      <div className="max-w-2xl">
+        <Card>
+          <CardContent className="py-12">
+            <EmptyState icon={Lock} title="Booking analytics is managed by the store owner" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  return <OwnerAnalyticsView />;
+}
+
+function OwnerAnalyticsView() {
   const storeId = useSellerStoreId();
   const { proPlanEnabled } = usePlatformConfig();
 

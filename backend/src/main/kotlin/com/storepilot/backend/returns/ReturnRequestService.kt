@@ -3,7 +3,6 @@ package com.storepilot.backend.returns
 import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
-import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
@@ -21,6 +20,7 @@ import com.storepilot.backend.payout.FeeCollectionRepository
 import com.storepilot.backend.payout.FeeCollectionStatus
 import com.storepilot.backend.payout.PayoutRepository
 import com.storepilot.backend.payout.PayoutStatus
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.stripe.StripeService
 import org.springframework.data.domain.PageRequest
@@ -54,6 +54,7 @@ class ReturnRequestService(
     private val orderNotifier: OrderNotifier,
     private val currentActor: CurrentActor,
     private val auditLogService: AuditLogService,
+    private val storeAccessService: StoreAccessService,
 ) {
     /**
      * POST /api/orders/{orderId}/returns — unauthenticated, same "order ID
@@ -328,13 +329,11 @@ class ReturnRequestService(
     }
 
     private fun requireSellerOwnsOrder(order: Order) {
-        val seller = currentActor.requireSeller()
-        if (order.store.seller.id != seller.id) throw ForbiddenException("You don't own order ${order.id}")
+        storeAccessService.requireOperationalAccess(order.store)
     }
 
     private fun requireSellerOwnsStore(storeId: UUID) {
-        val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        storeAccessService.requireOperationalAccess(store)
     }
 }

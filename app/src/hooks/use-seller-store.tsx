@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
  * same way as before; this component just owns the loading/not-yet-a-seller
  * states so none of those call sites need to change.
  */
-const SellerStoreContext = createContext<string | null>(null);
+const SellerStoreContext = createContext<{ storeId: string; role: "owner" | "staff" } | null>(null);
 
 export function SellerStoreProvider({ children }: { children: React.ReactNode }) {
   const { data: store, isLoading } = useQuery({
@@ -49,13 +49,25 @@ export function SellerStoreProvider({ children }: { children: React.ReactNode })
     );
   }
 
-  return <SellerStoreContext.Provider value={store.id}>{children}</SellerStoreContext.Provider>;
+  // role defaults defensively to "owner" — only ever missing for an old cached
+  // response from before this field existed, and "owner" is the pre-existing
+  // (only) behavior this whole app already assumed.
+  return <SellerStoreContext.Provider value={{ storeId: store.id, role: store.role ?? "owner" }}>{children}</SellerStoreContext.Provider>;
+}
+
+function useSellerStoreContext() {
+  const ctx = useContext(SellerStoreContext);
+  if (!ctx) {
+    throw new Error("useSellerStoreId()/useSellerRole() must be used within the dashboard's SellerStoreProvider");
+  }
+  return ctx;
 }
 
 export function useSellerStoreId(): string {
-  const storeId = useContext(SellerStoreContext);
-  if (!storeId) {
-    throw new Error("useSellerStoreId() must be used within the dashboard's SellerStoreProvider");
-  }
-  return storeId;
+  return useSellerStoreContext().storeId;
+}
+
+/** "owner" or "staff", relative to the signed-in seller — see StoreStaffMember's backend doc comment for what each can do. */
+export function useSellerRole(): "owner" | "staff" {
+  return useSellerStoreContext().role;
 }

@@ -117,3 +117,14 @@ export async function logout(): Promise<void> {
 export async function getSession(): Promise<AuthSession> {
   return apiClient.get<AuthSession>("/api/auth/session");
 }
+
+/**
+ * POST /api/staff/accept-invite — redeems a store-owner-issued invite
+ * token, creating the Cognito user + Seller + StoreStaffMember row and
+ * signing the new staff member straight in. Unlike register(), there's no
+ * separate verify-email step — the invite link itself already proved the
+ * invitee controls that inbox.
+ */
+export async function acceptStaffInvite(token: string, password: string, name?: string): Promise<AuthSession> {
+  return apiClient.post<AuthSession>("/api/staff/accept-invite", { token, password, name });
+}

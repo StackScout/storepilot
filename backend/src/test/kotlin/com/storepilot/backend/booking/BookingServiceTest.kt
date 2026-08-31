@@ -19,10 +19,12 @@ import com.storepilot.backend.order.ReceiptStorageService
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreAddress
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import com.storepilot.backend.stripe.StripeService
 import io.mockk.every
@@ -51,6 +53,8 @@ class BookingServiceTest {
     private val guestLookupOtpService = mockk<GuestLookupOtpService>(relaxed = true)
     private val sseHub = mockk<SseHub>(relaxed = true)
     private val couponService = mockk<CouponService>()
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
+    private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
     private val service = BookingService(
         bookingRepository,
@@ -66,6 +70,7 @@ class BookingServiceTest {
         guestLookupOtpService,
         sseHub,
         couponService,
+        storeAccessService,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID(); createdAt = Instant.now() }

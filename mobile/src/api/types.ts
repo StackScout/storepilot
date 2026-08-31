@@ -24,6 +24,9 @@ import type {
   StoreSettings,
   SellerNotification,
   SellerNotificationSummary,
+  StoreStaffMember,
+  StoreStaffInvite,
+  StaffInviteDetails,
 } from "@storepilot/shared-api";
 
 export type {
@@ -54,10 +57,15 @@ export type {
   AvailabilityExceptionInput,
   BookingAnalytics,
   AbnLookupResult,
+  StaffInviteInput,
+  AcceptStaffInviteInput,
 } from "@storepilot/shared-api";
 
 export type StoreResponse = Store;
 export type StoreStatsResponse = StoreStats;
+export type StoreStaffMemberResponse = StoreStaffMember;
+export type StoreStaffInviteResponse = StoreStaffInvite;
+export type StaffInviteDetailsResponse = StaffInviteDetails;
 export type OrderResponse = Order;
 export type ProductResponse = Product;
 export type ProductImageResponse = ProductImage;

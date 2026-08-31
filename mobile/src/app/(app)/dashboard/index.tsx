@@ -17,11 +17,14 @@ export default function DashboardScreen() {
 
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
   const storeId = storeQuery.data?.id;
+  const isOwner = (storeQuery.data?.role ?? 'owner') === 'owner';
 
+  // Owner-only — revenue and pendingOrderCount are bundled into the same
+  // response, so staff (who can't see revenue) don't get this card at all.
   const statsQuery = useQuery({
     queryKey: ['store', storeId, 'stats'],
     queryFn: () => getStoreStats(storeId!),
-    enabled: !!storeId,
+    enabled: !!storeId && isOwner,
   });
 
   const summaryQuery = useQuery({

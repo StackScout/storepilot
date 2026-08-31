@@ -60,6 +60,12 @@ class StoreServiceTest {
     private val payoutRepository = mockk<PayoutRepository>()
     private val feeCollectionRepository = mockk<FeeCollectionRepository>()
     private val categoryRepository = mockk<CategoryRepository>()
+    // Not relaxed: findBySellerId returns a nullable object, and mockk's relaxed
+    // mode fills that in with a child mock rather than null, breaking every
+    // existing "no store yet" assertion — default it to null explicitly instead.
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>().also {
+        every { it.findBySellerId(any()) } returns null
+    }
 
     private val service = StoreService(
         storeRepository,
@@ -78,6 +84,7 @@ class StoreServiceTest {
         payoutRepository,
         feeCollectionRepository,
         categoryRepository,
+        storeStaffMemberRepository,
     )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID() }

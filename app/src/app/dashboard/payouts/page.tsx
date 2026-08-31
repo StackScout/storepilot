@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Clock, CreditCard, Landmark, ReceiptText, Wallet } from "lucide-react";
+import { Clock, CreditCard, Landmark, Lock, ReceiptText, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -11,10 +11,26 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { useSellerRole, useSellerStoreId } from "@/hooks/use-seller-store";
 import { payoutsService, storesService, ordersService } from "@/services";
 
 export default function DashboardPayoutsPage() {
+  const role = useSellerRole();
+  if (role === "staff") {
+    return (
+      <div className="max-w-2xl">
+        <Card>
+          <CardContent className="py-12">
+            <EmptyState icon={Lock} title="Earnings and payouts are managed by the store owner" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  return <OwnerPayoutsView />;
+}
+
+function OwnerPayoutsView() {
   const storeId = useSellerStoreId();
   const { name, countryCode, currencyCode, currencySymbol, currencyLocale, platformFeePercent, defaultCodEnabled, defaultBankTransferEnabled } =
     usePlatformConfig();

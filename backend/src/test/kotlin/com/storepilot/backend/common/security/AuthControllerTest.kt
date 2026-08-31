@@ -7,6 +7,7 @@ import com.storepilot.backend.common.EmailNotVerifiedException
 import com.storepilot.backend.common.UnauthenticatedException
 import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.seller.Seller
+import com.storepilot.backend.store.StoreStaffService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -74,8 +75,9 @@ class AuthControllerTest {
     private val notificationProperties = NotificationProperties()
     private val jwtDecoder = mockk<JwtDecoder>()
     private val emailVerificationService = mockk<EmailVerificationService>(relaxed = true)
+    private val storeStaffService = mockk<StoreStaffService>(relaxed = true)
     private val controller = AuthController(
-        cognitoClient, cognitoProperties, currentActor, notificationProperties, jwtDecoder, emailVerificationService,
+        cognitoClient, cognitoProperties, currentActor, notificationProperties, jwtDecoder, emailVerificationService, storeStaffService,
     )
 
     @AfterEach

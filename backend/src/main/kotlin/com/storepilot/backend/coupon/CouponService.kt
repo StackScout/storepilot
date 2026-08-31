@@ -1,12 +1,12 @@
 package com.storepilot.backend.coupon
 
 import com.storepilot.backend.common.ConflictException
-import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
@@ -37,6 +37,7 @@ class CouponService(
     private val couponRepository: CouponRepository,
     private val storeRepository: StoreRepository,
     private val currentActor: CurrentActor,
+    private val storeAccessService: StoreAccessService,
 ) {
     // --- Seller-scoped (store-specific coupons) ---
 
@@ -209,8 +210,5 @@ class CouponService(
     private fun requireCoupon(id: UUID): Coupon = couponRepository.findById(id).orElseThrow { NotFoundException("Coupon $id not found") }
 
     private fun requireOwnedStore(storeId: UUID) = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        .also { store ->
-            val seller = currentActor.requireSeller()
-            if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
-        }
+        .let { storeAccessService.requireOperationalAccess(it) }
 }

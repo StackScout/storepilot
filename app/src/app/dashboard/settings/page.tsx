@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import { FileText, Loader2, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,8 +34,10 @@ import {
 import { StoreLogoFallback, StoreBannerFallback } from "@/components/shared/store-image-fallback";
 import { MfaSettingsCard } from "@/components/shared/mfa-settings-card";
 import { DangerZoneCard } from "@/components/dashboard/danger-zone-card";
+import { StaffManagementCard } from "@/components/dashboard/staff-management-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
-import { useSellerStoreId } from "@/hooks/use-seller-store";
+import { useSellerRole, useSellerStoreId } from "@/hooks/use-seller-store";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { formatCurrency } from "@/lib/currency";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -118,6 +120,24 @@ export default function DashboardSettingsPage() {
 }
 
 function DashboardSettingsForm() {
+  const role = useSellerRole();
+  if (role === "staff") {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
+        <EmptyState
+          icon={Lock}
+          title="Store settings are managed by the store owner"
+          description="Financial and account details here (bank info, payouts, billing) are only visible to the store owner."
+        />
+      </div>
+    );
+  }
+
+  return <OwnerSettingsForm />;
+}
+
+/** Split out from DashboardSettingsForm so the staff early-return above never has to reason about hook-count consistency against this component's much larger hook list. */
+function OwnerSettingsForm() {
   const queryClient = useQueryClient();
   const storeId = useSellerStoreId();
   const {
@@ -1048,6 +1068,8 @@ function DashboardSettingsForm() {
         </CardContent>
       </Card>
       )}
+
+      <StaffManagementCard storeId={storeId} />
 
       <DangerZoneCard
         storeId={store?.id ?? null}

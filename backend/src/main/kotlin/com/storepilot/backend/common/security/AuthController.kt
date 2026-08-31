@@ -4,6 +4,8 @@ import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.EmailNotVerifiedException
 import com.storepilot.backend.common.UnauthenticatedException
 import com.storepilot.backend.notification.NotificationProperties
+import com.storepilot.backend.store.AcceptStaffInviteInput
+import com.storepilot.backend.store.StoreStaffService
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
@@ -145,6 +147,7 @@ class AuthController(
     private val notificationProperties: NotificationProperties,
     private val jwtDecoder: JwtDecoder,
     private val emailVerificationService: EmailVerificationService,
+    private val storeStaffService: StoreStaffService,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
     private val restClient = RestClient.create()
@@ -199,6 +202,24 @@ class AuthController(
 
         emailVerificationService.sendCode(input.email, input.name)
         return RegisterResponse(email = input.email, name = input.name)
+    }
+
+    /**
+     * Redeems a store-owner-issued invite token: creates the Cognito user +
+     * Seller + StoreStaffMember row (see StoreStaffService.acceptInvite),
+     * then signs the new staff member straight in — unlike register(),
+     * there's no separate email-verification round trip, since the invite
+     * link itself already proved the invitee controls that inbox.
+     */
+    @PostMapping("/api/staff/accept-invite")
+    fun acceptStaffInvite(
+        @Valid @RequestBody input: AcceptStaffInviteInput,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): AuthSessionResponse {
+        val identity = storeStaffService.acceptInvite(input)
+        val authResponse = adminInitiateAuth(identity.email, input.password)
+        return completeLogin(identity.email, authResponse.authenticationResult(), request, response)
     }
 
     /** Confirms a code sent by register()/resendVerificationCode() and flips the Cognito user to email_verified=true. Doesn't sign the caller in — see register()'s doc comment. */

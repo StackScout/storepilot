@@ -6,6 +6,7 @@ import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.notification.MessagingNotifier
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
@@ -32,6 +33,7 @@ class MessagingService(
     private val storeRepository: StoreRepository,
     private val currentActor: CurrentActor,
     private val messagingNotifier: MessagingNotifier,
+    private val storeAccessService: StoreAccessService,
 ) {
     /**
      * POST /api/stores/{storeId}/conversations — buyer-only, get-or-create.
@@ -121,13 +123,12 @@ class MessagingService(
         val buyer = currentActor.buyerOrNull()
         if (buyer != null && buyer.id == conversation.buyer.id) return SenderType.BUYER
         val seller = currentActor.sellerOrNull()
-        if (seller != null && seller.id == conversation.store.seller.id) return SenderType.SELLER
+        if (seller != null && storeAccessService.isOperationalAccess(conversation.store, seller)) return SenderType.SELLER
         throw ForbiddenException("You aren't a participant in conversation ${conversation.id}")
     }
 
     private fun requireOwnedStore(storeId: UUID) {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        val seller = currentActor.requireSeller()
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
+        storeAccessService.requireOperationalAccess(store)
     }
 }

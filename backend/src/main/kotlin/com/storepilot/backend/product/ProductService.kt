@@ -2,7 +2,6 @@ package com.storepilot.backend.product
 
 import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
-import com.storepilot.backend.common.ForbiddenException
 import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.requireCategory
@@ -12,6 +11,7 @@ import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import org.springframework.data.domain.PageRequest
@@ -41,6 +41,7 @@ class ProductService(
     private val fileStorageService: FileStorageService,
     private val wishlistItemRepository: WishlistItemRepository,
     private val categoryRepository: CategoryRepository,
+    private val storeAccessService: StoreAccessService,
 ) {
     /**
      * GET /api/products — the matching row set is never fully materialized:
@@ -345,8 +346,7 @@ class ProductService(
         storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
 
     private fun requireOwnership(store: Store) {
-        val seller = currentActor.requireSeller()
-        if (store.seller.id != seller.id) throw ForbiddenException("You don't own store ${store.id}")
+        storeAccessService.requireOperationalAccess(store)
     }
 
     /** A product's category is locked to the store's own approved category — see task item 40's doc comment on Store.kt. */
@@ -356,13 +356,15 @@ class ProductService(
         }
     }
 
-    /** Unlike requireOwnership, never throws — used where a non-owner (or a guest) is a legitimate caller, just with a narrower view. */
-    private fun isOwnedByCurrentSeller(store: Store): Boolean = currentActor.sellerOrNull()?.id == store.seller.id
+    /** Unlike requireOwnership, never throws — used where a non-owner (or a guest) is a legitimate caller, just with a narrower view. Owner-or-staff, matching requireOwnership's operational access. */
+    private fun isOwnedByCurrentSeller(store: Store): Boolean {
+        val seller = currentActor.sellerOrNull() ?: return false
+        return storeAccessService.isOperationalAccess(store, seller)
+    }
 
     private fun isOwnedByCurrentSeller(storeId: UUID): Boolean {
-        val seller = currentActor.sellerOrNull() ?: return false
         val store = storeRepository.findById(storeId).orElse(null) ?: return false
-        return store.seller.id == seller.id
+        return isOwnedByCurrentSeller(store)
     }
 
     private fun uniqueSlug(storeId: UUID, name: String): String {

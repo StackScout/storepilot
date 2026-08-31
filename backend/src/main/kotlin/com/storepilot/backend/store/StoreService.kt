@@ -62,6 +62,7 @@ class StoreService(
     private val payoutRepository: PayoutRepository,
     private val feeCollectionRepository: FeeCollectionRepository,
     private val categoryRepository: CategoryRepository,
+    private val storeStaffMemberRepository: StoreStaffMemberRepository,
 ) {
     private val log = LoggerFactory.getLogger(StoreService::class.java)
 
@@ -195,13 +196,17 @@ class StoreService(
         storeSettingsRepository.findById(storeId).orElse(null)?.toPublicResponse()
 
     /**
-     * GET /api/me/store — the authenticated seller's own store, or null if
-     * they haven't onboarded yet. Lets the frontend resolve "my storeId"
-     * itself instead of trusting a client-supplied value.
+     * GET /api/me/store — the authenticated seller's own store (as owner),
+     * or the store they're a staff member of, or null if neither. Lets the
+     * frontend resolve "my storeId" (and whether it's viewing as owner or
+     * staff, via the response's `role`) itself instead of trusting a
+     * client-supplied value.
      */
     fun getMyStore(): StoreResponse? {
         val sellerId = requireNotNull(currentActor.requireSeller().id)
-        return storeRepository.findBySellerId(sellerId)?.toResponse(fileStorageService)
+        storeRepository.findBySellerId(sellerId)?.let { return it.toResponse(fileStorageService, role = "owner") }
+        val staffLink = storeStaffMemberRepository.findBySellerId(sellerId) ?: return null
+        return staffLink.store.toResponse(fileStorageService, role = "staff")
     }
 
     /**
@@ -222,6 +227,18 @@ class StoreService(
         if (currentActor.isBuyer()) {
             throw ConflictException("This account is registered as a buyer — create a separate account to sell.")
         }
+        // Known limitation, accepted deliberately (see StoreStaffService.removeStaff's
+        // doc comment): a removed staff member keeps their Seller row but loses
+        // ROLE_SELLER. If they re-onboard using that same row, this reuse branch
+        // won't re-call grantSellerGroup (it only fires for a brand-new row) — the
+        // safe default here (checking "does the JWT currently have ROLE_SELLER"
+        // instead) would misfire on every ordinary mid-onboarding retry too, since
+        // this whole flow deliberately runs on the pre-onboarding token the entire
+        // time (see this method's own doc comment) — so a ROLE_SELLER-less retry is
+        // the normal case here, not just the removed-staff one. Fixing this properly
+        // needs a non-JWT signal (e.g. an explicit adminListGroupsForUser check) —
+        // out of scope for this pass, same as removeStaff's own "no recovery path"
+        // tradeoff.
         val seller = sellerRepository.findByCognitoSub(identity.sub) ?: run {
             val created = sellerRepository.save(Seller(cognitoSub = identity.sub, email = identity.email, name = identity.name))
             grantSellerGroup(identity.username)

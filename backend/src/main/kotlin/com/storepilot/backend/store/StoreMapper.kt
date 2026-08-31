@@ -2,8 +2,8 @@ package com.storepilot.backend.store
 
 import com.storepilot.backend.common.storage.FileStorageService
 
-/** logoUrl/bannerUrl are resolved fresh on every call when present (never cached) — see FileStorageService.resolveUrl. Null means the seller hasn't uploaded one yet; the frontend renders a generated fallback in that case. */
-fun Store.toResponse(fileStorageService: FileStorageService): StoreResponse =
+/** logoUrl/bannerUrl are resolved fresh on every call when present (never cached) — see FileStorageService.resolveUrl. Null means the seller hasn't uploaded one yet; the frontend renders a generated fallback in that case. [role] is only ever supplied by StoreService.getMyStore — see StoreResponse.role's doc comment. */
+fun Store.toResponse(fileStorageService: FileStorageService, role: String? = null): StoreResponse =
     StoreResponse(
         id = requireNotNull(id),
         slug = slug,
@@ -25,6 +25,7 @@ fun Store.toResponse(fileStorageService: FileStorageService): StoreResponse =
         facebookUrl = facebookUrl,
         instagramUrl = instagramUrl,
         tiktokUrl = tiktokUrl,
+        role = role,
     )
 
 /** driverLicenceDocumentUrl/abnDocumentUrl are resolved fresh on every call (never cached) — see FileStorageService.resolveUrl. */

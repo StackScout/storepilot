@@ -7,6 +7,7 @@ export default function AccountLayout() {
       <Stack.Screen name="login" options={{ title: 'Sign in', presentation: 'modal' }} />
       <Stack.Screen name="register" options={{ title: 'Create account', presentation: 'modal' }} />
       <Stack.Screen name="register-seller" options={{ title: 'Start selling', presentation: 'modal' }} />
+      <Stack.Screen name="accept-staff-invite" options={{ title: 'Join store', presentation: 'modal' }} />
       <Stack.Screen name="onboarding" options={{ title: 'Set up your store', presentation: 'modal' }} />
       <Stack.Screen name="track" options={{ title: 'Track order/booking' }} />
       <Stack.Screen name="addresses" options={{ title: 'Addresses' }} />

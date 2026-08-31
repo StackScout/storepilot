@@ -6,8 +6,10 @@ import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.store.Store
+import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreAddress
 import com.storepilot.backend.store.StoreRepository
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
@@ -25,8 +27,10 @@ class CouponServiceTest {
     private val couponRepository = mockk<CouponRepository>()
     private val storeRepository = mockk<StoreRepository>()
     private val currentActor = mockk<CurrentActor>()
+    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
+    private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = CouponService(couponRepository, storeRepository, currentActor)
+    private val service = CouponService(couponRepository, storeRepository, currentActor, storeAccessService)
 
     private val storeId: UUID = UUID.randomUUID()
     private val otherStoreId: UUID = UUID.randomUUID()

@@ -11,7 +11,8 @@
       "icon": "./assets/expo.icon",
       "infoPlist": {
         "NSFaceIDUsageDescription": "StorePilot uses Face ID to quickly and securely sign you back in."
-      }
+      },
+      "bundleIdentifier": "com.nilangav.storepilot-seller"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +21,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -50,6 +54,13 @@
     "experiments": {
       "typedRoutes": false,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b3d5e09a-0bc0-470b-8515-27f5d46dd6af"
+      }
+    },
+    "owner": "nilangav"
   }
 }

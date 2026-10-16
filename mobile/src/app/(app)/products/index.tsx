@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { listStoreProducts, productToFormInput, updateProduct } from '@/api/products';
@@ -24,7 +24,12 @@ function ProductRow({ product, onPress, onAdjustStock }: { product: ProductRespo
     <View style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
       <TouchableOpacity onPress={onPress} style={styles.rowMain}>
         {product.images[0] ? (
-          <Image source={{ uri: product.images[0].url }} style={styles.thumb} contentFit="cover" />
+          <Image
+            source={{ uri: product.images[0].url }}
+            style={styles.thumb}
+            contentFit="cover"
+            onError={(e) => Alert.alert('Image failed to load', e.error)}
+          />
         ) : (
           <View style={[styles.thumb, { backgroundColor: theme.backgroundSelected }]} />
         )}

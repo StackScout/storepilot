@@ -33,7 +33,7 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1",
+    "react-native-worklets": "0.13.0-nightly-20260903-c2e9c026d",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -44,7 +44,7 @@
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
-    "ios": "expo run:ios",
+    "ios": "expo run:ios --device \"iPhone 18 Pro Max\"",
     "web": "expo start --web",
     "lint": "expo lint"
   },

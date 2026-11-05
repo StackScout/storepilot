@@ -339,6 +339,22 @@ export default function OnboardingScreen() {
           </ThemedText>
         </View>
 
+        {/* Helpful hint showing the first incomplete requirement */}
+        {!canSubmit && (
+            <ThemedText type="small" style={{ color: '#D64545', textAlign: 'center', marginBottom: 8 }}>
+              {form.storeName.trim().length < 3 ? 'Store name must be at least 3 characters' :
+                  !form.category ? 'Please select a category' :
+                      form.tagline.trim().length < 5 ? 'Tagline must be at least 5 characters' :
+                          form.description.trim().length < 20 ? 'Store description must be at least 20 characters' :
+                              !form.state ? 'Please select a state' :
+                                  form.city.trim().length < 2 ? 'City must be at least 2 characters' :
+                                      !licenceUri ? 'Please upload your driver\'s licence copy' :
+                                          form.driverLicenceNumber.trim().length < 6 ? 'Licence number must be at least 6 characters' :
+                                              form.whatsappNumber.trim().length < 9 ? 'WhatsApp number must be at least 9 digits' :
+                                                  !agreeToTerms ? 'Please agree to the seller terms' : 'Please check required fields'}
+            </ThemedText>
+        )}
+
         <TouchableOpacity
           style={[styles.submit, (!canSubmit || mutation.isPending) && styles.submitDisabled]}
           onPress={() => mutation.mutate()}

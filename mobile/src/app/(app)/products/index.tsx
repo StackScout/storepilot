@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { listStoreProducts, productToFormInput, updateProduct } from '@/api/products';
 import { getMyStore } from '@/api/stores';
@@ -69,6 +69,9 @@ export default function ProductsListScreen() {
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+
+  const bottomBarOffset = insets.bottom;
 
   const storeQuery = useQuery({ queryKey: ['me', 'store'], queryFn: getMyStore });
   const storeId = storeQuery.data?.id;
@@ -90,7 +93,7 @@ export default function ProductsListScreen() {
       <FlatList
         data={productsQuery.data ?? []}
         keyExtractor={(p) => p.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: bottomBarOffset + 60 }]}
         renderItem={({ item }) => (
           <ProductRow
             product={item}
@@ -106,7 +109,10 @@ export default function ProductsListScreen() {
           ) : null
         }
       />
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/products/new')}>
+      <TouchableOpacity
+          style={[styles.fab, { bottom: bottomBarOffset + Spacing.two }]}
+          onPress={() => router.push('/products/new')}
+      >
         <ThemedText style={styles.fabText}>+ Add product</ThemedText>
       </TouchableOpacity>
     </SafeAreaView>

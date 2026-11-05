@@ -2,7 +2,6 @@ package com.storepilot.backend.common
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.Profile
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
@@ -15,7 +14,6 @@ import software.amazon.awssdk.services.ses.SesClient
  * chain — never configured here, never in application.yml.
  */
 @Configuration
-@Profile("aws")
 class AwsClientConfig(
     private val awsProperties: AwsProperties,
 ) {

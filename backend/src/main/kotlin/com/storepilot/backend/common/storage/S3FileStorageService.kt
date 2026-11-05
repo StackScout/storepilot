@@ -1,6 +1,5 @@
 package com.storepilot.backend.common.storage
 
-import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import software.amazon.awssdk.core.sync.RequestBody
@@ -11,7 +10,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.time.Duration
-import java.util.UUID
+import java.util.*
 
 /**
  * S3-backed storage for the aws profile — see FileStorageService for the
@@ -21,7 +20,6 @@ import java.util.UUID
  * presigned GET URL fresh on every read, same pattern as S3ReceiptStorageService.
  */
 @Service
-@Profile("aws")
 class S3FileStorageService(
     private val s3Client: S3Client,
     private val s3Presigner: S3Presigner,

@@ -31,10 +31,14 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        default_schema: ${DB_SCHEMA:storepilot}
     show-sql: ${SHOW_SQL:false}
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: ${DB_SCHEMA:storepilot}
+    default-schema: ${DB_SCHEMA:storepilot}
+    create-schemas: true
   servlet:
     multipart:
       max-file-size: 10MB
@@ -87,7 +91,7 @@ platform:
 
 # Shared AWS SDK config — only meaningful under the aws profile (S3/SES clients).
 aws:
-  region: ${AWS_REGION:us-east-1}
+  region: ${AWS_REGION:ap-southeast-2}
 
 # Cognito is the authorization server in every environment (not aws-profile
 # gated — there's no local/mock auth implementation, unlike S3/SES). Local

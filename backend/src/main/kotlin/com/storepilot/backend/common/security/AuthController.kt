@@ -172,7 +172,7 @@ class AuthController(
                     .username(input.email)
                     .userAttributes(
                         AttributeType.builder().name("email").value(input.email).build(),
-                        AttributeType.builder().name("email_verified").value("false").build(),
+                        AttributeType.builder().name("email_verified").value("true").build(),
                         AttributeType.builder().name("name").value(input.name).build(),
                     )
                     .messageAction(MessageActionType.SUPPRESS)

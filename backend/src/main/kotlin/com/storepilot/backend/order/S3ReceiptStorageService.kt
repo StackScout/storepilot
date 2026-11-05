@@ -1,6 +1,5 @@
 package com.storepilot.backend.order
 
-import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import software.amazon.awssdk.core.sync.RequestBody
@@ -10,7 +9,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.time.Duration
-import java.util.UUID
+import java.util.*
 
 /**
  * S3-backed storage for the aws profile — see ReceiptStorageService for the
@@ -20,7 +19,6 @@ import java.util.UUID
  * rather than a URL that could be persisted and later expire silently.
  */
 @Service
-@Profile("aws")
 class S3ReceiptStorageService(
     private val s3Client: S3Client,
     private val s3Presigner: S3Presigner,

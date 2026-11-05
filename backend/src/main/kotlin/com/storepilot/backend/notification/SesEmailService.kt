@@ -1,18 +1,10 @@
 package com.storepilot.backend.notification
 
-import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.ses.SesClient
-import software.amazon.awssdk.services.ses.model.Body
-import software.amazon.awssdk.services.ses.model.Content
-import software.amazon.awssdk.services.ses.model.Destination
-import software.amazon.awssdk.services.ses.model.Message
-import software.amazon.awssdk.services.ses.model.RawMessage
-import software.amazon.awssdk.services.ses.model.SendEmailRequest
-import software.amazon.awssdk.services.ses.model.SendRawEmailRequest
-import java.util.Base64
-import java.util.UUID
+import software.amazon.awssdk.services.ses.model.*
+import java.util.*
 
 /**
  * Real EmailService implementation for the aws profile — see
@@ -23,7 +15,6 @@ import java.util.UUID
  * can work around.
  */
 @Service
-@Profile("aws")
 class SesEmailService(
     private val sesClient: SesClient,
     private val notificationProperties: NotificationProperties,

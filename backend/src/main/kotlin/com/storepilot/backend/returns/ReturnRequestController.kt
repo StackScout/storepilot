@@ -21,11 +21,12 @@ class ReturnRequestController(
     fun create(
         @PathVariable orderId: UUID,
         @RequestBody input: ReturnRequestCreateInput,
-    ): ResponseEntity<ReturnRequestResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(returnRequestService.create(orderId, input))
+    ): ResponseEntity<ReturnRequestResponse> = ResponseEntity.status(HttpStatus.CREATED).body(returnRequestService.create(orderId, input))
 
     @GetMapping("/api/orders/{orderId}/returns")
-    fun listForOrder(@PathVariable orderId: UUID): List<ReturnRequestResponse> = returnRequestService.listForOrder(orderId)
+    fun listForOrder(
+        @PathVariable orderId: UUID,
+    ): List<ReturnRequestResponse> = returnRequestService.listForOrder(orderId)
 
     @PostMapping("/api/orders/{orderId}/returns/{returnId}/decision")
     fun decide(

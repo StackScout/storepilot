@@ -37,18 +37,33 @@ class AddressServiceTest {
         }
     }
 
-    private fun addressInput(isDefault: Boolean = false, label: String? = "Home") = AddressInput(
+    private fun addressInput(
+        isDefault: Boolean = false,
+        label: String? = "Home",
+    ) = AddressInput(
         label = label,
-        shipping = ShippingDetailsInput(fullName = "Jane", phone = "0400000000", addressLine1 = "1 Main St", city = "Sydney", state = "NSW", postalCode = "2000"),
+        shipping =
+            ShippingDetailsInput(
+                fullName = "Jane",
+                phone = "0400000000",
+                addressLine1 = "1 Main St",
+                city = "Sydney",
+                state = "NSW",
+                postalCode = "2000",
+            ),
         isDefault = isDefault,
     )
 
-    private fun address(isDefault: Boolean = false) = Address(
-        buyer = buyer,
-        label = "Home",
-        shipping = ShippingDetails(fullName = "Jane", phone = "0400000000"),
-        isDefault = isDefault,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun address(isDefault: Boolean = false) =
+        Address(
+            buyer = buyer,
+            label = "Home",
+            shipping = ShippingDetails(fullName = "Jane", phone = "0400000000"),
+            isDefault = isDefault,
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
     // ---- create ----
 
@@ -97,7 +112,12 @@ class AddressServiceTest {
     @Test
     fun `update rejects an address belonging to another buyer`() {
         val otherBuyer = Buyer(name = "Other", email = "other@example.com").apply { id = UUID.randomUUID() }
-        val addr = Address(buyer = otherBuyer, shipping = ShippingDetails(fullName = "Other", phone = "0499999999")).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val addr =
+            Address(buyer = otherBuyer, shipping = ShippingDetails(fullName = "Other", phone = "0499999999")).apply {
+                id =
+                    UUID.randomUUID()
+                ; createdAt = Instant.now()
+            }
         every { addressRepository.findById(addr.id!!) } returns Optional.of(addr)
 
         assertThrows(ForbiddenException::class.java) { service.update(addr.id!!, addressInput()) }

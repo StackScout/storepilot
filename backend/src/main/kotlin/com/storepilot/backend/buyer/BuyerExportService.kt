@@ -62,9 +62,10 @@ class BuyerExportService(
         val buyer = currentActor.requireBuyer()
         val buyerId = requireNotNull(buyer.id)
 
-        val conversations = messagingService.listMyConversations().map { conversation ->
-            BuyerExportConversation(conversation, messagingService.listMessages(conversation.id))
-        }
+        val conversations =
+            messagingService.listMyConversations().map { conversation ->
+                BuyerExportConversation(conversation, messagingService.listMessages(conversation.id))
+            }
 
         return BuyerExportResponse(
             profile = buyer.toResponse(),

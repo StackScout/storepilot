@@ -22,7 +22,8 @@ class AddressService(
     @Transactional
     fun list(): List<AddressResponse> {
         val buyer = currentActor.requireBuyer()
-        return addressRepository.findByBuyerIdOrderByIsDefaultDescCreatedAtAsc(requireNotNull(buyer.id))
+        return addressRepository
+            .findByBuyerIdOrderByIsDefaultDescCreatedAtAsc(requireNotNull(buyer.id))
             .map { it.toResponse() }
     }
 
@@ -33,17 +34,21 @@ class AddressService(
         val existing = addressRepository.findByBuyerIdOrderByIsDefaultDescCreatedAtAsc(requireNotNull(buyer.id))
         val makeDefault = input.isDefault || existing.isEmpty()
         if (makeDefault) unsetCurrentDefault(existing)
-        val address = Address(
-            buyer = buyer,
-            label = input.label?.trim()?.takeIf { it.isNotBlank() },
-            shipping = input.shipping.toShippingDetails(),
-            isDefault = makeDefault,
-        )
+        val address =
+            Address(
+                buyer = buyer,
+                label = input.label?.trim()?.takeIf { it.isNotBlank() },
+                shipping = input.shipping.toShippingDetails(),
+                isDefault = makeDefault,
+            )
         return addressRepository.save(address).toResponse()
     }
 
     @Transactional
-    fun update(id: UUID, input: AddressInput): AddressResponse {
+    fun update(
+        id: UUID,
+        input: AddressInput,
+    ): AddressResponse {
         val address = requireOwnedAddress(id)
         if (input.isDefault && !address.isDefault) {
             unsetCurrentDefault(addressRepository.findByBuyerIdOrderByIsDefaultDescCreatedAtAsc(requireNotNull(address.buyer.id)))

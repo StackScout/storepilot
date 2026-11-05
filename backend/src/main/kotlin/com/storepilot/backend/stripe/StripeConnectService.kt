@@ -10,11 +10,11 @@ import com.storepilot.backend.notification.NotificationProperties
 import com.storepilot.backend.store.StoreRepository
 import com.storepilot.backend.store.StoreSettingsRepository
 import com.stripe.model.Account
+import com.stripe.model.AccountLink
 import com.stripe.net.OAuth
 import com.stripe.net.RequestOptions
 import com.stripe.param.AccountCreateParams
 import com.stripe.param.AccountLinkCreateParams
-import com.stripe.model.AccountLink
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -50,7 +50,10 @@ class StripeConnectService(
      * needs a matching scheme to close itself and hand control back.
      */
     @Transactional
-    fun startOnboarding(storeId: UUID, mobile: Boolean = false): StripeOnboardingResponse {
+    fun startOnboarding(
+        storeId: UUID,
+        mobile: Boolean = false,
+    ): StripeOnboardingResponse {
         // Stripe Connect is temporarily Australia-only (accounts are created
         // with setCountry("AU") below) — UI already hides this; this is
         // defense in depth for a stale client.
@@ -60,36 +63,43 @@ class StripeConnectService(
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
-        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val settings =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
 
-        val accountId = settings.stripeAccountId ?: run {
-            val account = Account.create(
-                AccountCreateParams.builder()
-                    .setType(AccountCreateParams.Type.STANDARD)
-                    .setCountry("AU")
-                    .setEmail(settings.contactEmail)
+        val accountId =
+            settings.stripeAccountId ?: run {
+                val account =
+                    Account.create(
+                        AccountCreateParams
+                            .builder()
+                            .setType(AccountCreateParams.Type.STANDARD)
+                            .setCountry("AU")
+                            .setEmail(settings.contactEmail)
+                            .build(),
+                    )
+                settings.stripeAccountId = account.id
+                storeSettingsRepository.save(settings)
+                account.id
+            }
+
+        val returnUrl =
+            if (mobile) {
+                "${cognitoProperties.mobileAppScheme}://stripe-connect-callback"
+            } else {
+                "${notificationProperties.frontendBaseUrl}/dashboard/settings"
+            }
+        val accountLink =
+            AccountLink.create(
+                AccountLinkCreateParams
+                    .builder()
+                    .setAccount(accountId)
+                    .setRefreshUrl(returnUrl)
+                    .setReturnUrl(returnUrl)
+                    .setType(AccountLinkCreateParams.Type.ACCOUNT_ONBOARDING)
                     .build(),
             )
-            settings.stripeAccountId = account.id
-            storeSettingsRepository.save(settings)
-            account.id
-        }
-
-        val returnUrl = if (mobile) {
-            "${cognitoProperties.mobileAppScheme}://stripe-connect-callback"
-        } else {
-            "${notificationProperties.frontendBaseUrl}/dashboard/settings"
-        }
-        val accountLink = AccountLink.create(
-            AccountLinkCreateParams.builder()
-                .setAccount(accountId)
-                .setRefreshUrl(returnUrl)
-                .setReturnUrl(returnUrl)
-                .setType(AccountLinkCreateParams.Type.ACCOUNT_ONBOARDING)
-                .build(),
-        )
         return StripeOnboardingResponse(onboardingUrl = accountLink.url)
     }
 
@@ -109,9 +119,10 @@ class StripeConnectService(
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
-        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val settings =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
         val accountId = settings.stripeAccountId ?: throw ConflictException("No Stripe account connected yet")
         syncAccountStatus(Account.retrieve(accountId))
     }

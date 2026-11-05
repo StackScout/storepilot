@@ -6,7 +6,6 @@ import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
-import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.security.CurrentActor
@@ -34,16 +33,17 @@ class StoreVerificationChangeRequestServiceTest {
     private val auditLogService = mockk<AuditLogService>(relaxed = true)
     private val adminNotificationService = mockk<AdminNotificationService>(relaxed = true)
 
-    private val service = StoreVerificationChangeRequestService(
-        storeRepository,
-        storeSettingsRepository,
-        changeRequestRepository,
-        currentActor,
-        fileStorageService,
-        platformConfigService,
-        auditLogService,
-        adminNotificationService,
-    )
+    private val service =
+        StoreVerificationChangeRequestService(
+            storeRepository,
+            storeSettingsRepository,
+            changeRequestRepository,
+            currentActor,
+            fileStorageService,
+            platformConfigService,
+            auditLogService,
+            adminNotificationService,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller")
     private val storeId: UUID = UUID.randomUUID()
@@ -52,28 +52,30 @@ class StoreVerificationChangeRequestServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "test-store",
-            name = "Test Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
-        settings = StoreSettings(
-            store = store,
-            contactEmail = "store@example.com",
-            contactPhone = "+61400000001",
-            bankAccountName = "Test",
-            bankAccountNumber = "123",
-            bankName = "Test Bank",
-            transactionFeePercent = BigDecimal("2.0"),
-            sellerType = SellerType.INDIVIDUAL,
-            driverLicenceNumber = "11111111",
-        )
+        store =
+            Store(
+                seller = seller,
+                slug = "test-store",
+                name = "Test Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
+        settings =
+            StoreSettings(
+                store = store,
+                contactEmail = "store@example.com",
+                contactPhone = "+61400000001",
+                bankAccountName = "Test",
+                bankAccountNumber = "123",
+                bankName = "Test Bank",
+                transactionFeePercent = BigDecimal("2.0"),
+                sellerType = SellerType.INDIVIDUAL,
+                driverLicenceNumber = "11111111",
+            )
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { storeSettingsRepository.findById(storeId) } returns Optional.of(settings)
@@ -140,7 +142,15 @@ class StoreVerificationChangeRequestServiceTest {
         assertEquals("99999999", response.driverLicenceNumber)
         assertEquals("11111111", response.currentDriverLicenceNumber, "current* reflects live settings, unchanged by submit")
         assertEquals("11111111", settings.driverLicenceNumber, "submit never mutates the real StoreSettings row")
-        verify { auditLogService.recordAsSeller(seller, AuditAction.STORE_VERIFICATION_CHANGE_REQUESTED, "store", storeId.toString(), any()) }
+        verify {
+            auditLogService.recordAsSeller(
+                seller,
+                AuditAction.STORE_VERIFICATION_CHANGE_REQUESTED,
+                "store",
+                storeId.toString(),
+                any(),
+            )
+        }
         verify { adminNotificationService.notifyVerificationChangeRequested(store) }
     }
 
@@ -186,8 +196,12 @@ class StoreVerificationChangeRequestServiceTest {
         val admin = Admin(cognitoSub = "admin-sub", email = "admin@example.com", name = "Admin")
         every { currentActor.requireAdmin() } returns admin
         val requestId = UUID.randomUUID()
-        val request = StoreVerificationChangeRequest(store = store, driverLicenceNumber = "99999999")
-            .apply { id = requestId; createdAt = java.time.Instant.now() }
+        val request =
+            StoreVerificationChangeRequest(store = store, driverLicenceNumber = "99999999")
+                .apply {
+                    id = requestId
+                    createdAt = java.time.Instant.now()
+                }
         every { changeRequestRepository.findById(requestId) } returns Optional.of(request)
         every { changeRequestRepository.save(any()) } answers { firstArg() }
 
@@ -197,7 +211,10 @@ class StoreVerificationChangeRequestServiceTest {
 
         val response = service.adminReject(requestId, VerificationChangeRequestReviewInput(rejectionReason = "Not verifiable"))
 
-        assertEquals(StoreVerificationChangeRequestStatus.REJECTED, response.status.let { wireValueOf<StoreVerificationChangeRequestStatus>(it) })
+        assertEquals(
+            StoreVerificationChangeRequestStatus.REJECTED,
+            response.status.let { wireValueOf<StoreVerificationChangeRequestStatus>(it) },
+        )
         assertEquals("11111111", settings.driverLicenceNumber, "reject must never mutate live StoreSettings")
         verify { auditLogService.record(AuditAction.STORE_VERIFICATION_CHANGE_REJECTED, "store", storeId.toString(), any()) }
     }

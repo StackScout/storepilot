@@ -1,7 +1,7 @@
 package com.storepilot.backend.payout
 
-import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookableService
+import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookingRepository
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.booking.ServiceStatus
@@ -25,12 +25,12 @@ import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.springframework.data.domain.PageImpl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
@@ -45,16 +45,17 @@ class FeeCollectionServiceTest {
     private val currentActor = mockk<CurrentActor>()
     private val auditLogService = mockk<com.storepilot.backend.admin.AuditLogService>(relaxed = true)
 
-    private val service = FeeCollectionService(
-        feeCollectionRepository,
-        orderRepository,
-        bookingRepository,
-        storeRepository,
-        receiptStorageService,
-        fileStorageService,
-        currentActor,
-        auditLogService,
-    )
+    private val service =
+        FeeCollectionService(
+            feeCollectionRepository,
+            orderRepository,
+            bookingRepository,
+            storeRepository,
+            receiptStorageService,
+            fileStorageService,
+            currentActor,
+            auditLogService,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -62,17 +63,18 @@ class FeeCollectionServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { feeCollectionRepository.save(any()) } answers {
@@ -104,7 +106,10 @@ class FeeCollectionServiceTest {
         buyerEmail = "buyer@example.com",
         fulfillmentTimeHours = 48,
         deliveryTimeHours = 120,
-    ).apply { this.id = id; createdAt = Instant.now() }
+    ).apply {
+        this.id = id
+        createdAt = Instant.now()
+    }
 
     private fun owedBooking(
         id: UUID = UUID.randomUUID(),
@@ -114,16 +119,17 @@ class FeeCollectionServiceTest {
         servicePrice: Int = 500,
         platformFee: Int = 25,
     ): Booking {
-        val bookableService = BookableService(
-            store = store,
-            name = "A service",
-            slug = "a-service",
-            description = "description",
-            category = "handicrafts",
-            price = servicePrice,
-            durationMinutes = 60,
-            status = ServiceStatus.ACTIVE,
-        ).apply { this.id = UUID.randomUUID() }
+        val bookableService =
+            BookableService(
+                store = store,
+                name = "A service",
+                slug = "a-service",
+                description = "description",
+                category = "handicrafts",
+                price = servicePrice,
+                durationMinutes = 60,
+                status = ServiceStatus.ACTIVE,
+            ).apply { this.id = UUID.randomUUID() }
         return Booking(
             bookingNumber = "AU-20260101-5678",
             store = store,
@@ -141,7 +147,10 @@ class FeeCollectionServiceTest {
             buyerName = "John Smith",
             buyerPhone = "0400000000",
             buyerEmail = "buyer@example.com",
-        ).apply { this.id = id; createdAt = Instant.now() }
+        ).apply {
+            this.id = id
+            createdAt = Instant.now()
+        }
     }
 
     private fun emptyHistory() {
@@ -177,11 +186,20 @@ class FeeCollectionServiceTest {
     @Test
     fun `getEligibleOrders excludes orders already in a previous fee collection`() {
         val order = owedOrder()
-        val existing = FeeCollection(store = store, subtotal = 1000, platformFee = 50).apply {
-            id = UUID.randomUUID()
-            createdAt = Instant.now()
-            sourceRefs.add(FeeCollectionSourceRef(feeCollection = this, orderId = order.id, orderNumber = order.orderNumber, subtotal = 1000, platformFee = 50))
-        }
+        val existing =
+            FeeCollection(store = store, subtotal = 1000, platformFee = 50).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                sourceRefs.add(
+                    FeeCollectionSourceRef(
+                        feeCollection = this,
+                        orderId = order.id,
+                        orderNumber = order.orderNumber,
+                        subtotal = 1000,
+                        platformFee = 50,
+                    ),
+                )
+            }
         every { feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(existing)
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(order)
 
@@ -249,10 +267,11 @@ class FeeCollectionServiceTest {
 
     @Test
     fun `markCollected records the reference and audits the decision`() {
-        val feeCollection = FeeCollection(store = store, subtotal = 1000, platformFee = 50).apply {
-            id = UUID.randomUUID()
-            createdAt = Instant.now()
-        }
+        val feeCollection =
+            FeeCollection(store = store, subtotal = 1000, platformFee = 50).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { feeCollectionRepository.findById(feeCollection.id!!) } returns Optional.of(feeCollection)
 
         val result = service.markCollected(feeCollection.id!!, MarkCollectedInput(reference = "INV-001"))
@@ -273,8 +292,17 @@ class FeeCollectionServiceTest {
 
     @Test
     fun `adminList returns every fee collection, most recent first`() {
-        val older = FeeCollection(store = store, subtotal = 100, platformFee = 5).apply { id = UUID.randomUUID(); createdAt = Instant.now().minusSeconds(60) }
-        val newer = FeeCollection(store = store, subtotal = 200, platformFee = 10).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val older =
+            FeeCollection(store = store, subtotal = 100, platformFee = 5).apply {
+                id = UUID.randomUUID()
+                createdAt =
+                    Instant.now().minusSeconds(60)
+            }
+        val newer =
+            FeeCollection(store = store, subtotal = 200, platformFee = 10).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { feeCollectionRepository.findAllByOrderByCreatedAtDesc(any()) } returns PageImpl(listOf(newer, older))
 
         val result = service.adminList(0, 20)

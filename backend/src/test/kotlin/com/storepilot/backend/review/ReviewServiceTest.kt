@@ -34,7 +34,8 @@ class ReviewServiceTest {
     private val bookingRepository = mockk<BookingRepository>()
     private val currentActor = mockk<CurrentActor>()
 
-    private val service = ReviewService(reviewRepository, productRepository, storeRepository, orderRepository, bookingRepository, currentActor)
+    private val service =
+        ReviewService(reviewRepository, productRepository, storeRepository, orderRepository, bookingRepository, currentActor)
 
     private val buyerId = UUID.randomUUID()
     private val buyer = Buyer(name = "Amelia Clarke", email = "amelia@example.com").apply { id = buyerId }
@@ -46,26 +47,28 @@ class ReviewServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "blue-mountains-roasters",
-            name = "Blue Mountains Roasters",
-            tagline = "tagline",
-            description = "description",
-            category = "food-beverage",
-            address = StoreAddress(city = "Katoomba", state = "NSW"),
-            whatsappNumber = "+61400000000",
-        ).apply { id = storeId }
-        product = Product(
-            store = store,
-            name = "Colombian Coffee Beans",
-            slug = "colombian-coffee-beans",
-            description = "description",
-            category = "food-beverage",
-            price = 1800,
-            stockQuantity = 10,
-            status = ProductStatus.ACTIVE,
-        ).apply { id = productId }
+        store =
+            Store(
+                seller = seller,
+                slug = "blue-mountains-roasters",
+                name = "Blue Mountains Roasters",
+                tagline = "tagline",
+                description = "description",
+                category = "food-beverage",
+                address = StoreAddress(city = "Katoomba", state = "NSW"),
+                whatsappNumber = "+61400000000",
+            ).apply { id = storeId }
+        product =
+            Product(
+                store = store,
+                name = "Colombian Coffee Beans",
+                slug = "colombian-coffee-beans",
+                description = "description",
+                category = "food-beverage",
+                price = 1800,
+                stockQuantity = 10,
+                status = ProductStatus.ACTIVE,
+            ).apply { id = productId }
         every { currentActor.requireBuyer() } returns buyer
     }
 
@@ -107,7 +110,13 @@ class ReviewServiceTest {
         every { orderRepository.existsByBuyerIdAndStatusAndItems_ProductId(buyerId, OrderStatus.DELIVERED, productId) } returns true
         every { reviewRepository.existsByBuyerIdAndProductId(buyerId, productId) } returns false
         val savedReview = slot<Review>()
-        every { reviewRepository.save(capture(savedReview)) } answers { savedReview.captured.apply { id = UUID.randomUUID(); createdAt = java.time.Instant.now() } }
+        every { reviewRepository.save(capture(savedReview)) } answers
+            {
+                savedReview.captured.apply {
+                    id = UUID.randomUUID()
+                    createdAt = java.time.Instant.now()
+                }
+            }
         val savedProduct = slot<Product>()
         every { productRepository.save(capture(savedProduct)) } answers { savedProduct.captured }
 
@@ -128,7 +137,13 @@ class ReviewServiceTest {
         every { bookingRepository.existsByBuyerIdAndStoreIdAndStatus(buyerId, storeId, BookingStatus.COMPLETED) } returns true
         every { reviewRepository.existsByBuyerIdAndStoreIdAndProductIdIsNull(buyerId, storeId) } returns false
         val savedReview = slot<Review>()
-        every { reviewRepository.save(capture(savedReview)) } answers { savedReview.captured.apply { id = UUID.randomUUID(); createdAt = java.time.Instant.now() } }
+        every { reviewRepository.save(capture(savedReview)) } answers
+            {
+                savedReview.captured.apply {
+                    id = UUID.randomUUID()
+                    createdAt = java.time.Instant.now()
+                }
+            }
         every { storeRepository.save(any()) } answers { firstArg() }
 
         val response = service.createStoreReview(storeId, ReviewInput(rating = 4, comment = null))

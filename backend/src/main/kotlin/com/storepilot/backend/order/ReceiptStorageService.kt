@@ -34,9 +34,10 @@ fun validateReceiptFile(file: MultipartFile) {
     }
 }
 
-fun receiptFileExtension(contentType: String?): String = when (contentType) {
-    "image/jpeg" -> ".jpg"
-    "image/png" -> ".png"
-    "image/webp" -> ".webp"
-    else -> ".pdf"
-}
+fun receiptFileExtension(contentType: String?): String =
+    when (contentType) {
+        "image/jpeg" -> ".jpg"
+        "image/png" -> ".png"
+        "image/webp" -> ".webp"
+        else -> ".pdf"
+    }

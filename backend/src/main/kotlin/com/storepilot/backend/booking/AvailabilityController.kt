@@ -22,7 +22,9 @@ class AvailabilityController(
     private val availabilityService: AvailabilityService,
 ) {
     @GetMapping("/api/stores/{storeId}/availability")
-    fun get(@PathVariable storeId: UUID): AvailabilityResponse = availabilityService.get(storeId)
+    fun get(
+        @PathVariable storeId: UUID,
+    ): AvailabilityResponse = availabilityService.get(storeId)
 
     @PutMapping("/api/stores/{storeId}/availability/weekly-rules")
     fun upsertWeeklyRules(
@@ -38,7 +40,10 @@ class AvailabilityController(
         ResponseEntity.status(HttpStatus.CREATED).body(availabilityService.createException(storeId, input))
 
     @DeleteMapping("/api/stores/{storeId}/availability/exceptions/{exceptionId}")
-    fun deleteException(@PathVariable storeId: UUID, @PathVariable exceptionId: UUID): ResponseEntity<Void> {
+    fun deleteException(
+        @PathVariable storeId: UUID,
+        @PathVariable exceptionId: UUID,
+    ): ResponseEntity<Void> {
         availabilityService.deleteException(storeId, exceptionId)
         return ResponseEntity.noContent().build()
     }
@@ -57,8 +62,10 @@ class AvailabilityController(
 
     /** [storeId] unused (service ownership is resolved via the service itself) but kept in the path for consistency with every other bookable-services route. */
     @GetMapping("/api/stores/{storeId}/bookable-services/{serviceId}/availability-override")
-    fun getServiceOverride(@PathVariable storeId: UUID, @PathVariable serviceId: UUID): ServiceAvailabilityOverrideResponse =
-        availabilityService.getServiceOverride(serviceId)
+    fun getServiceOverride(
+        @PathVariable storeId: UUID,
+        @PathVariable serviceId: UUID,
+    ): ServiceAvailabilityOverrideResponse = availabilityService.getServiceOverride(serviceId)
 
     @PutMapping("/api/stores/{storeId}/bookable-services/{serviceId}/availability-override")
     fun upsertServiceOverride(
@@ -69,7 +76,10 @@ class AvailabilityController(
 
     /** Reverts to inheriting the store's default weekly template — see AvailabilityService.disableServiceOverride. */
     @DeleteMapping("/api/stores/{storeId}/bookable-services/{serviceId}/availability-override")
-    fun disableServiceOverride(@PathVariable storeId: UUID, @PathVariable serviceId: UUID): ResponseEntity<Void> {
+    fun disableServiceOverride(
+        @PathVariable storeId: UUID,
+        @PathVariable serviceId: UUID,
+    ): ResponseEntity<Void> {
         availabilityService.disableServiceOverride(serviceId)
         return ResponseEntity.noContent().build()
     }

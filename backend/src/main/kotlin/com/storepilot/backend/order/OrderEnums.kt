@@ -11,7 +11,9 @@ import jakarta.persistence.Converter
  * mirroring the frontend's OrderStatusSelect — this enum only defines the
  * possible values.
  */
-enum class OrderStatus(override val wireValue: String) : WireValue {
+enum class OrderStatus(
+    override val wireValue: String,
+) : WireValue {
     PENDING("pending"),
     CONFIRMED("confirmed"),
     SHIPPED("shipped"),
@@ -22,10 +24,13 @@ enum class OrderStatus(override val wireValue: String) : WireValue {
 @Converter(autoApply = true)
 class OrderStatusConverter : WireValueEnumConverter<OrderStatus>(OrderStatus.entries.toTypedArray())
 
-enum class PaymentMethod(override val wireValue: String) : WireValue {
+enum class PaymentMethod(
+    override val wireValue: String,
+) : WireValue {
     PAYHERE("payhere"),
     COD("cod"),
     BANK_TRANSFER("bank-transfer"),
+
     /**
      * Stripe Connect direct charge — settles automatically at charge time
      * (seller's connected account gets the net, the platform's
@@ -40,7 +45,9 @@ enum class PaymentMethod(override val wireValue: String) : WireValue {
 @Converter(autoApply = true)
 class PaymentMethodConverter : WireValueEnumConverter<PaymentMethod>(PaymentMethod.entries.toTypedArray())
 
-enum class PaymentStatus(override val wireValue: String) : WireValue {
+enum class PaymentStatus(
+    override val wireValue: String,
+) : WireValue {
     UNPAID("unpaid"),
     PAID("paid"),
     REFUNDED("refunded"),
@@ -58,7 +65,9 @@ class PaymentStatusConverter : WireValueEnumConverter<PaymentStatus>(PaymentStat
  * (Store.whatsappNumber), matching this marketplace's existing
  * WhatsApp-first contact model rather than adding a second address entity.
  */
-enum class DeliveryMethod(override val wireValue: String) : WireValue {
+enum class DeliveryMethod(
+    override val wireValue: String,
+) : WireValue {
     SHIPPING("shipping"),
     PICKUP("pickup"),
 }

@@ -48,13 +48,18 @@ class BookableServiceService(
     fun findEntity(id: UUID): BookableService? = serviceRepository.findById(id).orElse(null)
 
     /** Same owner-vs-public split as ProductService.listByStore. */
-    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<BookableServiceResponse> {
+    fun listByStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<BookableServiceResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        val services = if (isOwnedByCurrentSeller(storeId)) {
-            serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
-        } else {
-            serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT, pageable)
-        }
+        val services =
+            if (isOwnedByCurrentSeller(storeId)) {
+                serviceRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
+            } else {
+                serviceRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ServiceStatus.DRAFT, pageable)
+            }
         return services.toPageResponse { it.toResponse(fileStorageService) }
     }
 
@@ -62,29 +67,38 @@ class BookableServiceService(
     fun hasActiveServices(storeId: UUID): Boolean = serviceRepository.existsByStoreIdAndStatus(storeId, ServiceStatus.ACTIVE)
 
     @Transactional
-    fun create(storeId: UUID, input: BookableServiceFormInput, images: List<MultipartFile>): BookableServiceResponse {
+    fun create(
+        storeId: UUID,
+        input: BookableServiceFormInput,
+        images: List<MultipartFile>,
+    ): BookableServiceResponse {
         val store = requireStore(storeId)
         requireOwnership(store)
         val category = categoryRepository.requireCategory(input.category)
         requireCategoryMatchesStore(store, category)
-        val service = BookableService(
-            store = store,
-            name = input.name,
-            slug = uniqueSlug(storeId, input.name),
-            description = input.description,
-            category = category,
-            price = input.price,
-            durationMinutes = input.durationMinutes,
-            bufferMinutes = input.bufferMinutes,
-            status = wireValueOf(input.status),
-        )
+        val service =
+            BookableService(
+                store = store,
+                name = input.name,
+                slug = uniqueSlug(storeId, input.name),
+                description = input.description,
+                category = category,
+                price = input.price,
+                durationMinutes = input.durationMinutes,
+                bufferMinutes = input.bufferMinutes,
+                status = wireValueOf(input.status),
+            )
         storeImages(service, images)
         return serviceRepository.save(service).toResponse(fileStorageService)
     }
 
     /** [images] empty = keep existing images unchanged; non-empty replaces the whole set — same convention as ProductService.update. */
     @Transactional
-    fun update(id: UUID, input: BookableServiceFormInput, images: List<MultipartFile>): BookableServiceResponse {
+    fun update(
+        id: UUID,
+        input: BookableServiceFormInput,
+        images: List<MultipartFile>,
+    ): BookableServiceResponse {
         val service = serviceRepository.findById(id).orElseThrow { NotFoundException("Service $id not found") }
         requireOwnership(service.store)
         val category = categoryRepository.requireCategory(input.category)
@@ -103,14 +117,18 @@ class BookableServiceService(
         return serviceRepository.save(service).toResponse(fileStorageService)
     }
 
-    private fun storeImages(service: BookableService, images: List<MultipartFile>) {
+    private fun storeImages(
+        service: BookableService,
+        images: List<MultipartFile>,
+    ) {
         images.forEachIndexed { index, file ->
-            val reference = fileStorageService.store(
-                "service-images",
-                file,
-                FileUploadPolicies.IMAGE_CONTENT_TYPES,
-                FileUploadPolicies.IMAGE_MAX_BYTES,
-            )
+            val reference =
+                fileStorageService.store(
+                    "service-images",
+                    file,
+                    FileUploadPolicies.IMAGE_CONTENT_TYPES,
+                    FileUploadPolicies.IMAGE_MAX_BYTES,
+                )
             service.images.add(BookableServiceImage(service = service, url = reference, alt = service.name, sortOrder = index))
         }
     }
@@ -134,7 +152,10 @@ class BookableServiceService(
     }
 
     /** A service's category is locked to the store's own approved category — identical rule to ProductService. */
-    private fun requireCategoryMatchesStore(store: Store, category: String) {
+    private fun requireCategoryMatchesStore(
+        store: Store,
+        category: String,
+    ) {
         if (category != store.category) {
             throw ConflictException("Services must be listed under this store's category (${store.category})")
         }
@@ -150,8 +171,16 @@ class BookableServiceService(
         return isOwnedByCurrentSeller(store)
     }
 
-    private fun uniqueSlug(storeId: UUID, name: String): String {
-        val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "service" }
+    private fun uniqueSlug(
+        storeId: UUID,
+        name: String,
+    ): String {
+        val base =
+            name
+                .lowercase()
+                .replace(Regex("[^a-z0-9]+"), "-")
+                .trim('-')
+                .ifBlank { "service" }
         var candidate = base
         var suffix = 1
         while (serviceRepository.findByStoreIdAndSlug(storeId, candidate) != null) {

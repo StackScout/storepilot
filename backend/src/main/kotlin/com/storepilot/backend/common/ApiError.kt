@@ -16,7 +16,10 @@ data class ApiError(
     )
 
     companion object {
-        fun of(code: String, message: String, fields: Map<String, String>? = null) =
-            ApiError(ErrorBody(code, message, fields))
+        fun of(
+            code: String,
+            message: String,
+            fields: Map<String, String>? = null,
+        ) = ApiError(ErrorBody(code, message, fields))
     }
 }

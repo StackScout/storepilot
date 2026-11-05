@@ -30,7 +30,10 @@ class SavedSearchServiceTest {
     @Test
     fun `create trims the name and saves it against the current buyer`() {
         every { savedSearchRepository.save(any()) } answers {
-            (firstArg() as SavedSearch).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+            (firstArg() as SavedSearch).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         }
 
         val result = service.create(SavedSearchInput(name = "  Necklaces  ", queryString = "q=necklace"))
@@ -42,7 +45,12 @@ class SavedSearchServiceTest {
     @Test
     fun `delete rejects a saved search belonging to another buyer`() {
         val otherBuyer = Buyer(name = "Other", email = "other@example.com").apply { id = UUID.randomUUID() }
-        val savedSearch = SavedSearch(buyer = otherBuyer, name = "Necklaces", queryString = "q=necklace").apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val savedSearch =
+            SavedSearch(buyer = otherBuyer, name = "Necklaces", queryString = "q=necklace").apply {
+                id = UUID.randomUUID()
+                createdAt =
+                    Instant.now()
+            }
         every { savedSearchRepository.findById(savedSearch.id!!) } returns Optional.of(savedSearch)
 
         assertThrows(ForbiddenException::class.java) { service.delete(savedSearch.id!!) }
@@ -57,7 +65,12 @@ class SavedSearchServiceTest {
 
     @Test
     fun `delete removes the owner's own saved search`() {
-        val savedSearch = SavedSearch(buyer = buyer, name = "Necklaces", queryString = "q=necklace").apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val savedSearch =
+            SavedSearch(buyer = buyer, name = "Necklaces", queryString = "q=necklace").apply {
+                id = UUID.randomUUID()
+                createdAt =
+                    Instant.now()
+            }
         every { savedSearchRepository.findById(savedSearch.id!!) } returns Optional.of(savedSearch)
         every { savedSearchRepository.delete(savedSearch) } returns Unit
 

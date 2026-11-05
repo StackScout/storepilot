@@ -33,7 +33,10 @@ class AdminNotificationService(
 ) {
     private val log = LoggerFactory.getLogger(AdminNotificationService::class.java)
 
-    fun list(page: Int, size: Int): PageResponse<AdminNotificationResponse> {
+    fun list(
+        page: Int,
+        size: Int,
+    ): PageResponse<AdminNotificationResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return adminNotificationRepository.findAllByOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
     }
@@ -43,15 +46,18 @@ class AdminNotificationService(
 
     @Transactional
     fun markRead(id: UUID): AdminNotificationResponse {
-        val notification = adminNotificationRepository.findById(id)
-            .orElseThrow { NotFoundException("Notification $id not found") }
+        val notification =
+            adminNotificationRepository
+                .findById(id)
+                .orElseThrow { NotFoundException("Notification $id not found") }
         notification.read = true
         return adminNotificationRepository.save(notification).toResponse()
     }
 
     @Transactional
     fun markAllRead() {
-        adminNotificationRepository.findAllByOrderByCreatedAtDesc()
+        adminNotificationRepository
+            .findAllByOrderByCreatedAtDesc()
             .filter { !it.read }
             .forEach { it.read = true }
     }
@@ -64,8 +70,15 @@ class AdminNotificationService(
      * triggered it.
      */
     @Transactional
-    fun notifyBankDetailsChanged(store: Store, bankName: String, bankAccountName: String, bankAccountNumber: String) {
-        val message = "${store.name} changed their payout bank details: $bankName, $bankAccountName, account ending ${bankAccountNumber.takeLast(4)}"
+    fun notifyBankDetailsChanged(
+        store: Store,
+        bankName: String,
+        bankAccountName: String,
+        bankAccountNumber: String,
+    ) {
+        val message =
+            "${store.name} changed their payout bank details: $bankName, $bankAccountName, " +
+                "account ending ${bankAccountNumber.takeLast(4)}"
         adminNotificationRepository.save(
             AdminNotification(
                 type = AdminNotificationType.BANK_DETAILS_CHANGED,

@@ -1,7 +1,7 @@
 package com.storepilot.backend.payout
 
-import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookableService
+import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookingRepository
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.booking.ServiceStatus
@@ -26,12 +26,12 @@ import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.springframework.data.domain.PageImpl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
@@ -47,17 +47,18 @@ class PayoutServiceTest {
     private val auditLogService = mockk<com.storepilot.backend.admin.AuditLogService>(relaxed = true)
     private val payoutNotifier = mockk<PayoutNotifier>(relaxed = true)
 
-    private val service = PayoutService(
-        payoutRepository,
-        orderRepository,
-        bookingRepository,
-        storeRepository,
-        receiptStorageService,
-        fileStorageService,
-        currentActor,
-        auditLogService,
-        payoutNotifier,
-    )
+    private val service =
+        PayoutService(
+            payoutRepository,
+            orderRepository,
+            bookingRepository,
+            storeRepository,
+            receiptStorageService,
+            fileStorageService,
+            currentActor,
+            auditLogService,
+            payoutNotifier,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -65,17 +66,18 @@ class PayoutServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { payoutRepository.save(any()) } answers {
@@ -107,7 +109,10 @@ class PayoutServiceTest {
         buyerEmail = "buyer@example.com",
         fulfillmentTimeHours = 48,
         deliveryTimeHours = 120,
-    ).apply { this.id = id; createdAt = Instant.now() }
+    ).apply {
+        this.id = id
+        createdAt = Instant.now()
+    }
 
     private fun payableBooking(
         id: UUID = UUID.randomUUID(),
@@ -117,16 +122,17 @@ class PayoutServiceTest {
         servicePrice: Int = 500,
         platformFee: Int = 25,
     ): Booking {
-        val bookableService = BookableService(
-            store = store,
-            name = "A service",
-            slug = "a-service",
-            description = "description",
-            category = "handicrafts",
-            price = servicePrice,
-            durationMinutes = 60,
-            status = ServiceStatus.ACTIVE,
-        ).apply { this.id = UUID.randomUUID() }
+        val bookableService =
+            BookableService(
+                store = store,
+                name = "A service",
+                slug = "a-service",
+                description = "description",
+                category = "handicrafts",
+                price = servicePrice,
+                durationMinutes = 60,
+                status = ServiceStatus.ACTIVE,
+            ).apply { this.id = UUID.randomUUID() }
         return Booking(
             bookingNumber = "AU-20260101-5678",
             store = store,
@@ -144,7 +150,10 @@ class PayoutServiceTest {
             buyerName = "John Smith",
             buyerPhone = "0400000000",
             buyerEmail = "buyer@example.com",
-        ).apply { this.id = id; createdAt = Instant.now() }
+        ).apply {
+            this.id = id
+            createdAt = Instant.now()
+        }
     }
 
     private fun emptyPayoutHistory() {
@@ -178,11 +187,21 @@ class PayoutServiceTest {
     @Test
     fun `getEligibleOrders excludes orders already included in a previous payout`() {
         val order = payableOrder()
-        val existingPayout = Payout(store = store, subtotal = 1000, platformFee = 50, net = 950).apply {
-            id = UUID.randomUUID()
-            createdAt = Instant.now()
-            sourceRefs.add(PayoutSourceRef(payout = this, orderId = order.id, orderNumber = order.orderNumber, subtotal = 1000, platformFee = 50, net = 950))
-        }
+        val existingPayout =
+            Payout(store = store, subtotal = 1000, platformFee = 50, net = 950).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                sourceRefs.add(
+                    PayoutSourceRef(
+                        payout = this,
+                        orderId = order.id,
+                        orderNumber = order.orderNumber,
+                        subtotal = 1000,
+                        platformFee = 50,
+                        net = 950,
+                    ),
+                )
+            }
         every { payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(existingPayout)
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(order)
 
@@ -253,17 +272,25 @@ class PayoutServiceTest {
 
     @Test
     fun `markPaid records the bank reference, audits, and notifies the seller`() {
-        val payout = Payout(store = store, subtotal = 1000, platformFee = 50, net = 950).apply {
-            id = UUID.randomUUID()
-            createdAt = Instant.now()
-        }
+        val payout =
+            Payout(store = store, subtotal = 1000, platformFee = 50, net = 950).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { payoutRepository.findById(payout.id!!) } returns Optional.of(payout)
 
         val result = service.markPaid(payout.id!!, MarkPaidInput(bankReference = "REF123"))
 
         assertEquals("paid", result.status)
         assertEquals("REF123", result.bankReference)
-        verify { auditLogService.record(com.storepilot.backend.admin.AuditAction.PAYOUT_MARKED_PAID, "payout", payout.id.toString(), any()) }
+        verify {
+            auditLogService.record(
+                com.storepilot.backend.admin.AuditAction.PAYOUT_MARKED_PAID,
+                "payout",
+                payout.id.toString(),
+                any(),
+            )
+        }
         verify { payoutNotifier.payoutMarkedPaid(payout) }
     }
 
@@ -271,8 +298,18 @@ class PayoutServiceTest {
 
     @Test
     fun `adminList returns every payout, most recent first`() {
-        val older = Payout(store = store, subtotal = 100, platformFee = 5, net = 95).apply { id = UUID.randomUUID(); createdAt = Instant.now().minusSeconds(60) }
-        val newer = Payout(store = store, subtotal = 200, platformFee = 10, net = 190).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val older =
+            Payout(store = store, subtotal = 100, platformFee = 5, net = 95).apply {
+                id = UUID.randomUUID()
+                createdAt =
+                    Instant.now().minusSeconds(60)
+            }
+        val newer =
+            Payout(store = store, subtotal = 200, platformFee = 10, net = 190).apply {
+                id = UUID.randomUUID()
+                createdAt =
+                    Instant.now()
+            }
         every { payoutRepository.findAllByOrderByCreatedAtDesc(any()) } returns PageImpl(listOf(newer, older))
 
         val result = service.adminList(0, 20)

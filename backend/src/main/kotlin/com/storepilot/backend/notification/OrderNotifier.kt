@@ -34,25 +34,43 @@ class OrderNotifier(
     /** Fired the moment a buyer places an order — see OrderService.createOrder, alongside orderConfirmed. */
     fun sellerOrderPlaced(order: Order) {
         val title = "New order: ${order.orderNumber}"
-        val body = "A new order from ${order.store.name}'s storefront just came in — ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}."
+        val body =
+            "A new order from ${order.store.name}'s storefront just came in " +
+                "— ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}."
         sendPushToSeller(order, title, body)
         sellerNotificationService.notify(order.store.seller, SellerNotificationType.ORDER, title, body, order.id)
     }
 
     /** Fulfillment/delivery-time reminders — see OrderFulfillmentReminderJob / OrderDeliveryReminderJob. */
     fun fulfillmentDueSoon(order: Order) {
-        sendPushToSeller(order, title = "Ship soon: ${order.orderNumber}", body = "Order ${order.orderNumber} needs to ship soon to stay within your fulfillment window.")
+        sendPushToSeller(
+            order,
+            title = "Ship soon: ${order.orderNumber}",
+            body = "Order ${order.orderNumber} needs to ship soon to stay within your fulfillment window.",
+        )
     }
 
     fun fulfillmentOverdue(order: Order) {
-        sendPushToSeller(order, title = "Overdue: ${order.orderNumber}", body = "Order ${order.orderNumber} is past its fulfillment window and still hasn't shipped.")
+        sendPushToSeller(
+            order,
+            title = "Overdue: ${order.orderNumber}",
+            body = "Order ${order.orderNumber} is past its fulfillment window and still hasn't shipped.",
+        )
     }
 
     fun deliveryDueReminder(order: Order) {
-        sendPushToSeller(order, title = "Check delivery: ${order.orderNumber}", body = "Order ${order.orderNumber} should have arrived by now — mark it delivered once it has.")
+        sendPushToSeller(
+            order,
+            title = "Check delivery: ${order.orderNumber}",
+            body = "Order ${order.orderNumber} should have arrived by now — mark it delivered once it has.",
+        )
     }
 
-    private fun sendPushToSeller(order: Order, title: String, body: String) {
+    private fun sendPushToSeller(
+        order: Order,
+        title: String,
+        body: String,
+    ) {
         val sellerId = order.store.seller.id ?: return
         val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
         if (tokens.isEmpty()) return
@@ -71,7 +89,11 @@ class OrderNotifier(
      * alongside this call, just no push/in-app entry, since there's no
      * account to attach one to.
      */
-    private fun notifyBuyer(order: Order, title: String, body: String) {
+    private fun notifyBuyer(
+        order: Order,
+        title: String,
+        body: String,
+    ) {
         val buyer = order.buyer ?: return
         val buyerId = buyer.id ?: return
         val tokens = buyerPushTokenRepository.findByBuyerId(buyerId).map { it.token }
@@ -98,29 +120,31 @@ class OrderNotifier(
         val isTaxInvoice = order.sellerAbn != null && order.gstAmount != null
         sendSafely(
             to = order.buyerEmail,
-            subject = if (isTaxInvoice) {
-                "Tax invoice for your ${platformConfig.name} order ${order.orderNumber}"
-            } else {
-                "Your ${platformConfig.name} order ${order.orderNumber} is confirmed"
-            },
-            body = buildString {
+            subject =
                 if (isTaxInvoice) {
-                    appendLine("TAX INVOICE")
+                    "Tax invoice for your ${platformConfig.name} order ${order.orderNumber}"
+                } else {
+                    "Your ${platformConfig.name} order ${order.orderNumber} is confirmed"
+                },
+            body =
+                buildString {
+                    if (isTaxInvoice) {
+                        appendLine("TAX INVOICE")
+                        appendLine()
+                    }
+                    appendLine("Thanks for your order from ${order.store.name}!")
                     appendLine()
-                }
-                appendLine("Thanks for your order from ${order.store.name}!")
-                appendLine()
-                appendLine("Order: ${order.orderNumber}")
-                if (isTaxInvoice) {
-                    appendLine("Seller ABN: ${order.sellerAbn}")
-                }
-                appendLine("Total: ${platformConfig.currencyCode} ${formatMoney(order.total)}")
-                if (isTaxInvoice) {
-                    appendLine("Includes GST: ${platformConfig.currencyCode} ${formatMoney(requireNotNull(order.gstAmount))}")
-                }
-                appendLine()
-                appendLine("Track your order: ${orderUrl(order)}")
-            },
+                    appendLine("Order: ${order.orderNumber}")
+                    if (isTaxInvoice) {
+                        appendLine("Seller ABN: ${order.sellerAbn}")
+                    }
+                    appendLine("Total: ${platformConfig.currencyCode} ${formatMoney(order.total)}")
+                    if (isTaxInvoice) {
+                        appendLine("Includes GST: ${platformConfig.currencyCode} ${formatMoney(requireNotNull(order.gstAmount))}")
+                    }
+                    appendLine()
+                    appendLine("Track your order: ${orderUrl(order)}")
+                },
         )
         notifyBuyer(order, title = "Order placed", body = "Your order ${order.orderNumber} from ${order.store.name} is confirmed.")
     }
@@ -135,12 +159,13 @@ class OrderNotifier(
         sendSafely(
             to = settings.contactEmail,
             subject = "Receipt uploaded for order ${order.orderNumber}",
-            body = buildString {
-                appendLine("A buyer has uploaded a payment receipt for order ${order.orderNumber}.")
-                appendLine("Amount: ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}")
-                appendLine()
-                appendLine("Review and verify it from your seller dashboard.")
-            },
+            body =
+                buildString {
+                    appendLine("A buyer has uploaded a payment receipt for order ${order.orderNumber}.")
+                    appendLine("Amount: ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}")
+                    appendLine()
+                    appendLine("Review and verify it from your seller dashboard.")
+                },
         )
         val title = "Receipt uploaded: ${order.orderNumber}"
         val pushBody = "A buyer uploaded a payment receipt — review it to confirm payment."
@@ -148,57 +173,69 @@ class OrderNotifier(
         sellerNotificationService.notify(order.store.seller, SellerNotificationType.ORDER, title, pushBody, order.id)
     }
 
-    fun bankTransferVerified(order: Order, approved: Boolean, note: String?) {
-        val subject = if (approved) {
-            "Payment confirmed for order ${order.orderNumber}"
-        } else {
-            "Payment receipt rejected for order ${order.orderNumber}"
-        }
-        val body = buildString {
+    fun bankTransferVerified(
+        order: Order,
+        approved: Boolean,
+        note: String?,
+    ) {
+        val subject =
             if (approved) {
-                appendLine("Good news — the seller has confirmed your payment for order ${order.orderNumber}.")
+                "Payment confirmed for order ${order.orderNumber}"
             } else {
-                appendLine("The seller couldn't verify your payment receipt for order ${order.orderNumber}.")
-                if (!note.isNullOrBlank()) {
-                    appendLine("Reason: $note")
-                }
-                appendLine("You can upload a new receipt or cancel the order here:")
+                "Payment receipt rejected for order ${order.orderNumber}"
             }
-            appendLine()
-            appendLine(orderUrl(order))
-        }
+        val body =
+            buildString {
+                if (approved) {
+                    appendLine("Good news — the seller has confirmed your payment for order ${order.orderNumber}.")
+                } else {
+                    appendLine("The seller couldn't verify your payment receipt for order ${order.orderNumber}.")
+                    if (!note.isNullOrBlank()) {
+                        appendLine("Reason: $note")
+                    }
+                    appendLine("You can upload a new receipt or cancel the order here:")
+                }
+                appendLine()
+                appendLine(orderUrl(order))
+            }
         sendSafely(to = order.buyerEmail, subject = subject, body = body)
         notifyBuyer(
             order,
             title = if (approved) "Payment confirmed" else "Payment receipt rejected",
-            body = if (approved) {
-                "Your payment for order ${order.orderNumber} is confirmed."
-            } else {
-                "Your payment receipt for order ${order.orderNumber} couldn't be verified."
-            },
+            body =
+                if (approved) {
+                    "Your payment for order ${order.orderNumber} is confirmed."
+                } else {
+                    "Your payment receipt for order ${order.orderNumber} couldn't be verified."
+                },
         )
     }
 
     /** [courierReceiptFile] (if any) is attached directly from the just-uploaded file — cheaper and simpler than reading it back from storage. */
-    fun orderShipped(order: Order, courierReceiptFile: MultipartFile?) {
-        val attachment = courierReceiptFile?.takeIf { !it.isEmpty }?.let {
-            EmailAttachment(
-                filename = it.originalFilename?.takeIf { name -> name.isNotBlank() } ?: "courier-receipt",
-                contentType = it.contentType ?: "application/octet-stream",
-                bytes = it.bytes,
-            )
-        }
+    fun orderShipped(
+        order: Order,
+        courierReceiptFile: MultipartFile?,
+    ) {
+        val attachment =
+            courierReceiptFile?.takeIf { !it.isEmpty }?.let {
+                EmailAttachment(
+                    filename = it.originalFilename?.takeIf { name -> name.isNotBlank() } ?: "courier-receipt",
+                    contentType = it.contentType ?: "application/octet-stream",
+                    bytes = it.bytes,
+                )
+            }
         sendSafely(
             to = order.buyerEmail,
             subject = "Your ${platformConfigService.current().name} order ${order.orderNumber} has shipped",
-            body = buildString {
-                appendLine("Good news — ${order.store.name} has handed your order ${order.orderNumber} to the courier.")
-                appendLine()
-                appendLine("Courier: ${order.courierServiceName}")
-                appendLine("Tracking number: ${order.trackingNumber}")
-                appendLine()
-                appendLine("Track your order: ${orderUrl(order)}")
-            },
+            body =
+                buildString {
+                    appendLine("Good news — ${order.store.name} has handed your order ${order.orderNumber} to the courier.")
+                    appendLine()
+                    appendLine("Courier: ${order.courierServiceName}")
+                    appendLine("Tracking number: ${order.trackingNumber}")
+                    appendLine()
+                    appendLine("Track your order: ${orderUrl(order)}")
+                },
             attachment = attachment,
         )
         notifyBuyer(order, title = "Order shipped", body = "${order.store.name} shipped your order ${order.orderNumber}.")
@@ -209,11 +246,12 @@ class OrderNotifier(
         sendSafely(
             to = order.buyerEmail,
             subject = "Your order ${order.orderNumber} has been confirmed",
-            body = buildString {
-                appendLine("${order.store.name} has confirmed your order ${order.orderNumber}.")
-                appendLine()
-                appendLine("Track your order: ${orderUrl(order)}")
-            },
+            body =
+                buildString {
+                    appendLine("${order.store.name} has confirmed your order ${order.orderNumber}.")
+                    appendLine()
+                    appendLine("Track your order: ${orderUrl(order)}")
+                },
         )
         notifyBuyer(order, title = "Order confirmed", body = "${order.store.name} confirmed your order ${order.orderNumber}.")
     }
@@ -223,11 +261,12 @@ class OrderNotifier(
         sendSafely(
             to = order.buyerEmail,
             subject = "Your order ${order.orderNumber} has been delivered",
-            body = buildString {
-                appendLine("Your order ${order.orderNumber} from ${order.store.name} has been delivered.")
-                appendLine()
-                appendLine("View your order: ${orderUrl(order)}")
-            },
+            body =
+                buildString {
+                    appendLine("Your order ${order.orderNumber} from ${order.store.name} has been delivered.")
+                    appendLine()
+                    appendLine("View your order: ${orderUrl(order)}")
+                },
         )
         notifyBuyer(order, title = "Order delivered", body = "Your order ${order.orderNumber} from ${order.store.name} has been delivered.")
     }
@@ -237,14 +276,15 @@ class OrderNotifier(
         sendSafely(
             to = order.buyerEmail,
             subject = "Your order ${order.orderNumber} was cancelled",
-            body = buildString {
-                appendLine("${order.store.name} has cancelled your order ${order.orderNumber}.")
-                if (order.paymentStatus == PaymentStatus.REFUNDED) {
-                    appendLine("Your payment has been refunded.")
-                }
-                appendLine()
-                appendLine(orderUrl(order))
-            },
+            body =
+                buildString {
+                    appendLine("${order.store.name} has cancelled your order ${order.orderNumber}.")
+                    if (order.paymentStatus == PaymentStatus.REFUNDED) {
+                        appendLine("Your payment has been refunded.")
+                    }
+                    appendLine()
+                    appendLine(orderUrl(order))
+                },
         )
         notifyBuyer(order, title = "Order cancelled", body = "${order.store.name} cancelled your order ${order.orderNumber}.")
     }
@@ -258,7 +298,10 @@ class OrderNotifier(
     }
 
     /** ReturnRequestService.create — seller notification, mirrors receiptUploaded's "seller needs to act" shape. */
-    fun returnRequested(order: Order, request: ReturnRequest) {
+    fun returnRequested(
+        order: Order,
+        request: ReturnRequest,
+    ) {
         val storeId = order.store.id ?: return
         val settings = storeSettingsRepository.findById(storeId).orElse(null)
         if (settings == null) {
@@ -268,15 +311,16 @@ class OrderNotifier(
         sendSafely(
             to = settings.contactEmail,
             subject = "Return requested for order ${order.orderNumber}",
-            body = buildString {
-                appendLine("A buyer has requested a return for order ${order.orderNumber}.")
-                appendLine("Reason: ${request.reasonCategory.wireValue}")
-                if (!request.reasonNote.isNullOrBlank()) {
-                    appendLine("Details: ${request.reasonNote}")
-                }
-                appendLine()
-                appendLine("Review and respond from your seller dashboard.")
-            },
+            body =
+                buildString {
+                    appendLine("A buyer has requested a return for order ${order.orderNumber}.")
+                    appendLine("Reason: ${request.reasonCategory.wireValue}")
+                    if (!request.reasonNote.isNullOrBlank()) {
+                        appendLine("Details: ${request.reasonNote}")
+                    }
+                    appendLine()
+                    appendLine("Review and respond from your seller dashboard.")
+                },
         )
         val title = "Return requested: ${order.orderNumber}"
         val pushBody = "A buyer has requested a return for order ${order.orderNumber}."
@@ -285,51 +329,62 @@ class OrderNotifier(
     }
 
     /** ReturnRequestService.decide — buyer notification, mirrors bankTransferVerified's approved/rejected shape. */
-    fun returnDecided(order: Order, approved: Boolean, note: String?) {
-        val subject = if (approved) {
-            "Your return for order ${order.orderNumber} was approved"
-        } else {
-            "Your return for order ${order.orderNumber} was declined"
-        }
-        val body = buildString {
+    fun returnDecided(
+        order: Order,
+        approved: Boolean,
+        note: String?,
+    ) {
+        val subject =
             if (approved) {
-                appendLine("Good news — the seller has approved your return for order ${order.orderNumber}.")
-                appendLine("We'll email you again once your refund has gone through.")
+                "Your return for order ${order.orderNumber} was approved"
             } else {
-                appendLine("The seller couldn't approve your return for order ${order.orderNumber}.")
-                if (!note.isNullOrBlank()) {
-                    appendLine("Reason: $note")
-                }
+                "Your return for order ${order.orderNumber} was declined"
             }
-            appendLine()
-            appendLine(orderUrl(order))
-        }
+        val body =
+            buildString {
+                if (approved) {
+                    appendLine("Good news — the seller has approved your return for order ${order.orderNumber}.")
+                    appendLine("We'll email you again once your refund has gone through.")
+                } else {
+                    appendLine("The seller couldn't approve your return for order ${order.orderNumber}.")
+                    if (!note.isNullOrBlank()) {
+                        appendLine("Reason: $note")
+                    }
+                }
+                appendLine()
+                appendLine(orderUrl(order))
+            }
         sendSafely(to = order.buyerEmail, subject = subject, body = body)
         notifyBuyer(
             order,
             title = if (approved) "Return approved" else "Return declined",
-            body = if (approved) {
-                "Your return for order ${order.orderNumber} was approved."
-            } else {
-                "Your return for order ${order.orderNumber} was declined."
-            },
+            body =
+                if (approved) {
+                    "Your return for order ${order.orderNumber} was approved."
+                } else {
+                    "Your return for order ${order.orderNumber} was declined."
+                },
         )
     }
 
     /** ReturnRequestService.completeRefund — buyer notification once the refund has actually gone through (immediately for Stripe, or once a seller/admin confirms it for every other payment method). */
-    fun returnRefunded(order: Order, refundReference: String?) {
+    fun returnRefunded(
+        order: Order,
+        refundReference: String?,
+    ) {
         sendSafely(
             to = order.buyerEmail,
             subject = "Your refund for order ${order.orderNumber} is complete",
-            body = buildString {
-                appendLine("Your refund for order ${order.orderNumber} from ${order.store.name} has been processed.")
-                appendLine("Amount: ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}")
-                if (!refundReference.isNullOrBlank()) {
-                    appendLine("Reference: $refundReference")
-                }
-                appendLine()
-                appendLine(orderUrl(order))
-            },
+            body =
+                buildString {
+                    appendLine("Your refund for order ${order.orderNumber} from ${order.store.name} has been processed.")
+                    appendLine("Amount: ${platformConfigService.current().currencyCode} ${formatMoney(order.total)}")
+                    if (!refundReference.isNullOrBlank()) {
+                        appendLine("Reference: $refundReference")
+                    }
+                    appendLine()
+                    appendLine(orderUrl(order))
+                },
         )
         notifyBuyer(order, title = "Refund complete", body = "Your refund for order ${order.orderNumber} has been processed.")
     }
@@ -338,12 +393,13 @@ class OrderNotifier(
         sendSafely(
             to = order.buyerEmail,
             subject = "Action needed: payment receipt for order ${order.orderNumber}",
-            body = buildString {
-                appendLine("Your order ${order.orderNumber} from ${order.store.name} is still waiting on a payment receipt.")
-                appendLine()
-                appendLine("Upload your receipt or cancel the order here:")
-                appendLine(orderUrl(order))
-            },
+            body =
+                buildString {
+                    appendLine("Your order ${order.orderNumber} from ${order.store.name} is still waiting on a payment receipt.")
+                    appendLine()
+                    appendLine("Upload your receipt or cancel the order here:")
+                    appendLine(orderUrl(order))
+                },
         )
     }
 
@@ -369,7 +425,12 @@ class OrderNotifier(
      * loop. Revisit when: onboarding real sellers/going live, or SES
      * latency/failures actually show up in logs.
      */
-    private fun sendSafely(to: String, subject: String, body: String, attachment: EmailAttachment? = null) {
+    private fun sendSafely(
+        to: String,
+        subject: String,
+        body: String,
+        attachment: EmailAttachment? = null,
+    ) {
         try {
             emailService.send(to, subject, body, attachment)
         } catch (e: Exception) {

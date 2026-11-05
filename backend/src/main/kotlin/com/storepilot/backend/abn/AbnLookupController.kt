@@ -15,5 +15,7 @@ class AbnLookupController(
     private val abnLookupService: AbnLookupService,
 ) {
     @GetMapping("/api/abn-lookup/{abn}")
-    fun lookup(@PathVariable abn: String): AbnLookupResponse = abnLookupService.lookup(abn)
+    fun lookup(
+        @PathVariable abn: String,
+    ): AbnLookupResponse = abnLookupService.lookup(abn)
 }

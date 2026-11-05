@@ -1,7 +1,7 @@
 package com.storepilot.backend.stripe
 
-import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookableService
+import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookingRepository
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.booking.ServiceStatus
@@ -49,54 +49,65 @@ class StripeServiceTest {
     private val bookingRepository = mockk<BookingRepository>()
     private val storeSettingsRepository = mockk<StoreSettingsRepository>()
     private val platformConfigService = mockk<PlatformConfigService>()
-    private val stripeProperties = StripeProperties(
-        successUrlBase = "http://localhost:3000/orders",
-        cancelUrlBase = "http://localhost:3000/orders",
-        bookingSuccessUrlBase = "http://localhost:3000/bookings",
-        bookingCancelUrlBase = "http://localhost:3000/bookings",
-    )
+    private val stripeProperties =
+        StripeProperties(
+            successUrlBase = "http://localhost:3000/orders",
+            cancelUrlBase = "http://localhost:3000/orders",
+            bookingSuccessUrlBase = "http://localhost:3000/bookings",
+            bookingCancelUrlBase = "http://localhost:3000/bookings",
+        )
 
     private val cognitoProperties = CognitoProperties()
 
-    private val service = StripeService(orderRepository, bookingRepository, storeSettingsRepository, platformConfigService, stripeProperties, cognitoProperties)
+    private val service =
+        StripeService(
+            orderRepository,
+            bookingRepository,
+            storeSettingsRepository,
+            platformConfigService,
+            stripeProperties,
+            cognitoProperties,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private lateinit var store: Store
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
 
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot",
-            tagline = "tagline",
-            countryName = "Australia",
-            countryCode = "AU",
-            currencyCode = "AUD",
-            currencySymbol = "$",
-            currencyLocale = "en-AU",
-            platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000,
-            proMonthlyPriceCents = 2900,
-            defaultCodEnabled = true,
-            defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true,
-            proPlanEnabled = true,
-            supportEmail = "hello@storepilot.au",
-            companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney",
-            returnWindowDays = 14,
-        )
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
     }
 
     @AfterEach
@@ -104,7 +115,10 @@ class StripeServiceTest {
         unmockkAll()
     }
 
-    private fun storeSettings(accountId: String? = "acct_123", chargesEnabled: Boolean = true) = StoreSettings(
+    private fun storeSettings(
+        accountId: String? = "acct_123",
+        chargesEnabled: Boolean = true,
+    ) = StoreSettings(
         store = store,
         contactEmail = "store@example.com",
         contactPhone = "+61400000001",
@@ -150,16 +164,17 @@ class StripeServiceTest {
         status: BookingStatus = BookingStatus.PENDING,
         stripePaymentIntentId: String? = null,
     ): Booking {
-        val bookableService = BookableService(
-            store = store,
-            name = "A service",
-            slug = "a-service",
-            description = "description",
-            category = "handicrafts",
-            price = total,
-            durationMinutes = 60,
-            status = ServiceStatus.ACTIVE,
-        ).apply { this.id = UUID.randomUUID() }
+        val bookableService =
+            BookableService(
+                store = store,
+                name = "A service",
+                slug = "a-service",
+                description = "description",
+                category = "handicrafts",
+                price = total,
+                durationMinutes = 60,
+                status = ServiceStatus.ACTIVE,
+            ).apply { this.id = UUID.randomUUID() }
         return Booking(
             bookingNumber = "AU-20260101-5678",
             store = store,
@@ -273,10 +288,11 @@ class StripeServiceTest {
         val o = order(status = OrderStatus.PENDING)
         every { orderRepository.findById(o.id!!) } returns Optional.of(o)
         every { orderRepository.save(any()) } answers { firstArg() }
-        val session = mockk<Session> {
-            every { clientReferenceId } returns o.id.toString()
-            every { paymentIntent } returns "pi_123"
-        }
+        val session =
+            mockk<Session> {
+                every { clientReferenceId } returns o.id.toString()
+                every { paymentIntent } returns "pi_123"
+            }
 
         service.handleCheckoutSessionCompleted(session)
 
@@ -291,10 +307,11 @@ class StripeServiceTest {
         val o = order(status = OrderStatus.CONFIRMED, paymentStatus = PaymentStatus.PAID)
         val timelineSizeBefore = o.timeline.size
         every { orderRepository.findById(o.id!!) } returns Optional.of(o)
-        val session = mockk<Session> {
-            every { clientReferenceId } returns o.id.toString()
-            every { paymentIntent } returns "pi_123"
-        }
+        val session =
+            mockk<Session> {
+                every { clientReferenceId } returns o.id.toString()
+                every { paymentIntent } returns "pi_123"
+            }
 
         service.handleCheckoutSessionCompleted(session)
 
@@ -308,10 +325,11 @@ class StripeServiceTest {
         every { orderRepository.findById(b.id!!) } returns Optional.empty()
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
         every { bookingRepository.save(any()) } answers { firstArg() }
-        val session = mockk<Session> {
-            every { clientReferenceId } returns b.id.toString()
-            every { paymentIntent } returns "pi_456"
-        }
+        val session =
+            mockk<Session> {
+                every { clientReferenceId } returns b.id.toString()
+                every { paymentIntent } returns "pi_456"
+            }
 
         service.handleCheckoutSessionCompleted(session)
 
@@ -324,9 +342,10 @@ class StripeServiceTest {
         val id = UUID.randomUUID()
         every { orderRepository.findById(id) } returns Optional.empty()
         every { bookingRepository.findById(id) } returns Optional.empty()
-        val session = mockk<Session> {
-            every { clientReferenceId } returns id.toString()
-        }
+        val session =
+            mockk<Session> {
+                every { clientReferenceId } returns id.toString()
+            }
 
         service.handleCheckoutSessionCompleted(session)
 

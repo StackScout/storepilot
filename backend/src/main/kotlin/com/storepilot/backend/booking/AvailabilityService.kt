@@ -49,7 +49,10 @@ class AvailabilityService(
 
     /** Replaces all 7 weekly rows and the lead-time policy in one call — see WeeklyAvailabilityInput's doc comment. */
     @Transactional
-    fun upsertWeeklyRules(storeId: UUID, input: WeeklyAvailabilityInput): AvailabilityResponse {
+    fun upsertWeeklyRules(
+        storeId: UUID,
+        input: WeeklyAvailabilityInput,
+    ): AvailabilityResponse {
         val store = requireStore(storeId)
         requireOwnership(store)
         val dayNumbers = input.rules.map { it.dayOfWeek }.toSet()
@@ -81,7 +84,10 @@ class AvailabilityService(
     }
 
     @Transactional
-    fun createException(storeId: UUID, input: AvailabilityExceptionInput): AvailabilityExceptionResponse {
+    fun createException(
+        storeId: UUID,
+        input: AvailabilityExceptionInput,
+    ): AvailabilityExceptionResponse {
         val store = requireStore(storeId)
         requireOwnership(store)
         require(!input.isOpen || (input.openTime != null && input.closeTime != null && input.openTime < input.closeTime)) {
@@ -97,11 +103,16 @@ class AvailabilityService(
     }
 
     @Transactional
-    fun deleteException(storeId: UUID, exceptionId: UUID) {
+    fun deleteException(
+        storeId: UUID,
+        exceptionId: UUID,
+    ) {
         val store = requireStore(storeId)
         requireOwnership(store)
-        val exception = availabilityExceptionRepository.findById(exceptionId)
-            .orElseThrow { NotFoundException("Availability exception $exceptionId not found") }
+        val exception =
+            availabilityExceptionRepository
+                .findById(exceptionId)
+                .orElseThrow { NotFoundException("Availability exception $exceptionId not found") }
         require(exception.store.id == store.id) { "Exception $exceptionId does not belong to store $storeId" }
         availabilityExceptionRepository.delete(exception)
     }
@@ -116,7 +127,10 @@ class AvailabilityService(
 
     /** Replaces all 7 of this service's override rows and turns hasCustomAvailability on — see BookableService.hasCustomAvailability's doc comment. */
     @Transactional
-    fun upsertServiceOverride(serviceId: UUID, input: ServiceAvailabilityOverrideInput): ServiceAvailabilityOverrideResponse {
+    fun upsertServiceOverride(
+        serviceId: UUID,
+        input: ServiceAvailabilityOverrideInput,
+    ): ServiceAvailabilityOverrideResponse {
         val service = requireService(serviceId)
         requireOwnership(service.store)
         val dayNumbers = input.rules.map { it.dayOfWeek }.toSet()
@@ -163,9 +177,16 @@ class AvailabilityService(
      * double-booking is allowed by design (independent per-service
      * capacity), see docs/features/bookings.md.
      */
-    fun computeSlots(storeId: UUID, serviceId: UUID, from: LocalDate, to: LocalDate): List<DayAvailabilityResponse> {
-        val service = bookableServiceRepository.findById(serviceId)
-            .orElseThrow { NotFoundException("Service $serviceId not found") }
+    fun computeSlots(
+        storeId: UUID,
+        serviceId: UUID,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<DayAvailabilityResponse> {
+        val service =
+            bookableServiceRepository
+                .findById(serviceId)
+                .orElseThrow { NotFoundException("Service $serviceId not found") }
         require(service.store.id == storeId) { "Service $serviceId does not belong to store $storeId" }
 
         val leadTimeMinutes = storeAvailabilityRepository.findById(storeId).map { it.leadTimeMinutes }.orElse(120)
@@ -174,30 +195,37 @@ class AvailabilityService(
         // instead of the store's template — AvailabilityException stays
         // store-only regardless, see BookableService.hasCustomAvailability's
         // doc comment.
-        val weeklyRulesByDay: Map<java.time.DayOfWeek, WeeklyRuleLike> = if (service.hasCustomAvailability) {
-            serviceWeeklyAvailabilityRuleRepository.findByServiceIdOrderByDayOfWeekAsc(serviceId)
-                .associateBy({ it.dayOfWeek }, { WeeklyRuleLike(it.isOpen, it.openTime, it.closeTime) })
-        } else {
-            weeklyAvailabilityRuleRepository.findByStoreIdOrderByDayOfWeekAsc(storeId)
-                .associateBy({ it.dayOfWeek }, { WeeklyRuleLike(it.isOpen, it.openTime, it.closeTime) })
-        }
-        val exceptionsByDate = availabilityExceptionRepository.findByStoreIdAndDateBetween(storeId, from, to)
-            .associateBy { it.date }
+        val weeklyRulesByDay: Map<java.time.DayOfWeek, WeeklyRuleLike> =
+            if (service.hasCustomAvailability) {
+                serviceWeeklyAvailabilityRuleRepository
+                    .findByServiceIdOrderByDayOfWeekAsc(serviceId)
+                    .associateBy({ it.dayOfWeek }, { WeeklyRuleLike(it.isOpen, it.openTime, it.closeTime) })
+            } else {
+                weeklyAvailabilityRuleRepository
+                    .findByStoreIdOrderByDayOfWeekAsc(storeId)
+                    .associateBy({ it.dayOfWeek }, { WeeklyRuleLike(it.isOpen, it.openTime, it.closeTime) })
+            }
+        val exceptionsByDate =
+            availabilityExceptionRepository
+                .findByStoreIdAndDateBetween(storeId, from, to)
+                .associateBy { it.date }
         val excludedStatuses = setOf(BookingStatus.CANCELLED, BookingStatus.NO_SHOW)
-        val existingBookings = bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(
-            serviceId,
-            excludedStatuses,
-            to.plusDays(1).atStartOfDay(zoneId).toInstant(),
-            from.atStartOfDay(zoneId).toInstant(),
-        )
+        val existingBookings =
+            bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(
+                serviceId,
+                excludedStatuses,
+                to.plusDays(1).atStartOfDay(zoneId).toInstant(),
+                from.atStartOfDay(zoneId).toInstant(),
+            )
 
         val stepMinutes = service.durationMinutes + service.bufferMinutes
         val days = mutableListOf<DayAvailabilityResponse>()
         var date = from
         while (!date.isAfter(to)) {
-            val (isOpen, openTime, closeTime) = exceptionsByDate[date]?.let { Triple(it.isOpen, it.openTime, it.closeTime) }
-                ?: weeklyRulesByDay[date.dayOfWeek]?.let { Triple(it.isOpen, it.openTime, it.closeTime) }
-                ?: Triple(false, null, null)
+            val (isOpen, openTime, closeTime) =
+                exceptionsByDate[date]?.let { Triple(it.isOpen, it.openTime, it.closeTime) }
+                    ?: weeklyRulesByDay[date.dayOfWeek]?.let { Triple(it.isOpen, it.openTime, it.closeTime) }
+                    ?: Triple(false, null, null)
 
             val slots = mutableListOf<SlotResponse>()
             if (isOpen && openTime != null && closeTime != null) {
@@ -236,27 +264,34 @@ class AvailabilityService(
 }
 
 /** Shared shape for resolving a day's window from either the store's or a service's weekly rule row. */
-private data class WeeklyRuleLike(val isOpen: Boolean, val openTime: LocalTime?, val closeTime: LocalTime?)
-
-private fun WeeklyAvailabilityRule.toResponse() = WeeklyAvailabilityRuleResponse(
-    dayOfWeek = dayOfWeek.value,
-    isOpen = isOpen,
-    openTime = openTime,
-    closeTime = closeTime,
+private data class WeeklyRuleLike(
+    val isOpen: Boolean,
+    val openTime: LocalTime?,
+    val closeTime: LocalTime?,
 )
 
-private fun AvailabilityException.toResponse() = AvailabilityExceptionResponse(
-    id = requireNotNull(id),
-    date = date,
-    isOpen = isOpen,
-    openTime = openTime,
-    closeTime = closeTime,
-    note = note,
-)
+private fun WeeklyAvailabilityRule.toResponse() =
+    WeeklyAvailabilityRuleResponse(
+        dayOfWeek = dayOfWeek.value,
+        isOpen = isOpen,
+        openTime = openTime,
+        closeTime = closeTime,
+    )
 
-private fun ServiceWeeklyAvailabilityRule.toResponse() = WeeklyAvailabilityRuleResponse(
-    dayOfWeek = dayOfWeek.value,
-    isOpen = isOpen,
-    openTime = openTime,
-    closeTime = closeTime,
-)
+private fun AvailabilityException.toResponse() =
+    AvailabilityExceptionResponse(
+        id = requireNotNull(id),
+        date = date,
+        isOpen = isOpen,
+        openTime = openTime,
+        closeTime = closeTime,
+        note = note,
+    )
+
+private fun ServiceWeeklyAvailabilityRule.toResponse() =
+    WeeklyAvailabilityRuleResponse(
+        dayOfWeek = dayOfWeek.value,
+        isOpen = isOpen,
+        openTime = openTime,
+        closeTime = closeTime,
+    )

@@ -6,7 +6,6 @@ import com.storepilot.backend.common.PlatformSettings
 import com.storepilot.backend.common.ShippingDetails
 import com.storepilot.backend.order.DeliveryMethod
 import com.storepilot.backend.order.Order
-import com.storepilot.backend.order.OrderStatus
 import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
 import com.storepilot.backend.returns.ReturnReasonCategory
@@ -44,10 +43,18 @@ class OrderNotifierTest {
     private val buyerPushTokenRepository = mockk<BuyerPushTokenRepository>()
     private val buyerNotificationService = mockk<BuyerNotificationService>(relaxed = true)
 
-    private val notifier = OrderNotifier(
-        emailService, storeSettingsRepository, notificationProperties, platformConfigService, pushNotificationService,
-        pushTokenRepository, sellerNotificationService, buyerPushTokenRepository, buyerNotificationService,
-    )
+    private val notifier =
+        OrderNotifier(
+            emailService,
+            storeSettingsRepository,
+            notificationProperties,
+            platformConfigService,
+            pushNotificationService,
+            pushTokenRepository,
+            sellerNotificationService,
+            buyerPushTokenRepository,
+            buyerNotificationService,
+        )
 
     private lateinit var seller: Seller
     private lateinit var store: Store
@@ -57,18 +64,39 @@ class OrderNotifierTest {
     fun setUp() {
         seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
         buyer = Buyer(email = "buyer@example.com", name = "Buyer").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
-            currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true, proPlanEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney", returnWindowDays = 14,
-        )
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
         every { pushTokenRepository.findBySellerId(any()) } returns emptyList()
         every { buyerPushTokenRepository.findByBuyerId(any()) } returns emptyList()
     }
@@ -81,25 +109,49 @@ class OrderNotifierTest {
         buyer: Buyer? = null,
         paymentStatus: PaymentStatus = PaymentStatus.PAID,
     ) = Order(
-        orderNumber = "AU-1001", store = store, subtotal = 1000, deliveryMethod = DeliveryMethod.SHIPPING,
-        shippingFee = 0, platformFee = 35, total = 1000, paymentMethod = PaymentMethod.STRIPE, paymentStatus = paymentStatus,
-        shipping = ShippingDetails(), buyerEmail = "buyer@example.com", buyer = buyer, sellerAbn = sellerAbn, gstAmount = gstAmount,
-        trackingNumber = trackingNumber, courierServiceName = courierServiceName, fulfillmentTimeHours = 48, deliveryTimeHours = 120,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        orderNumber = "AU-1001",
+        store = store,
+        subtotal = 1000,
+        deliveryMethod = DeliveryMethod.SHIPPING,
+        shippingFee = 0,
+        platformFee = 35,
+        total = 1000,
+        paymentMethod = PaymentMethod.STRIPE,
+        paymentStatus = paymentStatus,
+        shipping = ShippingDetails(),
+        buyerEmail = "buyer@example.com",
+        buyer = buyer,
+        sellerAbn = sellerAbn,
+        gstAmount = gstAmount,
+        trackingNumber = trackingNumber,
+        courierServiceName = courierServiceName,
+        fulfillmentTimeHours = 48,
+        deliveryTimeHours = 120,
+    ).apply {
+        id = UUID.randomUUID()
+        createdAt = Instant.now()
+    }
 
-    private fun storeSettings() = StoreSettings(
-        store = store, contactEmail = "contact@store.example.com", contactPhone = "+61400000001",
-        bankAccountName = "Store Account", bankAccountNumber = "123456789", bankName = "Test Bank",
-        transactionFeePercent = BigDecimal("3.5"), sellerType = SellerType.INDIVIDUAL,
-    )
+    private fun storeSettings() =
+        StoreSettings(
+            store = store,
+            contactEmail = "contact@store.example.com",
+            contactPhone = "+61400000001",
+            bankAccountName = "Store Account",
+            bankAccountNumber = "123456789",
+            bankName = "Test Bank",
+            transactionFeePercent = BigDecimal("3.5"),
+            sellerType = SellerType.INDIVIDUAL,
+        )
 
     @Test
     fun `sellerOrderPlaced sends a push to every registered device`() {
         val o = order()
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(
-            PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() },
-            PushToken(seller = seller, token = "token-2", platform = "android").apply { id = UUID.randomUUID() },
-        )
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(
+                PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() },
+                PushToken(seller = seller, token = "token-2", platform = "android").apply { id = UUID.randomUUID() },
+            )
 
         notifier.sellerOrderPlaced(o)
 
@@ -125,7 +177,8 @@ class OrderNotifierTest {
     @Test
     fun `sellerOrderPlaced swallows a push failure`() {
         val o = order()
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
         every { pushNotificationService.send(any(), any(), any(), any()) } throws RuntimeException("Expo is down")
 
         notifier.sellerOrderPlaced(o)
@@ -134,7 +187,8 @@ class OrderNotifierTest {
     @Test
     fun `fulfillmentDueSoon, fulfillmentOverdue, and deliveryDueReminder each send a distinct push`() {
         val o = order()
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
 
         notifier.fulfillmentDueSoon(o)
         notifier.fulfillmentOverdue(o)
@@ -178,7 +232,8 @@ class OrderNotifierTest {
     fun `receiptUploaded emails the store's contact address and pushes the seller`() {
         val o = order()
         every { storeSettingsRepository.findById(store.id!!) } returns Optional.of(storeSettings())
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
 
         notifier.receiptUploaded(o)
 
@@ -203,7 +258,14 @@ class OrderNotifierTest {
 
         notifier.bankTransferVerified(o, approved = true, note = null)
 
-        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("confirmed") }, body = capture(bodySlot), attachment = null) }
+        verify {
+            emailService.send(
+                to = "buyer@example.com",
+                subject = match { it.contains("confirmed") },
+                body = capture(bodySlot),
+                attachment = null,
+            )
+        }
         assertTrue(bodySlot.captured.contains("confirmed"))
     }
 
@@ -214,7 +276,14 @@ class OrderNotifierTest {
 
         notifier.bankTransferVerified(o, approved = false, note = "Amount doesn't match")
 
-        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("rejected") }, body = capture(bodySlot), attachment = null) }
+        verify {
+            emailService.send(
+                to = "buyer@example.com",
+                subject = match { it.contains("rejected") },
+                body = capture(bodySlot),
+                attachment = null,
+            )
+        }
         assertTrue(bodySlot.captured.contains("Amount doesn't match"))
     }
 
@@ -253,9 +322,15 @@ class OrderNotifierTest {
     @Test
     fun `returnRequested emails the store and pushes the seller`() {
         val o = order()
-        val request = ReturnRequest(order = o, reasonCategory = ReturnReasonCategory.DEFECTIVE, reasonNote = "Box was crushed").apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val request =
+            ReturnRequest(order = o, reasonCategory = ReturnReasonCategory.DEFECTIVE, reasonNote = "Box was crushed").apply {
+                id =
+                    UUID.randomUUID()
+                ; createdAt = Instant.now()
+            }
         every { storeSettingsRepository.findById(store.id!!) } returns Optional.of(storeSettings())
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
         val bodySlot = slot<String>()
 
         notifier.returnRequested(o, request)
@@ -267,7 +342,12 @@ class OrderNotifierTest {
     @Test
     fun `returnRequested skips notifying when the store has no settings row`() {
         val o = order()
-        val request = ReturnRequest(order = o, reasonCategory = ReturnReasonCategory.DEFECTIVE).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val request =
+            ReturnRequest(order = o, reasonCategory = ReturnReasonCategory.DEFECTIVE).apply {
+                id = UUID.randomUUID()
+                createdAt =
+                    Instant.now()
+            }
         every { storeSettingsRepository.findById(store.id!!) } returns Optional.empty()
 
         notifier.returnRequested(o, request)
@@ -284,7 +364,17 @@ class OrderNotifierTest {
         notifier.returnDecided(o, approved = false, note = "Item wasn't damaged")
 
         verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("approved") }, body = any(), attachment = null) }
-        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("declined") }, body = capture(declineBodySlot), attachment = null) }
+        verify {
+            emailService.send(
+                to = "buyer@example.com",
+                subject =
+                    match {
+                        it.contains("declined")
+                    },
+                body = capture(declineBodySlot),
+                attachment = null,
+            )
+        }
         assertTrue(declineBodySlot.captured.contains("Item wasn't damaged"))
     }
 
@@ -321,9 +411,10 @@ class OrderNotifierTest {
     @Test
     fun `orderConfirmed pushes and records a notification for a signed-in buyer`() {
         val o = order(buyer = buyer)
-        every { buyerPushTokenRepository.findByBuyerId(buyer.id!!) } returns listOf(
-            BuyerPushToken(buyer = buyer, token = "buyer-token", platform = "ios").apply { id = UUID.randomUUID() },
-        )
+        every { buyerPushTokenRepository.findByBuyerId(buyer.id!!) } returns
+            listOf(
+                BuyerPushToken(buyer = buyer, token = "buyer-token", platform = "ios").apply { id = UUID.randomUUID() },
+            )
 
         notifier.orderConfirmed(o)
 
@@ -355,7 +446,14 @@ class OrderNotifierTest {
 
         notifier.orderConfirmedBySeller(o)
 
-        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("confirmed") }, body = any(), attachment = null) }
+        verify {
+            emailService.send(
+                to = "buyer@example.com",
+                subject = match { it.contains("confirmed") },
+                body = any(),
+                attachment = null,
+            )
+        }
         verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("confirmed") }, any(), o.id) }
     }
 
@@ -365,7 +463,14 @@ class OrderNotifierTest {
 
         notifier.orderDelivered(o)
 
-        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("delivered") }, body = any(), attachment = null) }
+        verify {
+            emailService.send(
+                to = "buyer@example.com",
+                subject = match { it.contains("delivered") },
+                body = any(),
+                attachment = null,
+            )
+        }
         verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, match { it.contains("delivered") }, any(), o.id) }
     }
 
@@ -376,7 +481,14 @@ class OrderNotifierTest {
 
         notifier.orderCancelledBySeller(o)
 
-        verify { emailService.send(to = "buyer@example.com", subject = match { it.contains("cancelled") }, body = capture(bodySlot), attachment = null) }
+        verify {
+            emailService.send(
+                to = "buyer@example.com",
+                subject = match { it.contains("cancelled") },
+                body = capture(bodySlot),
+                attachment = null,
+            )
+        }
         assertTrue(bodySlot.captured.contains("refunded"))
         verify { buyerNotificationService.notify(buyer, BuyerNotificationType.ORDER, any(), any(), o.id) }
     }
@@ -384,7 +496,8 @@ class OrderNotifierTest {
     @Test
     fun `orderCancelledByBuyer pushes and records a notification for the seller, not the buyer`() {
         val o = order(buyer = buyer)
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "seller-token", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "seller-token", platform = "ios").apply { id = UUID.randomUUID() })
 
         notifier.orderCancelledByBuyer(o)
 

@@ -16,18 +16,19 @@ class PlatformConfigController(
 
     /** State/province options for this deployment — see State.kt's doc comment. */
     @GetMapping("/api/states")
-    fun getStates(): List<StateResponse> =
-        stateRepository.findAllByOrderBySortOrderAscNameAsc().map { StateResponse(it.name) }
+    fun getStates(): List<StateResponse> = stateRepository.findAllByOrderBySortOrderAscNameAsc().map { StateResponse(it.name) }
 
     // --- Admin-scoped (matched by SecurityConfig's /api/admin/** catch-all) ---
 
     /** Which payment methods this deployment offers at all — see PlatformSettings' default*Enabled doc comments. */
     @PatchMapping("/api/admin/platform-config/payment-methods")
-    fun updatePaymentMethods(@RequestBody input: PlatformPaymentMethodsInput): PlatformConfigResponse =
-        platformConfigService.updatePaymentMethods(input).toResponse()
+    fun updatePaymentMethods(
+        @RequestBody input: PlatformPaymentMethodsInput,
+    ): PlatformConfigResponse = platformConfigService.updatePaymentMethods(input).toResponse()
 
     /** Whether the seller Free/Pro tier concept exists on this deployment at all — see PlatformSettings.proPlanEnabled's doc comment. */
     @PatchMapping("/api/admin/platform-config/pro-plan")
-    fun updateProPlanEnabled(@RequestBody input: PlatformProPlanInput): PlatformConfigResponse =
-        platformConfigService.updateProPlanEnabled(input).toResponse()
+    fun updateProPlanEnabled(
+        @RequestBody input: PlatformProPlanInput,
+    ): PlatformConfigResponse = platformConfigService.updateProPlanEnabled(input).toResponse()
 }

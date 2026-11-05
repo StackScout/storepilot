@@ -25,7 +25,8 @@ class WebConfig(
     @Value("\${app.cors-allowed-origins}") private val allowedOrigins: String,
 ) : WebMvcConfigurer {
     override fun addCorsMappings(registry: CorsRegistry) {
-        registry.addMapping("/api/**")
+        registry
+            .addMapping("/api/**")
             .allowedOrigins(*allowedOrigins.split(",").map { it.trim() }.toTypedArray())
             .allowedMethods("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS")
             .allowedHeaders("*")

@@ -16,28 +16,42 @@ class StoreStaffController(
     private val storeStaffService: StoreStaffService,
 ) {
     @PostMapping("/api/stores/{storeId}/staff/invite")
-    fun invite(@PathVariable storeId: UUID, @Valid @RequestBody input: StaffInviteInput): ResponseEntity<StoreStaffInviteResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(storeStaffService.invite(storeId, input))
+    fun invite(
+        @PathVariable storeId: UUID,
+        @Valid @RequestBody input: StaffInviteInput,
+    ): ResponseEntity<StoreStaffInviteResponse> = ResponseEntity.status(HttpStatus.CREATED).body(storeStaffService.invite(storeId, input))
 
     @GetMapping("/api/stores/{storeId}/staff")
-    fun listStaff(@PathVariable storeId: UUID): List<StoreStaffMemberResponse> = storeStaffService.listStaff(storeId)
+    fun listStaff(
+        @PathVariable storeId: UUID,
+    ): List<StoreStaffMemberResponse> = storeStaffService.listStaff(storeId)
 
     @GetMapping("/api/stores/{storeId}/staff/invites")
-    fun listPendingInvites(@PathVariable storeId: UUID): List<StoreStaffInviteResponse> = storeStaffService.listPendingInvites(storeId)
+    fun listPendingInvites(
+        @PathVariable storeId: UUID,
+    ): List<StoreStaffInviteResponse> = storeStaffService.listPendingInvites(storeId)
 
     @DeleteMapping("/api/stores/{storeId}/staff/{staffMemberId}")
-    fun removeStaff(@PathVariable storeId: UUID, @PathVariable staffMemberId: UUID): ResponseEntity<Void> {
+    fun removeStaff(
+        @PathVariable storeId: UUID,
+        @PathVariable staffMemberId: UUID,
+    ): ResponseEntity<Void> {
         storeStaffService.removeStaff(storeId, staffMemberId)
         return ResponseEntity.noContent().build()
     }
 
     @DeleteMapping("/api/stores/{storeId}/staff/invites/{inviteId}")
-    fun revokeInvite(@PathVariable storeId: UUID, @PathVariable inviteId: UUID): ResponseEntity<Void> {
+    fun revokeInvite(
+        @PathVariable storeId: UUID,
+        @PathVariable inviteId: UUID,
+    ): ResponseEntity<Void> {
         storeStaffService.revokeInvite(storeId, inviteId)
         return ResponseEntity.noContent().build()
     }
 
     /** Public — lets the accept-invite page render before the invitee is authenticated. */
     @GetMapping("/api/staff/invites/{token}")
-    fun getInviteDetails(@PathVariable token: String): StaffInviteDetailsResponse = storeStaffService.getInviteDetails(token)
+    fun getInviteDetails(
+        @PathVariable token: String,
+    ): StaffInviteDetailsResponse = storeStaffService.getInviteDetails(token)
 }

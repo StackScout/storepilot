@@ -59,26 +59,30 @@ class ReturnRequestServiceTest {
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = ReturnRequestService(
-        returnRequestRepository,
-        orderRepository,
-        storeRepository,
-        payoutRepository,
-        feeCollectionRepository,
-        platformConfigService,
-        stripeService,
-        orderNotifier,
-        currentActor,
-        auditLogService,
-        storeAccessService,
-    )
+    private val service =
+        ReturnRequestService(
+            returnRequestRepository,
+            orderRepository,
+            storeRepository,
+            payoutRepository,
+            feeCollectionRepository,
+            platformConfigService,
+            stripeService,
+            orderNotifier,
+            currentActor,
+            auditLogService,
+            storeAccessService,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller")
     private val storeId: UUID = UUID.randomUUID()
     private lateinit var store: Store
     private lateinit var order: Order
 
-    private fun newOrder(paymentMethod: PaymentMethod, deliveredAt: Instant = Instant.now().minus(1, ChronoUnit.DAYS)): Order =
+    private fun newOrder(
+        paymentMethod: PaymentMethod,
+        deliveredAt: Instant = Instant.now().minus(1, ChronoUnit.DAYS),
+    ): Order =
         Order(
             orderNumber = "AU-20260101-0001",
             store = store,
@@ -101,17 +105,18 @@ class ReturnRequestServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "test-store",
-            name = "Test Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "test-store",
+                name = "Test Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         order = newOrder(PaymentMethod.COD)
         every { currentActor.requireSeller() } returns seller
         every { orderRepository.findById(any()) } returns Optional.of(order)
@@ -152,7 +157,11 @@ class ReturnRequestServiceTest {
     fun `create allows a new request after a prior one was rejected`() {
         every { returnRequestRepository.existsByOrder_IdAndStatusNot(requireNotNull(order.id), ReturnRequestStatus.REJECTED) } returns false
 
-        val response = service.create(requireNotNull(order.id), ReturnRequestCreateInput(reasonCategory = "defective", reasonNote = "Arrived broken"))
+        val response =
+            service.create(
+                requireNotNull(order.id),
+                ReturnRequestCreateInput(reasonCategory = "defective", reasonNote = "Arrived broken"),
+            )
 
         assertEquals("defective", response.reasonCategory)
         assertEquals(ReturnRequestStatus.REQUESTED.wireValue, response.status)
@@ -179,7 +188,12 @@ class ReturnRequestServiceTest {
         )
         order.timeline.add(
             0,
-            OrderTimelineEntry(order = order, status = OrderStatus.DELIVERED, label = "Delivered", timestamp = Instant.now().minus(45, ChronoUnit.DAYS)),
+            OrderTimelineEntry(
+                order = order,
+                status = OrderStatus.DELIVERED,
+                label = "Delivered",
+                timestamp = Instant.now().minus(45, ChronoUnit.DAYS),
+            ),
         )
         every { returnRequestRepository.existsByOrder_IdAndStatusNot(any(), any()) } returns false
 
@@ -195,7 +209,12 @@ class ReturnRequestServiceTest {
         val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.CHANGED_MIND).apply { id = UUID.randomUUID() }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
-        val response = service.decide(requireNotNull(order.id), requireNotNull(request.id), ReturnRequestDecisionInput(approved = false, note = "Item was used"))
+        val response =
+            service.decide(
+                requireNotNull(order.id),
+                requireNotNull(request.id),
+                ReturnRequestDecisionInput(approved = false, note = "Item was used"),
+            )
 
         assertEquals(ReturnRequestStatus.REJECTED.wireValue, response.status)
         assertEquals(PaymentStatus.PAID, order.paymentStatus)
@@ -215,7 +234,15 @@ class ReturnRequestServiceTest {
         assertEquals(PaymentStatus.REFUNDED, order.paymentStatus)
         assertNull(response.settlementReconciliationNote, "Stripe orders never enter the Payout/FeeCollection ledgers")
         verify { stripeService.refundPayment(order) }
-        verify { auditLogService.recordAsSeller(seller, AuditAction.RETURN_REFUND_MARKED_COMPLETE, "return_request", request.id.toString(), any()) }
+        verify {
+            auditLogService.recordAsSeller(
+                seller,
+                AuditAction.RETURN_REFUND_MARKED_COMPLETE,
+                "return_request",
+                request.id.toString(),
+                any(),
+            )
+        }
     }
 
     @Test
@@ -237,7 +264,16 @@ class ReturnRequestServiceTest {
         order = newOrder(PaymentMethod.PAYHERE)
         every { orderRepository.findById(any()) } returns Optional.of(order)
         val payout = Payout(store = store, subtotal = 1000, platformFee = 20, net = 980, status = PayoutStatus.PAID)
-        payout.sourceRefs.add(PayoutSourceRef(payout = payout, orderId = order.id, orderNumber = order.orderNumber, subtotal = 1000, platformFee = 20, net = 980))
+        payout.sourceRefs.add(
+            PayoutSourceRef(
+                payout = payout,
+                orderId = order.id,
+                orderNumber = order.orderNumber,
+                subtotal = 1000,
+                platformFee = 20,
+                net = 980,
+            ),
+        )
         every { payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(payout)
         val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER).apply { id = UUID.randomUUID() }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
@@ -251,7 +287,8 @@ class ReturnRequestServiceTest {
     fun `decide rejects a non-owning seller`() {
         val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.CHANGED_MIND).apply { id = UUID.randomUUID() }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
-        every { currentActor.requireSeller() } returns Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
+        every { currentActor.requireSeller() } returns
+            Seller(cognitoSub = "other-sub", email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
 
         assertThrows(ForbiddenException::class.java) {
             service.decide(requireNotNull(order.id), requireNotNull(request.id), ReturnRequestDecisionInput(approved = true))
@@ -260,7 +297,11 @@ class ReturnRequestServiceTest {
 
     @Test
     fun `decide rejects a request that was already decided`() {
-        val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.CHANGED_MIND, status = ReturnRequestStatus.APPROVED).apply { id = UUID.randomUUID() }
+        val request =
+            ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.CHANGED_MIND, status = ReturnRequestStatus.APPROVED).apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
         assertThrows(ConflictException::class.java) {
@@ -282,14 +323,31 @@ class ReturnRequestServiceTest {
 
     @Test
     fun `markRefundedBySeller completes a COD refund`() {
-        val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply { id = UUID.randomUUID() }
+        val request =
+            ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
-        val response = service.markRefundedBySeller(requireNotNull(order.id), requireNotNull(request.id), ReturnRequestMarkRefundedInput(refundReference = "cash-handoff"))
+        val response =
+            service.markRefundedBySeller(
+                requireNotNull(order.id),
+                requireNotNull(request.id),
+                ReturnRequestMarkRefundedInput(refundReference = "cash-handoff"),
+            )
 
         assertEquals(ReturnRequestStatus.REFUNDED.wireValue, response.status)
         assertEquals(PaymentStatus.REFUNDED, order.paymentStatus)
-        verify { auditLogService.recordAsSeller(seller, AuditAction.RETURN_REFUND_MARKED_COMPLETE, "return_request", request.id.toString(), any()) }
+        verify {
+            auditLogService.recordAsSeller(
+                seller,
+                AuditAction.RETURN_REFUND_MARKED_COMPLETE,
+                "return_request",
+                request.id.toString(),
+                any(),
+            )
+        }
         verify { orderNotifier.returnRefunded(order, "cash-handoff") }
     }
 
@@ -297,7 +355,11 @@ class ReturnRequestServiceTest {
     fun `markRefundedBySeller rejects a PayHere order — only an admin can confirm that refund`() {
         order = newOrder(PaymentMethod.PAYHERE)
         every { orderRepository.findById(any()) } returns Optional.of(order)
-        val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply { id = UUID.randomUUID() }
+        val request =
+            ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
         assertThrows(ConflictException::class.java) {
@@ -307,7 +369,11 @@ class ReturnRequestServiceTest {
 
     @Test
     fun `markRefundedBySeller rejects a request that isn't awaiting a refund`() {
-        val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REQUESTED).apply { id = UUID.randomUUID() }
+        val request =
+            ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REQUESTED).apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
         assertThrows(ConflictException::class.java) {
@@ -320,10 +386,18 @@ class ReturnRequestServiceTest {
     @Test
     fun `adminMarkRefunded completes a PayHere refund`() {
         order = newOrder(PaymentMethod.PAYHERE)
-        val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply { id = UUID.randomUUID() }
+        val request =
+            ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
-        val response = service.adminMarkRefunded(requireNotNull(request.id), ReturnRequestMarkRefundedInput(refundReference = "payhere-refund-88"))
+        val response =
+            service.adminMarkRefunded(
+                requireNotNull(request.id),
+                ReturnRequestMarkRefundedInput(refundReference = "payhere-refund-88"),
+            )
 
         assertEquals(ReturnRequestStatus.REFUNDED.wireValue, response.status)
         assertEquals(PaymentStatus.REFUNDED, order.paymentStatus)
@@ -332,7 +406,11 @@ class ReturnRequestServiceTest {
 
     @Test
     fun `adminMarkRefunded rejects a COD order — the seller must self-attest that one`() {
-        val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply { id = UUID.randomUUID() }
+        val request =
+            ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER, status = ReturnRequestStatus.REFUND_PENDING).apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)
 
         assertThrows(ConflictException::class.java) {
@@ -345,7 +423,15 @@ class ReturnRequestServiceTest {
     @Test
     fun `decide approve flags an order already fee-collected for COD`() {
         val feeCollection = FeeCollection(store = store, subtotal = 1000, platformFee = 20, status = FeeCollectionStatus.COLLECTED)
-        feeCollection.sourceRefs.add(FeeCollectionSourceRef(feeCollection = feeCollection, orderId = order.id, orderNumber = order.orderNumber, subtotal = 1000, platformFee = 20))
+        feeCollection.sourceRefs.add(
+            FeeCollectionSourceRef(
+                feeCollection = feeCollection,
+                orderId = order.id,
+                orderNumber = order.orderNumber,
+                subtotal = 1000,
+                platformFee = 20,
+            ),
+        )
         every { feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(feeCollection)
         val request = ReturnRequest(order = order, reasonCategory = ReturnReasonCategory.OTHER).apply { id = UUID.randomUUID() }
         every { returnRequestRepository.findById(requireNotNull(request.id)) } returns Optional.of(request)

@@ -2,8 +2,8 @@ package com.storepilot.backend.admin
 
 import com.storepilot.backend.common.PageResponse
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
@@ -23,7 +23,9 @@ class AdminNotificationController(
     fun summary(): AdminNotificationSummaryResponse = adminNotificationService.summary()
 
     @PatchMapping("/api/admin/notifications/{id}/read")
-    fun markRead(@PathVariable id: UUID): AdminNotificationResponse = adminNotificationService.markRead(id)
+    fun markRead(
+        @PathVariable id: UUID,
+    ): AdminNotificationResponse = adminNotificationService.markRead(id)
 
     @PatchMapping("/api/admin/notifications/read-all")
     fun markAllRead() = adminNotificationService.markAllRead()

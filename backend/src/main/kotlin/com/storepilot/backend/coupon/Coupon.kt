@@ -55,7 +55,9 @@ class Coupon(
     var active: Boolean = true,
 ) : BaseEntity()
 
-enum class DiscountType(override val wireValue: String) : WireValue {
+enum class DiscountType(
+    override val wireValue: String,
+) : WireValue {
     PERCENT("percent"),
     FIXED("fixed"),
 }
@@ -64,7 +66,9 @@ enum class DiscountType(override val wireValue: String) : WireValue {
 class DiscountTypeConverter : WireValueEnumConverter<DiscountType>(DiscountType.entries.toTypedArray())
 
 /** What kind of checkout a coupon is being resolved against — see CouponService.resolve. */
-enum class CouponKind(override val wireValue: String) : WireValue {
+enum class CouponKind(
+    override val wireValue: String,
+) : WireValue {
     ORDER("order"),
     BOOKING("booking"),
 }

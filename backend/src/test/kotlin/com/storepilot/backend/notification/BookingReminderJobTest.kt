@@ -33,22 +33,53 @@ class BookingReminderJobTest {
     @BeforeEach
     fun setUp() {
         val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Studio", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
-        service = BookableService(store = store, name = "Haircut", slug = "haircut", description = "description", category = "handicrafts", price = 5000, durationMinutes = 30, status = ServiceStatus.ACTIVE)
-            .apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Studio",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
+        service =
+            BookableService(
+                store = store,
+                name = "Haircut",
+                slug = "haircut",
+                description = "description",
+                category = "handicrafts",
+                price = 5000,
+                durationMinutes = 30,
+                status = ServiceStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
     }
 
-    private fun booking() = Booking(
-        bookingNumber = "BK-1001", store = store, service = service, serviceName = service.name, servicePrice = service.price,
-        serviceDurationMinutes = service.durationMinutes, scheduledStart = Instant.now().plus(2, ChronoUnit.HOURS),
-        scheduledEnd = Instant.now().plus(2, ChronoUnit.HOURS).plusSeconds(1800), platformFee = 175, total = 5000,
-        status = BookingStatus.CONFIRMED, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID,
-        buyerName = "Jane Buyer", buyerPhone = "+61400000002", buyerEmail = "buyer@example.com",
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun booking() =
+        Booking(
+            bookingNumber = "BK-1001",
+            store = store,
+            service = service,
+            serviceName = service.name,
+            servicePrice = service.price,
+            serviceDurationMinutes = service.durationMinutes,
+            scheduledStart = Instant.now().plus(2, ChronoUnit.HOURS),
+            scheduledEnd = Instant.now().plus(2, ChronoUnit.HOURS).plusSeconds(1800),
+            platformFee = 175,
+            total = 5000,
+            status = BookingStatus.CONFIRMED,
+            paymentMethod = PaymentMethod.STRIPE,
+            paymentStatus = PaymentStatus.PAID,
+            buyerName = "Jane Buyer",
+            buyerPhone = "+61400000002",
+            buyerEmail = "buyer@example.com",
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
     @Test
     fun `notifies and stamps every due booking`() {
@@ -61,8 +92,10 @@ class BookingReminderJobTest {
 
         verify { bookingNotifier.bookingReminder(b1) }
         verify { bookingNotifier.bookingReminder(b2) }
-        org.junit.jupiter.api.Assertions.assertNotNull(b1.lastReminderSentAt)
-        org.junit.jupiter.api.Assertions.assertNotNull(b2.lastReminderSentAt)
+        org.junit.jupiter.api.Assertions
+            .assertNotNull(b1.lastReminderSentAt)
+        org.junit.jupiter.api.Assertions
+            .assertNotNull(b2.lastReminderSentAt)
         verify { bookingRepository.saveAll(listOf(b1, b2)) }
     }
 

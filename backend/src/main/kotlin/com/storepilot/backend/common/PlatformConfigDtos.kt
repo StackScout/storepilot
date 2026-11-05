@@ -56,4 +56,6 @@ fun PlatformSettings.toResponse(): PlatformConfigResponse =
         returnWindowDays = returnWindowDays,
     )
 
-data class StateResponse(val name: String)
+data class StateResponse(
+    val name: String,
+)

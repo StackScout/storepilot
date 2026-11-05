@@ -5,7 +5,6 @@ import com.storepilot.backend.admin.AdminRepository
 import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.buyer.BuyerRepository
 import com.storepilot.backend.common.ForbiddenException
-import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -41,14 +40,19 @@ class CurrentActorTest {
         SecurityContextHolder.clearContext()
     }
 
-    private fun authenticateAs(sub: String, vararg roles: String) {
-        val jwt = Jwt.withTokenValue("token")
-            .header("alg", "none")
-            .subject(sub)
-            .claim("username", sub)
-            .issuedAt(Instant.now())
-            .expiresAt(Instant.now().plusSeconds(60))
-            .build()
+    private fun authenticateAs(
+        sub: String,
+        vararg roles: String,
+    ) {
+        val jwt =
+            Jwt
+                .withTokenValue("token")
+                .header("alg", "none")
+                .subject(sub)
+                .claim("username", sub)
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build()
         val authorities: Collection<GrantedAuthority> = roles.map { SimpleGrantedAuthority("ROLE_$it") }
         SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt, authorities)
     }
@@ -57,12 +61,21 @@ class CurrentActorTest {
     fun stubCognitoProfileLookup() {
         every {
             cognitoClient.adminGetUser(any<AdminGetUserRequest>())
-        } returns AdminGetUserResponse.builder()
-            .userAttributes(
-                AttributeType.builder().name("email").value("actor@example.com").build(),
-                AttributeType.builder().name("name").value("Actor Name").build(),
-            )
-            .build()
+        } returns
+            AdminGetUserResponse
+                .builder()
+                .userAttributes(
+                    AttributeType
+                        .builder()
+                        .name("email")
+                        .value("actor@example.com")
+                        .build(),
+                    AttributeType
+                        .builder()
+                        .name("name")
+                        .value("Actor Name")
+                        .build(),
+                ).build()
     }
 
     @Test
@@ -122,9 +135,12 @@ class CurrentActorTest {
         // return null (neither row exists yet) and both attempt to insert —
         // only one wins at the database level. This simulates the loser.
         authenticateAs("sub-1", "BUYER")
-        every { buyerRepository.findByCognitoSub("sub-1") } returns null andThen Buyer(
-            name = "Actor Name", email = "actor@example.com", cognitoSub = "sub-1",
-        )
+        every { buyerRepository.findByCognitoSub("sub-1") } returns null andThen
+            Buyer(
+                name = "Actor Name",
+                email = "actor@example.com",
+                cognitoSub = "sub-1",
+            )
         every { buyerRepository.findByEmailIgnoreCase("actor@example.com") } returns null
         every { buyerRepository.saveAndFlush(any<Buyer>()) } throws
             org.springframework.dao.DataIntegrityViolationException("duplicate key value violates unique constraint \"buyers_email_key\"")

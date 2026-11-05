@@ -27,17 +27,32 @@ class GuestLookupOtpServiceTest {
 
     @BeforeEach
     fun setUp() {
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
-            currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true, proPlanEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney", returnWindowDays = 14,
-        )
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
         every { repository.save(any()) } answers { firstArg() }
     }
 
-    private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun sha256(value: String) =
+        MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 
     @Test
     fun `requestCode creates a new record and emails a code when none exists yet`() {
@@ -55,8 +70,17 @@ class GuestLookupOtpServiceTest {
 
     @Test
     fun `requestCode overwrites an existing record and resets its attempt count`() {
-        val existing = GuestLookupCode(targetType = "order", targetId = targetId, codeHash = "stale-hash", expiresAt = Instant.now().minus(1, ChronoUnit.DAYS), attempts = 3)
-            .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val existing =
+            GuestLookupCode(
+                targetType = "order",
+                targetId = targetId,
+                codeHash = "stale-hash",
+                expiresAt = Instant.now().minus(1, ChronoUnit.DAYS),
+                attempts = 3,
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { repository.findByTargetTypeAndTargetId("order", targetId) } returns existing
 
         service.requestCode("order", targetId, "buyer@example.com", "Jane")
@@ -86,8 +110,16 @@ class GuestLookupOtpServiceTest {
 
     @Test
     fun `verifyCode rejects an expired code`() {
-        val record = GuestLookupCode(targetType = "order", targetId = targetId, codeHash = sha256("123456"), expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES))
-            .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val record =
+            GuestLookupCode(
+                targetType = "order",
+                targetId = targetId,
+                codeHash = sha256("123456"),
+                expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES),
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { repository.findByTargetTypeAndTargetId("order", targetId) } returns record
 
         val ex = assertThrows(IllegalArgumentException::class.java) { service.verifyCode("order", targetId, "123456") }
@@ -96,8 +128,17 @@ class GuestLookupOtpServiceTest {
 
     @Test
     fun `verifyCode rejects once too many attempts have already been made`() {
-        val record = GuestLookupCode(targetType = "order", targetId = targetId, codeHash = sha256("123456"), expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES), attempts = 5)
-            .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val record =
+            GuestLookupCode(
+                targetType = "order",
+                targetId = targetId,
+                codeHash = sha256("123456"),
+                expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES),
+                attempts = 5,
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { repository.findByTargetTypeAndTargetId("order", targetId) } returns record
 
         val ex = assertThrows(IllegalArgumentException::class.java) { service.verifyCode("order", targetId, "123456") }
@@ -106,8 +147,17 @@ class GuestLookupOtpServiceTest {
 
     @Test
     fun `verifyCode increments attempts and rejects a wrong code`() {
-        val record = GuestLookupCode(targetType = "order", targetId = targetId, codeHash = sha256("123456"), expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES), attempts = 1)
-            .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val record =
+            GuestLookupCode(
+                targetType = "order",
+                targetId = targetId,
+                codeHash = sha256("123456"),
+                expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES),
+                attempts = 1,
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { repository.findByTargetTypeAndTargetId("order", targetId) } returns record
 
         val ex = assertThrows(IllegalArgumentException::class.java) { service.verifyCode("order", targetId, "000000") }
@@ -119,8 +169,16 @@ class GuestLookupOtpServiceTest {
 
     @Test
     fun `verifyCode deletes the record on a correct code`() {
-        val record = GuestLookupCode(targetType = "order", targetId = targetId, codeHash = sha256("123456"), expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES))
-            .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val record =
+            GuestLookupCode(
+                targetType = "order",
+                targetId = targetId,
+                codeHash = sha256("123456"),
+                expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES),
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { repository.findByTargetTypeAndTargetId("order", targetId) } returns record
         every { repository.delete(record) } returns Unit
 

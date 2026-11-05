@@ -13,12 +13,12 @@ import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
-import org.springframework.data.domain.PageImpl
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
@@ -61,7 +61,10 @@ class CouponServiceTest {
             minSubtotal = minSubtotal,
             expiresAt = expiresAt,
             active = active,
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
     }
 
     @Test
@@ -73,14 +76,16 @@ class CouponServiceTest {
 
     @Test
     fun `resolve computes a fixed discount`() {
-        every { couponRepository.findByCode("FLAT500") } returns coupon(code = "FLAT500", discountType = DiscountType.FIXED, discountValue = 500)
+        every { couponRepository.findByCode("FLAT500") } returns
+            coupon(code = "FLAT500", discountType = DiscountType.FIXED, discountValue = 500)
         val resolution = service.resolve("FLAT500", storeId, CouponKind.ORDER, 1000)
         assertEquals(500, resolution.discountAmount)
     }
 
     @Test
     fun `resolve caps a fixed discount at the checkout amount`() {
-        every { couponRepository.findByCode("FLAT500") } returns coupon(code = "FLAT500", discountType = DiscountType.FIXED, discountValue = 500)
+        every { couponRepository.findByCode("FLAT500") } returns
+            coupon(code = "FLAT500", discountType = DiscountType.FIXED, discountValue = 500)
         val resolution = service.resolve("FLAT500", storeId, CouponKind.ORDER, 300)
         assertEquals(300, resolution.discountAmount)
     }
@@ -170,22 +175,30 @@ class CouponServiceTest {
 
     @BeforeEach
     fun setUpStore() {
-        store = Store(
-            seller = seller, slug = "store", name = "Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
     }
 
-    private fun couponInput(code: String = "NEW20") = CouponInput(
-        code = code,
-        discountType = "percent",
-        discountValue = 20,
-        appliesToOrders = true,
-        appliesToBookings = true,
-    )
+    private fun couponInput(code: String = "NEW20") =
+        CouponInput(
+            code = code,
+            discountType = "percent",
+            discountValue = 20,
+            appliesToOrders = true,
+            appliesToBookings = true,
+        )
 
     @Test
     fun `createForStore rejects a seller who doesn't own the store`() {
@@ -198,7 +211,12 @@ class CouponServiceTest {
     @Test
     fun `createForStore normalizes the code to uppercase and scopes it to the store`() {
         val slot = io.mockk.slot<Coupon>()
-        every { couponRepository.save(capture(slot)) } answers { slot.captured.apply { id = UUID.randomUUID(); createdAt = Instant.now() } }
+        every { couponRepository.save(capture(slot)) } answers {
+            slot.captured.apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
+        }
 
         val result = service.createForStore(storeId, couponInput(code = "  new20  "))
 
@@ -262,7 +280,10 @@ class CouponServiceTest {
     fun `createPlatformWide requires an admin`() {
         every { currentActor.requireAdmin() } returns mockk()
         every { couponRepository.save(any()) } answers {
-            (firstArg() as Coupon).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+            (firstArg() as Coupon).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         }
 
         val result = service.createPlatformWide(couponInput())

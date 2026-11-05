@@ -13,11 +13,13 @@ fun isValidAbnChecksum(rawAbn: String): Boolean {
     val digits = rawAbn.filter { it.isDigit() }
     if (digits.length != 11) return false
 
-    val weightedSum = digits.mapIndexed { index, char ->
-        val digit = char.digitToInt()
-        val adjusted = if (index == 0) digit - 1 else digit
-        adjusted * WEIGHTS[index]
-    }.sum()
+    val weightedSum =
+        digits
+            .mapIndexed { index, char ->
+                val digit = char.digitToInt()
+                val adjusted = if (index == 0) digit - 1 else digit
+                adjusted * WEIGHTS[index]
+            }.sum()
 
     return weightedSum % 89 == 0
 }

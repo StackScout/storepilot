@@ -18,7 +18,9 @@ class StoreVerificationChangeRequestController(
     private val changeRequestService: StoreVerificationChangeRequestService,
 ) {
     @GetMapping("/api/stores/{storeId}/verification-change-requests/current")
-    fun current(@PathVariable storeId: UUID): ResponseEntity<StoreVerificationChangeRequestResponse> {
+    fun current(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<StoreVerificationChangeRequestResponse> {
         val request = changeRequestService.current(storeId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(request)
     }
@@ -44,7 +46,9 @@ class StoreVerificationChangeRequestController(
     ): PageResponse<StoreVerificationChangeRequestResponse> = changeRequestService.adminList(status, page, size)
 
     @PostMapping("/api/admin/verification-change-requests/{id}/approve")
-    fun adminApprove(@PathVariable id: UUID): StoreSettingsResponse = changeRequestService.adminApprove(id)
+    fun adminApprove(
+        @PathVariable id: UUID,
+    ): StoreSettingsResponse = changeRequestService.adminApprove(id)
 
     @PostMapping("/api/admin/verification-change-requests/{id}/reject")
     fun adminReject(

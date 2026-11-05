@@ -6,10 +6,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
@@ -33,7 +32,9 @@ class ProductController(
     ): PageResponse<ProductResponse> = productService.search(category, query, minPrice, maxPrice, sort, page, size)
 
     @GetMapping("/api/products/{id}")
-    fun getById(@PathVariable id: UUID): ProductResponse = productService.getById(id)
+    fun getById(
+        @PathVariable id: UUID,
+    ): ProductResponse = productService.getById(id)
 
     @GetMapping("/api/stores/{storeId}/products")
     fun listByStore(
@@ -58,19 +59,27 @@ class ProductController(
     ): ProductResponse = productService.update(id, input, images.orEmpty())
 
     @DeleteMapping("/api/products/{id}")
-    fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
+    fun delete(
+        @PathVariable id: UUID,
+    ): ResponseEntity<Void> {
         productService.delete(id)
         return ResponseEntity.noContent().build()
     }
 
     @GetMapping("/api/products/{id}/wishlist")
-    fun getWishlistStatus(@PathVariable id: UUID): WishlistStatusResponse = WishlistStatusResponse(productService.isWishlisted(id))
+    fun getWishlistStatus(
+        @PathVariable id: UUID,
+    ): WishlistStatusResponse = WishlistStatusResponse(productService.isWishlisted(id))
 
     @PostMapping("/api/products/{id}/wishlist")
-    fun addToWishlist(@PathVariable id: UUID): WishlistStatusResponse = WishlistStatusResponse(productService.addToWishlist(id))
+    fun addToWishlist(
+        @PathVariable id: UUID,
+    ): WishlistStatusResponse = WishlistStatusResponse(productService.addToWishlist(id))
 
     @DeleteMapping("/api/products/{id}/wishlist")
-    fun removeFromWishlist(@PathVariable id: UUID): ResponseEntity<Void> {
+    fun removeFromWishlist(
+        @PathVariable id: UUID,
+    ): ResponseEntity<Void> {
         productService.removeFromWishlist(id)
         return ResponseEntity.noContent().build()
     }

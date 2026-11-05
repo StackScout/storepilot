@@ -56,8 +56,11 @@ class PayHereService(
 
         // ShippingDetails only has one combined fullName field; PayHere wants
         // first/last split separately.
-        val nameParts = order.shipping.fullName?.trim()?.split(Regex("\\s+"), limit = 2)
-            ?.filter { it.isNotBlank() } ?: emptyList()
+        val nameParts =
+            order.shipping.fullName
+                ?.trim()
+                ?.split(Regex("\\s+"), limit = 2)
+                ?.filter { it.isNotBlank() } ?: emptyList()
         val firstName = nameParts.getOrElse(0) { "Customer" }
         val lastName = nameParts.getOrElse(1) { firstName }
 
@@ -101,7 +104,11 @@ class PayHereService(
         val currency = platformConfig.currencyCode
         val hash = generateHash(bookingId.toString(), amount, currency)
 
-        val nameParts = booking.buyerName.trim().split(Regex("\\s+"), limit = 2).filter { it.isNotBlank() }
+        val nameParts =
+            booking.buyerName
+                .trim()
+                .split(Regex("\\s+"), limit = 2)
+                .filter { it.isNotBlank() }
         val firstName = nameParts.getOrElse(0) { "Customer" }
         val lastName = nameParts.getOrElse(1) { firstName }
 
@@ -142,12 +149,19 @@ class PayHereService(
         val payhereCurrency = params["payhere_currency"]
         val statusCode = params["status_code"]
         val md5sig = params["md5sig"]
-        if (merchantId == null || orderIdRaw == null || payhereAmount == null || payhereCurrency == null || statusCode == null || md5sig == null) {
+        if (merchantId == null ||
+            orderIdRaw == null ||
+            payhereAmount == null ||
+            payhereCurrency == null ||
+            statusCode == null ||
+            md5sig == null
+        ) {
             log.warn("PayHere notify: missing required params, ignoring: {}", params.keys)
             return
         }
 
-        val expected = md5Upper(merchantId + orderIdRaw + payhereAmount + payhereCurrency + statusCode + md5Upper(properties.merchantSecret))
+        val expected =
+            md5Upper(merchantId + orderIdRaw + payhereAmount + payhereCurrency + statusCode + md5Upper(properties.merchantSecret))
         if (expected != md5sig) {
             log.warn("PayHere notify: md5sig mismatch for order {} — ignoring (possible forged callback)", orderIdRaw)
             return
@@ -169,8 +183,10 @@ class PayHereService(
         val paymentId = params["payment_id"]
         val method = params["method"]
         val statusMessage = params["status_message"]
-        val note = listOfNotNull(method?.let { "Method: $it" }, paymentId?.let { "PayHere payment ID: $it" })
-            .joinToString(" · ").ifBlank { null }
+        val note =
+            listOfNotNull(method?.let { "Method: $it" }, paymentId?.let { "PayHere payment ID: $it" })
+                .joinToString(" · ")
+                .ifBlank { null }
 
         if (order != null) {
             when (statusCode) {
@@ -178,7 +194,13 @@ class PayHereService(
                     order.paymentStatus = PaymentStatus.PAID
                     if (order.status == OrderStatus.PENDING) order.status = OrderStatus.CONFIRMED
                     order.timeline.add(
-                        OrderTimelineEntry(order = order, status = order.status, label = "Payment confirmed via PayHere", timestamp = Instant.now(), note = note),
+                        OrderTimelineEntry(
+                            order = order,
+                            status = order.status,
+                            label = "Payment confirmed via PayHere",
+                            timestamp = Instant.now(),
+                            note = note,
+                        ),
                     )
                 }
                 "-1", "-2", "-3" -> {
@@ -201,7 +223,13 @@ class PayHereService(
                     booking.paymentStatus = PaymentStatus.PAID
                     if (booking.status == BookingStatus.PENDING) booking.status = BookingStatus.CONFIRMED
                     booking.timeline.add(
-                        BookingTimelineEntry(booking = booking, status = booking.status, label = "Payment confirmed via PayHere", timestamp = Instant.now(), note = note),
+                        BookingTimelineEntry(
+                            booking = booking,
+                            status = booking.status,
+                            label = "Payment confirmed via PayHere",
+                            timestamp = Instant.now(),
+                            note = note,
+                        ),
                     )
                 }
                 "-1", "-2", "-3" -> {
@@ -221,8 +249,11 @@ class PayHereService(
         }
     }
 
-    private fun generateHash(orderId: String, amount: String, currency: String): String =
-        md5Upper(properties.merchantId + orderId + amount + currency + md5Upper(properties.merchantSecret))
+    private fun generateHash(
+        orderId: String,
+        amount: String,
+        currency: String,
+    ): String = md5Upper(properties.merchantId + orderId + amount + currency + md5Upper(properties.merchantSecret))
 
     private fun md5Upper(input: String): String {
         val digest = MessageDigest.getInstance("MD5").digest(input.toByteArray(Charsets.UTF_8))

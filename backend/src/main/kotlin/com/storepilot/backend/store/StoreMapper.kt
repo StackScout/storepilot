@@ -3,7 +3,10 @@ package com.storepilot.backend.store
 import com.storepilot.backend.common.storage.FileStorageService
 
 /** logoUrl/bannerUrl are resolved fresh on every call when present (never cached) — see FileStorageService.resolveUrl. Null means the seller hasn't uploaded one yet; the frontend renders a generated fallback in that case. [role] is only ever supplied by StoreService.getMyStore — see StoreResponse.role's doc comment. */
-fun Store.toResponse(fileStorageService: FileStorageService, role: String? = null): StoreResponse =
+fun Store.toResponse(
+    fileStorageService: FileStorageService,
+    role: String? = null,
+): StoreResponse =
     StoreResponse(
         id = requireNotNull(id),
         slug = slug,
@@ -62,7 +65,10 @@ fun StoreSettings.toResponse(fileStorageService: FileStorageService): StoreSetti
     )
 
 /** currentSettings is read fresh at map time (see StoreVerificationChangeRequestResponse's doc comment), not stored on the request row — null only if a store somehow has no settings row at all, defensively defaulted to INDIVIDUAL/blank rather than crashing the admin review list over one bad row. */
-fun StoreVerificationChangeRequest.toResponse(currentSettings: StoreSettings?, fileStorageService: FileStorageService): StoreVerificationChangeRequestResponse =
+fun StoreVerificationChangeRequest.toResponse(
+    currentSettings: StoreSettings?,
+    fileStorageService: FileStorageService,
+): StoreVerificationChangeRequestResponse =
     StoreVerificationChangeRequestResponse(
         id = requireNotNull(id),
         storeId = requireNotNull(store.id),

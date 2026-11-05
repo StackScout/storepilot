@@ -27,17 +27,31 @@ class LowStockAlertJobTest {
     @BeforeEach
     fun setUp() {
         val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
     }
 
-    private fun product() = Product(
-        store = store, name = "Handmade Vase", slug = "handmade-vase", description = "description", category = "handicrafts",
-        price = 5000, stockQuantity = 3, status = ProductStatus.ACTIVE,
-    ).apply { id = UUID.randomUUID() }
+    private fun product() =
+        Product(
+            store = store,
+            name = "Handmade Vase",
+            slug = "handmade-vase",
+            description = "description",
+            category = "handicrafts",
+            price = 5000,
+            stockQuantity = 3,
+            status = ProductStatus.ACTIVE,
+        ).apply { id = UUID.randomUUID() }
 
     @Test
     fun `alerts and stamps every low-stock product returned by the repository`() {

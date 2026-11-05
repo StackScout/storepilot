@@ -38,19 +38,21 @@ import kotlin.random.Random
 /** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
 private const val MAX_PAGE_SIZE = 100
 
-private val ORDER_NUMBER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatterBuilder()
-    .appendValue(ChronoField.YEAR, 4)
-    .appendValue(ChronoField.MONTH_OF_YEAR, 2)
-    .appendValue(ChronoField.DAY_OF_MONTH, 2)
-    .toFormatter()
+private val ORDER_NUMBER_DATE_FORMAT: DateTimeFormatter =
+    DateTimeFormatterBuilder()
+        .appendValue(ChronoField.YEAR, 4)
+        .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+        .appendValue(ChronoField.DAY_OF_MONTH, 2)
+        .toFormatter()
 
-private val STATUS_LABELS = mapOf(
-    OrderStatus.PENDING to "Order placed",
-    OrderStatus.CONFIRMED to "Order confirmed by seller",
-    OrderStatus.SHIPPED to "Handed over to courier",
-    OrderStatus.DELIVERED to "Delivered",
-    OrderStatus.CANCELLED to "Cancelled",
-)
+private val STATUS_LABELS =
+    mapOf(
+        OrderStatus.PENDING to "Order placed",
+        OrderStatus.CONFIRMED to "Order confirmed by seller",
+        OrderStatus.SHIPPED to "Handed over to courier",
+        OrderStatus.DELIVERED to "Delivered",
+        OrderStatus.CANCELLED to "Cancelled",
+    )
 
 /**
  * Server-side mirror of the frontend's OrderStatusSelect NEXT_STATUS_OPTIONS
@@ -60,13 +62,14 @@ private val STATUS_LABELS = mapOf(
  * can resubmit shipping details without the status itself changing);
  * delivered/cancelled are terminal — no transition out of either.
  */
-private val ALLOWED_STATUS_TRANSITIONS: Map<OrderStatus, Set<OrderStatus>> = mapOf(
-    OrderStatus.PENDING to setOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED),
-    OrderStatus.CONFIRMED to setOf(OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.CANCELLED),
-    OrderStatus.SHIPPED to setOf(OrderStatus.SHIPPED, OrderStatus.DELIVERED),
-    OrderStatus.DELIVERED to setOf(OrderStatus.DELIVERED),
-    OrderStatus.CANCELLED to setOf(OrderStatus.CANCELLED),
-)
+private val ALLOWED_STATUS_TRANSITIONS: Map<OrderStatus, Set<OrderStatus>> =
+    mapOf(
+        OrderStatus.PENDING to setOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED),
+        OrderStatus.CONFIRMED to setOf(OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.CANCELLED),
+        OrderStatus.SHIPPED to setOf(OrderStatus.SHIPPED, OrderStatus.DELIVERED),
+        OrderStatus.DELIVERED to setOf(OrderStatus.DELIVERED),
+        OrderStatus.CANCELLED to setOf(OrderStatus.CANCELLED),
+    )
 
 @Service
 @Transactional(readOnly = true)
@@ -94,17 +97,23 @@ class OrderService(
     }
 
     /** GET /api/stores/{storeId}/orders — paginated: a long-running store can accumulate thousands of orders. */
-    fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<OrderResponse> {
+    fun listByStore(
+        storeId: UUID,
+        status: String?,
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         storeAccessService.requireOperationalAccess(store)
 
         val statusEnum = status?.let { wireValueOf<OrderStatus>(it) }
         val pageable = PageRequest.of(page, size)
-        val orders = if (statusEnum != null) {
-            orderRepository.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, statusEnum, pageable)
-        } else {
-            orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable)
-        }
+        val orders =
+            if (statusEnum != null) {
+                orderRepository.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, statusEnum, pageable)
+            } else {
+                orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable)
+            }
         return orders.toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
@@ -124,10 +133,15 @@ class OrderService(
 
     /** Paged sibling of the above — GET /api/me/orders itself. */
     @Transactional
-    fun listByCurrentBuyer(page: Int, size: Int): PageResponse<OrderResponse> {
+    fun listByCurrentBuyer(
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
+        return orderRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse {
+            it.toResponse(receiptStorageService, fileStorageService)
+        }
     }
 
     /**
@@ -137,32 +151,53 @@ class OrderService(
      * took. Never a ledger to release/collect from — Connect already moved
      * the money at charge time (see PaymentMethod.STRIPE's doc comment).
      */
-    fun listStripeSettlementsByStore(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> {
+    fun listStripeSettlementsByStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> {
         val seller = currentActor.requireSeller()
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         if (store.seller.id != seller.id) throw ForbiddenException("You don't own store $storeId")
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return orderRepository.findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId, PaymentMethod.STRIPE, PaymentStatus.PAID, pageable)
-            .toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
+        return orderRepository
+            .findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(
+                storeId,
+                PaymentMethod.STRIPE,
+                PaymentStatus.PAID,
+                pageable,
+            ).toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
     /** Unpaged — internal cross-service use (AccountingService.summary() needs every settled order to sum correctly). GET /api/admin/stripe-settlements uses the paged overload below. */
     fun adminListStripeSettlements(): List<OrderResponse> =
-        orderRepository.findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID)
+        orderRepository
+            .findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID)
             .map { it.toResponse(receiptStorageService, fileStorageService) }
 
     /** Paged sibling of the above — GET /api/admin/stripe-settlements itself. */
-    fun adminListStripeSettlements(page: Int, size: Int): PageResponse<OrderResponse> {
+    fun adminListStripeSettlements(
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return orderRepository.findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID, pageable)
+        return orderRepository
+            .findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(PaymentMethod.STRIPE, PaymentStatus.PAID, pageable)
             .toPageResponse { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
     fun getById(id: UUID): OrderResponse =
-        orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }.toResponse(receiptStorageService, fileStorageService)
+        orderRepository
+            .findById(
+                id,
+            ).orElseThrow { NotFoundException("Order $id not found") }
+            .toResponse(receiptStorageService, fileStorageService)
 
     /** Order number (exact, case-insensitive) + last 9 digits of phone — the first factor of guest lookup, shared by both steps below. */
-    private fun resolveByNumberAndPhone(orderNumber: String, phone: String): Order? {
+    private fun resolveByNumberAndPhone(
+        orderNumber: String,
+        phone: String,
+    ): Order? {
         val normalizedInput = phone.replace(Regex("\\s+"), "")
         val suffix = normalizedInput.takeLast(9)
         val order = orderRepository.findByOrderNumberIgnoreCase(orderNumber.trim()) ?: return null
@@ -182,7 +217,10 @@ class OrderService(
      * the response either way.
      */
     @Transactional
-    fun requestLookupCode(orderNumber: String, phone: String) {
+    fun requestLookupCode(
+        orderNumber: String,
+        phone: String,
+    ) {
         val order = resolveByNumberAndPhone(orderNumber, phone) ?: return
         guestLookupOtpService.requestCode(
             targetType = "order",
@@ -194,7 +232,11 @@ class OrderService(
 
     /** POST /api/orders/lookup/verify — second step, completes the lookup. Throws NotFoundException (number/phone mismatch) or IllegalArgumentException (bad/expired code — see GuestLookupOtpService.verifyCode). */
     @Transactional
-    fun verifyLookupCode(orderNumber: String, phone: String, code: String): OrderResponse {
+    fun verifyLookupCode(
+        orderNumber: String,
+        phone: String,
+        code: String,
+    ): OrderResponse {
         val order = resolveByNumberAndPhone(orderNumber, phone) ?: throw NotFoundException("Order not found")
         guestLookupOtpService.verifyCode("order", requireNotNull(order.id), code)
         return order.toResponse(receiptStorageService, fileStorageService)
@@ -203,11 +245,13 @@ class OrderService(
     /** POST /api/orders — checkout. */
     @Transactional
     fun createOrder(input: CheckoutInput): OrderResponse {
-        val resolvedItems = input.items.map { line ->
-            val product = productService.findEntity(line.productId)
-                ?: throw NotFoundException("Product ${line.productId} not found")
-            Triple(product, line.quantity, product.store)
-        }
+        val resolvedItems =
+            input.items.map { line ->
+                val product =
+                    productService.findEntity(line.productId)
+                        ?: throw NotFoundException("Product ${line.productId} not found")
+                Triple(product, line.quantity, product.store)
+            }
         // product.trackStock is already the AND of the store's and the
         // product's own stock-management opt-in (see ProductService's
         // effectiveTrackStock) — so a product with tracking off, or
@@ -229,8 +273,10 @@ class OrderService(
         // both the platform fee and the buyer's total are derived from. Use
         // is only recorded after the order is actually persisted (below),
         // so a failed/aborted checkout never burns a use.
-        val couponResolution = input.couponCode?.takeIf { it.isNotBlank() }
-            ?.let { couponService.resolve(it, requireNotNull(store.id), CouponKind.ORDER, subtotal) }
+        val couponResolution =
+            input.couponCode
+                ?.takeIf { it.isNotBlank() }
+                ?.let { couponService.resolve(it, requireNotNull(store.id), CouponKind.ORDER, subtotal) }
         val discountAmount = couponResolution?.discountAmount ?: 0
         val discountedSubtotal = subtotal - discountAmount
 
@@ -254,9 +300,10 @@ class OrderService(
         val shippingFee = if (deliveryMethod == DeliveryMethod.PICKUP) 0 else platformConfig.flatShippingFee
 
         val feePercent = storeSettings?.transactionFeePercent ?: platformConfig.platformFeePercent
-        val platformFee = (BigDecimal(discountedSubtotal) * feePercent)
-            .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
-            .toInt()
+        val platformFee =
+            (BigDecimal(discountedSubtotal) * feePercent)
+                .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
+                .toInt()
 
         val now = Instant.now()
         val paymentMethod = wireValueOf<PaymentMethod>(input.paymentMethod)
@@ -267,7 +314,10 @@ class OrderService(
         // must still be blocked here, not just hidden in the UI. Skipped
         // entirely on a deployment with no Pro tier concept (see
         // PlatformSettings.proPlanEnabled's doc comment).
-        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO && platformConfig.proPlanEnabled) {
+        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) &&
+            store.seller.plan != SellerPlan.PRO &&
+            platformConfig.proPlanEnabled
+        ) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
         // Platform-wide ceiling, admin-configurable (see PlatformSettings'
@@ -277,7 +327,9 @@ class OrderService(
         // client. PayHere/Stripe are both "online payment" — only one is
         // ever wired up per deployment (PayHere for LK, Stripe for AU), so
         // a single flag covers whichever this deployment uses.
-        if ((paymentMethod == PaymentMethod.PAYHERE || paymentMethod == PaymentMethod.STRIPE) && !platformConfig.defaultOnlinePaymentEnabled) {
+        if ((paymentMethod == PaymentMethod.PAYHERE || paymentMethod == PaymentMethod.STRIPE) &&
+            !platformConfig.defaultOnlinePaymentEnabled
+        ) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
         if (paymentMethod == PaymentMethod.COD && !platformConfig.defaultCodEnabled) {
@@ -300,54 +352,59 @@ class OrderService(
         // registration at this exact moment — see Order.kt's doc comment.
         // AU retail prices are GST-inclusive by convention, so the GST
         // component of a GST-inclusive total is total / 11, not total * 0.1.
-        val gstAmount = if (storeSettings?.gstRegistered == true) {
-            BigDecimal(total).divide(BigDecimal(11), 0, RoundingMode.HALF_UP).toInt()
-        } else {
-            null
-        }
+        val gstAmount =
+            if (storeSettings?.gstRegistered == true) {
+                BigDecimal(total).divide(BigDecimal(11), 0, RoundingMode.HALF_UP).toInt()
+            } else {
+                null
+            }
         val sellerAbn = if (storeSettings?.gstRegistered == true) storeSettings.abn else null
 
         // The slowest item in the order sets the whole order's fulfillment/
         // delivery promise — resolved once here, while every Product row is
         // still guaranteed to exist, then snapshotted onto the Order (see
         // its doc comment on why this can't be a live join later).
-        val fulfillmentTimeHours = resolvedItems.maxOf { (product, _, _) ->
-            product.fulfillmentTimeHours ?: (storeSettings?.defaultFulfillmentTimeHours ?: 48)
-        }
-        val deliveryTimeHours = resolvedItems.maxOf { (product, _, _) ->
-            product.deliveryTimeHours ?: (storeSettings?.defaultDeliveryTimeHours ?: 120)
-        }
+        val fulfillmentTimeHours =
+            resolvedItems.maxOf { (product, _, _) ->
+                product.fulfillmentTimeHours ?: (storeSettings?.defaultFulfillmentTimeHours ?: 48)
+            }
+        val deliveryTimeHours =
+            resolvedItems.maxOf { (product, _, _) ->
+                product.deliveryTimeHours ?: (storeSettings?.defaultDeliveryTimeHours ?: 120)
+            }
 
-        val order = Order(
-            orderNumber = generateOrderNumber(now, platformConfig.countryCode),
-            store = store,
-            subtotal = subtotal,
-            fulfillmentTimeHours = fulfillmentTimeHours,
-            deliveryTimeHours = deliveryTimeHours,
-            deliveryMethod = deliveryMethod,
-            shippingFee = shippingFee,
-            platformFee = platformFee,
-            total = total,
-            couponCode = couponResolution?.code,
-            discountAmount = discountAmount,
-            sellerAbn = sellerAbn,
-            gstAmount = gstAmount,
-            status = OrderStatus.PENDING,
-            paymentMethod = paymentMethod,
-            paymentStatus = paymentStatus,
-            shipping = ShippingDetails(
-                fullName = input.shipping.fullName,
-                phone = input.shipping.phone,
-                // Normalized to null (never a blank/placeholder string) —
-                // a pickup order has no address at all.
-                addressLine1 = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.addressLine1,
-                city = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.city,
-                state = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.state,
-                postalCode = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.postalCode,
-            ),
-            buyerEmail = input.email,
-            buyer = buyer,
-        )
+        val order =
+            Order(
+                orderNumber = generateOrderNumber(now, platformConfig.countryCode),
+                store = store,
+                subtotal = subtotal,
+                fulfillmentTimeHours = fulfillmentTimeHours,
+                deliveryTimeHours = deliveryTimeHours,
+                deliveryMethod = deliveryMethod,
+                shippingFee = shippingFee,
+                platformFee = platformFee,
+                total = total,
+                couponCode = couponResolution?.code,
+                discountAmount = discountAmount,
+                sellerAbn = sellerAbn,
+                gstAmount = gstAmount,
+                status = OrderStatus.PENDING,
+                paymentMethod = paymentMethod,
+                paymentStatus = paymentStatus,
+                shipping =
+                    ShippingDetails(
+                        fullName = input.shipping.fullName,
+                        phone = input.shipping.phone,
+                        // Normalized to null (never a blank/placeholder string) —
+                        // a pickup order has no address at all.
+                        addressLine1 = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.addressLine1,
+                        city = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.city,
+                        state = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.state,
+                        postalCode = if (deliveryMethod == DeliveryMethod.PICKUP) null else input.shipping.postalCode,
+                    ),
+                buyerEmail = input.email,
+                buyer = buyer,
+            )
         resolvedItems.forEach { (product, quantity, _) ->
             order.items.add(
                 OrderItem(
@@ -361,7 +418,12 @@ class OrderService(
             )
         }
         order.timeline.add(
-            OrderTimelineEntry(order = order, status = OrderStatus.PENDING, label = STATUS_LABELS.getValue(OrderStatus.PENDING), timestamp = now),
+            OrderTimelineEntry(
+                order = order,
+                status = OrderStatus.PENDING,
+                label = STATUS_LABELS.getValue(OrderStatus.PENDING),
+                timestamp = now,
+            ),
         )
 
         val saved = orderRepository.save(order)
@@ -381,7 +443,11 @@ class OrderService(
      * being stored for later viewing on the order page.
      */
     @Transactional
-    fun updateStatus(id: UUID, input: OrderStatusUpdateInput, courierReceipt: MultipartFile?): OrderResponse {
+    fun updateStatus(
+        id: UUID,
+        input: OrderStatusUpdateInput,
+        courierReceipt: MultipartFile?,
+    ): OrderResponse {
         val order = orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }
         requireSellerOwnsOrder(order)
         val status = wireValueOf<OrderStatus>(input.status)
@@ -426,12 +492,13 @@ class OrderService(
             // Starts the delivery-time clock — see Order.shippedAt's doc comment.
             order.shippedAt = Instant.now()
             if (courierReceipt != null && !courierReceipt.isEmpty) {
-                order.courierReceiptUrl = fileStorageService.store(
-                    "courier-receipts",
-                    courierReceipt,
-                    FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
-                    FileUploadPolicies.DOCUMENT_MAX_BYTES,
-                )
+                order.courierReceiptUrl =
+                    fileStorageService.store(
+                        "courier-receipts",
+                        courierReceipt,
+                        FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+                        FileUploadPolicies.DOCUMENT_MAX_BYTES,
+                    )
             }
         }
 
@@ -457,7 +524,10 @@ class OrderService(
 
     /** POST /api/orders/{id}/receipt — buyer uploads proof of a bank transfer. */
     @Transactional
-    fun uploadReceipt(id: UUID, file: MultipartFile): OrderResponse {
+    fun uploadReceipt(
+        id: UUID,
+        file: MultipartFile,
+    ): OrderResponse {
         val order = orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }
         if (order.paymentMethod != PaymentMethod.BANK_TRANSFER) {
             throw ConflictException("Order $id is not a bank transfer payment")
@@ -483,7 +553,10 @@ class OrderService(
 
     /** POST /api/orders/{id}/verify-bank-transfer — seller accepts or rejects the uploaded receipt. */
     @Transactional
-    fun verifyBankTransfer(id: UUID, input: VerifyBankTransferInput): OrderResponse {
+    fun verifyBankTransfer(
+        id: UUID,
+        input: VerifyBankTransferInput,
+    ): OrderResponse {
         val order = orderRepository.findById(id).orElseThrow { NotFoundException("Order $id not found") }
         requireSellerOwnsOrder(order)
         if (order.paymentMethod != PaymentMethod.BANK_TRANSFER) {
@@ -560,11 +633,12 @@ class OrderService(
                 status = OrderStatus.CANCELLED,
                 label = "Cancelled by buyer",
                 timestamp = Instant.now(),
-                note = if (hadRejectedReceipt) {
-                    "Cancelled after the payment receipt was rejected"
-                } else {
-                    "Cancelled before a payment receipt was uploaded"
-                },
+                note =
+                    if (hadRejectedReceipt) {
+                        "Cancelled after the payment receipt was rejected"
+                    } else {
+                        "Cancelled before a payment receipt was uploaded"
+                    },
             ),
         )
         val saved = orderRepository.save(order)
@@ -572,7 +646,10 @@ class OrderService(
         return publishOrderEvent(saved)
     }
 
-    private fun generateOrderNumber(now: Instant, countryCode: String): String {
+    private fun generateOrderNumber(
+        now: Instant,
+        countryCode: String,
+    ): String {
         val datePart = ORDER_NUMBER_DATE_FORMAT.format(now.atZone(java.time.ZoneOffset.UTC))
         val randomPart = Random.nextInt(1000, 10000)
         return "$countryCode-$datePart-$randomPart"

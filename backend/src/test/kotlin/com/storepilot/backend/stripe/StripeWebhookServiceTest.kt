@@ -33,11 +33,16 @@ class StripeWebhookServiceTest {
         unmockkAll()
     }
 
-    private fun eventOf(eventType: String, payload: Any?): Event {
-        val deserializer = mockk<EventDataObjectDeserializer> {
-            every { getObject() } returns if (payload != null) Optional.of(payload as com.stripe.model.StripeObject) else Optional.empty()
-            every { deserializeUnsafe() } returns (payload as? com.stripe.model.StripeObject)
-        }
+    private fun eventOf(
+        eventType: String,
+        payload: Any?,
+    ): Event {
+        val deserializer =
+            mockk<EventDataObjectDeserializer> {
+                every { getObject() } returns
+                    if (payload != null) Optional.of(payload as com.stripe.model.StripeObject) else Optional.empty()
+                every { deserializeUnsafe() } returns (payload as? com.stripe.model.StripeObject)
+            }
         return mockk<Event> {
             every { type } returns eventType
             every { id } returns "evt_1"

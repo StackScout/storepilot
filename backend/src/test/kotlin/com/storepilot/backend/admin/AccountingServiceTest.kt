@@ -34,33 +34,85 @@ class AccountingServiceTest {
     @BeforeEach
     fun setUp() {
         val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
     }
 
-    private fun payout(status: PayoutStatus, net: Int) = Payout(store = store, subtotal = net + 10, platformFee = 10, net = net, status = status)
-        .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun payout(
+        status: PayoutStatus,
+        net: Int,
+    ) = Payout(store = store, subtotal = net + 10, platformFee = 10, net = net, status = status)
+        .apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
-    private fun feeCollection(status: FeeCollectionStatus, platformFee: Int) = FeeCollection(store = store, subtotal = 1000, platformFee = platformFee, status = status)
-        .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun feeCollection(
+        status: FeeCollectionStatus,
+        platformFee: Int,
+    ) = FeeCollection(store = store, subtotal = 1000, platformFee = platformFee, status = status)
+        .apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
-    private fun orderResponse(total: Int, platformFee: Int) = OrderResponse(
-        id = UUID.randomUUID(), orderNumber = "AU-1", storeId = store.id!!, storeName = store.name, storeSlug = store.slug,
-        items = emptyList<OrderItemResponse>(), subtotal = total, deliveryMethod = "shipping", shippingFee = 0,
-        platformFee = platformFee, total = total, couponCode = null, discountAmount = 0, sellerAbn = null, gstAmount = null,
-        status = "delivered", paymentMethod = "stripe", paymentStatus = "paid", receiptUrl = null, trackingNumber = null,
-        courierServiceName = null, courierReceiptUrl = null,
-        shipping = ShippingDetailsResponse(fullName = null, phone = null, addressLine1 = null, city = null, state = null, postalCode = null),
-        timeline = emptyList(), createdAt = Instant.now(), buyerEmail = "buyer@example.com", buyerId = null,
+    private fun orderResponse(
+        total: Int,
+        platformFee: Int,
+    ) = OrderResponse(
+        id = UUID.randomUUID(),
+        orderNumber = "AU-1",
+        storeId = store.id!!,
+        storeName = store.name,
+        storeSlug = store.slug,
+        items = emptyList<OrderItemResponse>(),
+        subtotal = total,
+        deliveryMethod = "shipping",
+        shippingFee = 0,
+        platformFee = platformFee,
+        total = total,
+        couponCode = null,
+        discountAmount = 0,
+        sellerAbn = null,
+        gstAmount = null,
+        status = "delivered",
+        paymentMethod = "stripe",
+        paymentStatus = "paid",
+        receiptUrl = null,
+        trackingNumber = null,
+        courierServiceName = null,
+        courierReceiptUrl = null,
+        shipping =
+            ShippingDetailsResponse(
+                fullName = null,
+                phone = null,
+                addressLine1 = null,
+                city = null,
+                state = null,
+                postalCode = null,
+            ),
+        timeline = emptyList(),
+        createdAt = Instant.now(),
+        buyerEmail = "buyer@example.com",
+        buyerId = null,
     )
 
     @Test
     fun `summary sums payouts, fee collections, and Stripe settlements by status`() {
-        every { payoutRepository.findAll() } returns listOf(payout(PayoutStatus.SCHEDULED, 100), payout(PayoutStatus.SCHEDULED, 50), payout(PayoutStatus.PAID, 200))
-        every { feeCollectionRepository.findAll() } returns listOf(feeCollection(FeeCollectionStatus.PENDING, 30), feeCollection(FeeCollectionStatus.COLLECTED, 40))
+        every { payoutRepository.findAll() } returns
+            listOf(payout(PayoutStatus.SCHEDULED, 100), payout(PayoutStatus.SCHEDULED, 50), payout(PayoutStatus.PAID, 200))
+        every { feeCollectionRepository.findAll() } returns
+            listOf(feeCollection(FeeCollectionStatus.PENDING, 30), feeCollection(FeeCollectionStatus.COLLECTED, 40))
         every { orderService.adminListStripeSettlements() } returns listOf(orderResponse(1000, 35), orderResponse(2000, 70))
 
         val result = service.summary()

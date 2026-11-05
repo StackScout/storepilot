@@ -31,19 +31,41 @@ class OrderDeliveryReminderJobTest {
     @BeforeEach
     fun setUp() {
         val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
     }
 
     /** deliveryTimeHours = 120 -> deadline = shippedAt + 120h. */
-    private fun order(shippedAt: Instant?) = Order(
-        orderNumber = "AU-1001", store = store, subtotal = 1000, deliveryMethod = DeliveryMethod.SHIPPING,
-        shippingFee = 0, platformFee = 35, total = 1000, paymentMethod = PaymentMethod.COD, paymentStatus = PaymentStatus.UNPAID,
-        shipping = ShippingDetails(), buyerEmail = "buyer@example.com", fulfillmentTimeHours = 48, deliveryTimeHours = 120, shippedAt = shippedAt,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun order(shippedAt: Instant?) =
+        Order(
+            orderNumber = "AU-1001",
+            store = store,
+            subtotal = 1000,
+            deliveryMethod = DeliveryMethod.SHIPPING,
+            shippingFee = 0,
+            platformFee = 35,
+            total = 1000,
+            paymentMethod = PaymentMethod.COD,
+            paymentStatus = PaymentStatus.UNPAID,
+            shipping = ShippingDetails(),
+            buyerEmail = "buyer@example.com",
+            fulfillmentTimeHours = 48,
+            deliveryTimeHours = 120,
+            shippedAt = shippedAt,
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
     @Test
     fun `reminds once past the shipped-plus-delivery-window deadline`() {

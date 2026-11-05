@@ -12,7 +12,10 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /** [maxRequests] allowed per [window], per client IP, for one exact request path. */
-private data class RateLimitPolicy(val maxRequests: Int, val window: Duration)
+private data class RateLimitPolicy(
+    val maxRequests: Int,
+    val window: Duration,
+)
 
 /**
  * Every endpoint reachable without authentication (see permissions.yml's
@@ -21,22 +24,26 @@ private data class RateLimitPolicy(val maxRequests: Int, val window: Duration)
  * than a single global default, since a legitimate refresh-token call is
  * naturally much more frequent than a legitimate registration.
  */
-private val RATE_LIMIT_POLICIES: Map<String, RateLimitPolicy> = mapOf(
-    "/api/auth/login" to RateLimitPolicy(10, Duration.ofMinutes(1)),
-    "/api/auth/mfa/challenge" to RateLimitPolicy(10, Duration.ofMinutes(1)),
-    "/api/auth/register" to RateLimitPolicy(5, Duration.ofMinutes(10)),
-    "/api/auth/resend-verification-code" to RateLimitPolicy(5, Duration.ofMinutes(10)),
-    "/api/auth/refresh" to RateLimitPolicy(30, Duration.ofMinutes(1)),
-    "/api/auth/google/start" to RateLimitPolicy(20, Duration.ofMinutes(1)),
-    "/api/auth/google/callback" to RateLimitPolicy(20, Duration.ofMinutes(1)),
-    "/api/orders/lookup/request-code" to RateLimitPolicy(5, Duration.ofMinutes(10)),
-    "/api/bookings/lookup/request-code" to RateLimitPolicy(5, Duration.ofMinutes(10)),
-    "/api/orders/lookup/verify" to RateLimitPolicy(10, Duration.ofMinutes(10)),
-    "/api/bookings/lookup/verify" to RateLimitPolicy(10, Duration.ofMinutes(10)),
-)
+private val RATE_LIMIT_POLICIES: Map<String, RateLimitPolicy> =
+    mapOf(
+        "/api/auth/login" to RateLimitPolicy(10, Duration.ofMinutes(1)),
+        "/api/auth/mfa/challenge" to RateLimitPolicy(10, Duration.ofMinutes(1)),
+        "/api/auth/register" to RateLimitPolicy(5, Duration.ofMinutes(10)),
+        "/api/auth/resend-verification-code" to RateLimitPolicy(5, Duration.ofMinutes(10)),
+        "/api/auth/refresh" to RateLimitPolicy(30, Duration.ofMinutes(1)),
+        "/api/auth/google/start" to RateLimitPolicy(20, Duration.ofMinutes(1)),
+        "/api/auth/google/callback" to RateLimitPolicy(20, Duration.ofMinutes(1)),
+        "/api/orders/lookup/request-code" to RateLimitPolicy(5, Duration.ofMinutes(10)),
+        "/api/bookings/lookup/request-code" to RateLimitPolicy(5, Duration.ofMinutes(10)),
+        "/api/orders/lookup/verify" to RateLimitPolicy(10, Duration.ofMinutes(10)),
+        "/api/bookings/lookup/verify" to RateLimitPolicy(10, Duration.ofMinutes(10)),
+    )
 
 /** Mutable per-(ip, path) fixed-window counter. */
-private class RequestCounter(@Volatile var windowStart: Instant, @Volatile var count: Int)
+private class RequestCounter(
+    @Volatile var windowStart: Instant,
+    @Volatile var count: Int,
+)
 
 /**
  * Hand-rolled in-memory fixed-window limiter — no external dependency, same
@@ -60,7 +67,11 @@ class RateLimitFilter : OncePerRequestFilter() {
 
     // Public (widened from OncePerRequestFilter's protected) so RateLimitFilterTest
     // can call it directly without standing up a real Spring filter chain.
-    public override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, filterChain: FilterChain) {
+    public override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain,
+    ) {
         val policy = RATE_LIMIT_POLICIES[request.requestURI]
         if (policy == null) {
             filterChain.doFilter(request, response)

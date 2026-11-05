@@ -30,12 +30,20 @@ class ReviewService(
     private val bookingRepository: BookingRepository,
     private val currentActor: CurrentActor,
 ) {
-    fun listByProduct(productId: UUID, page: Int, size: Int): PageResponse<ReviewResponse> {
+    fun listByProduct(
+        productId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<ReviewResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return reviewRepository.findByProductIdOrderByCreatedAtDesc(productId, pageable).toPageResponse { it.toResponse() }
     }
 
-    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<ReviewResponse> {
+    fun listByStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<ReviewResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return reviewRepository.findByStoreIdAndProductIdIsNullOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
     }
@@ -49,7 +57,10 @@ class ReviewService(
      * backstop, same pattern as ProductService.requireUniqueSku).
      */
     @Transactional
-    fun createProductReview(productId: UUID, input: ReviewInput): ReviewResponse {
+    fun createProductReview(
+        productId: UUID,
+        input: ReviewInput,
+    ): ReviewResponse {
         val buyer = currentActor.requireBuyer()
         val product = productRepository.findById(productId).orElse(null) ?: throw NotFoundException("Product not found")
         if (!orderRepository.existsByBuyerIdAndStatusAndItems_ProductId(requireNotNull(buyer.id), OrderStatus.DELIVERED, productId)) {
@@ -58,9 +69,10 @@ class ReviewService(
         if (reviewRepository.existsByBuyerIdAndProductId(requireNotNull(buyer.id), productId)) {
             throw ConflictException("You've already reviewed this product")
         }
-        val review = reviewRepository.save(
-            Review(buyer = buyer, store = product.store, productId = productId, rating = input.rating, comment = input.comment),
-        )
+        val review =
+            reviewRepository.save(
+                Review(buyer = buyer, store = product.store, productId = productId, rating = input.rating, comment = input.comment),
+            )
         product.reviewCount += 1
         product.rating = ((product.rating * (product.reviewCount - 1)) + input.rating) / product.reviewCount
         productRepository.save(product)
@@ -75,7 +87,10 @@ class ReviewService(
      * quality), not any one item.
      */
     @Transactional
-    fun createStoreReview(storeId: UUID, input: ReviewInput): ReviewResponse {
+    fun createStoreReview(
+        storeId: UUID,
+        input: ReviewInput,
+    ): ReviewResponse {
         val buyer = currentActor.requireBuyer()
         val store = storeRepository.findById(storeId).orElse(null) ?: throw NotFoundException("Store not found")
         val buyerId = requireNotNull(buyer.id)
@@ -87,9 +102,10 @@ class ReviewService(
         if (reviewRepository.existsByBuyerIdAndStoreIdAndProductIdIsNull(buyerId, storeId)) {
             throw ConflictException("You've already reviewed this store")
         }
-        val review = reviewRepository.save(
-            Review(buyer = buyer, store = store, productId = null, rating = input.rating, comment = input.comment),
-        )
+        val review =
+            reviewRepository.save(
+                Review(buyer = buyer, store = store, productId = null, rating = input.rating, comment = input.comment),
+            )
         store.reviewCount += 1
         store.rating = ((store.rating * (store.reviewCount - 1)) + input.rating) / store.reviewCount
         storeRepository.save(store)

@@ -27,10 +27,11 @@ class OrderDeliveryReminderJob(
     @Transactional
     fun run() {
         val now = Instant.now()
-        val due = orderRepository.findCandidatesForDeliveryReminder().filter { order ->
-            val shippedAt = order.shippedAt ?: return@filter false
-            now >= shippedAt.plus(order.deliveryTimeHours.toLong(), ChronoUnit.HOURS)
-        }
+        val due =
+            orderRepository.findCandidatesForDeliveryReminder().filter { order ->
+                val shippedAt = order.shippedAt ?: return@filter false
+                now >= shippedAt.plus(order.deliveryTimeHours.toLong(), ChronoUnit.HOURS)
+            }
 
         due.forEach { order ->
             orderNotifier.deliveryDueReminder(order)

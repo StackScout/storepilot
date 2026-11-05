@@ -6,7 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor
 import java.util.UUID
 
-interface StoreRepository : JpaRepository<Store, UUID>, JpaSpecificationExecutor<Store> {
+interface StoreRepository :
+    JpaRepository<Store, UUID>,
+    JpaSpecificationExecutor<Store> {
     fun findBySlug(slug: String): Store?
 
     fun findBySellerId(sellerId: UUID): Store?
@@ -21,9 +23,15 @@ interface StoreSettingsRepository : JpaRepository<StoreSettings, UUID> {
 }
 
 interface StoreVerificationChangeRequestRepository : JpaRepository<StoreVerificationChangeRequest, UUID> {
-    fun findByStoreIdAndStatus(storeId: UUID, status: StoreVerificationChangeRequestStatus): StoreVerificationChangeRequest?
+    fun findByStoreIdAndStatus(
+        storeId: UUID,
+        status: StoreVerificationChangeRequestStatus,
+    ): StoreVerificationChangeRequest?
 
-    fun findByStatusOrderByCreatedAtDesc(status: StoreVerificationChangeRequestStatus, pageable: Pageable): Page<StoreVerificationChangeRequest>
+    fun findByStatusOrderByCreatedAtDesc(
+        status: StoreVerificationChangeRequestStatus,
+        pageable: Pageable,
+    ): Page<StoreVerificationChangeRequest>
 
     fun findAllByOrderByCreatedAtDesc(pageable: Pageable): Page<StoreVerificationChangeRequest>
 }

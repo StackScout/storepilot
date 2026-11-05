@@ -88,7 +88,9 @@ class BookableServiceImage(
 ) : BaseEntity()
 
 /** Mirrors src/types/booking.ts's ServiceStatus. No "out-of-stock" analog — a service has no stock concept. */
-enum class ServiceStatus(override val wireValue: String) : WireValue {
+enum class ServiceStatus(
+    override val wireValue: String,
+) : WireValue {
     ACTIVE("active"),
     DRAFT("draft"),
 }

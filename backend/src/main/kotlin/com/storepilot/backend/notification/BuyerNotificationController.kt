@@ -2,8 +2,8 @@ package com.storepilot.backend.notification
 
 import com.storepilot.backend.common.PageResponse
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
@@ -23,7 +23,9 @@ class BuyerNotificationController(
     fun summary(): BuyerNotificationSummaryResponse = buyerNotificationService.summary()
 
     @PatchMapping("/api/me/buyer/notifications/{id}/read")
-    fun markRead(@PathVariable id: UUID): BuyerNotificationResponse = buyerNotificationService.markRead(id)
+    fun markRead(
+        @PathVariable id: UUID,
+    ): BuyerNotificationResponse = buyerNotificationService.markRead(id)
 
     @PatchMapping("/api/me/buyer/notifications/read-all")
     fun markAllRead() = buyerNotificationService.markAllRead()

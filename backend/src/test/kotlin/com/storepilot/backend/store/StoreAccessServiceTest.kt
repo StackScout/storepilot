@@ -21,21 +21,26 @@ class StoreAccessServiceTest {
 
     private val owner = Seller(cognitoSub = "owner-sub", email = "owner@example.com", name = "Owner").apply { id = UUID.randomUUID() }
     private val staff = Seller(cognitoSub = "staff-sub", email = "staff@example.com", name = "Staff").apply { id = UUID.randomUUID() }
-    private val stranger = Seller(cognitoSub = "stranger-sub", email = "stranger@example.com", name = "Stranger").apply { id = UUID.randomUUID() }
+    private val stranger =
+        Seller(cognitoSub = "stranger-sub", email = "stranger@example.com", name = "Stranger").apply {
+            id =
+                UUID.randomUUID()
+        }
     private lateinit var store: Store
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = owner,
-            slug = "store-1",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "fashion",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = owner,
+                slug = "store-1",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "fashion",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+            ).apply { id = UUID.randomUUID() }
     }
 
     @Test

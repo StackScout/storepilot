@@ -11,7 +11,10 @@ data class SellerPlanResponse(
     val currencyCode: String,
 )
 
-fun Seller.toPlanResponse(monthlyPriceCents: Int, currencyCode: String) = SellerPlanResponse(
+fun Seller.toPlanResponse(
+    monthlyPriceCents: Int,
+    currencyCode: String,
+) = SellerPlanResponse(
     plan = plan.wireValue,
     currentPeriodEnd = planCurrentPeriodEnd,
     cancelAtPeriodEnd = planCancelAtPeriodEnd,
@@ -19,4 +22,6 @@ fun Seller.toPlanResponse(monthlyPriceCents: Int, currencyCode: String) = Seller
     currencyCode = currencyCode,
 )
 
-data class CheckoutUrlResponse(val checkoutUrl: String)
+data class CheckoutUrlResponse(
+    val checkoutUrl: String,
+)

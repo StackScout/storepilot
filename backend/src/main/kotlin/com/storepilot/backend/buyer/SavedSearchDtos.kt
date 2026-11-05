@@ -18,9 +18,10 @@ data class SavedSearchResponse(
     val createdAt: Instant,
 )
 
-fun SavedSearch.toResponse() = SavedSearchResponse(
-    id = requireNotNull(id),
-    name = name,
-    queryString = queryString,
-    createdAt = requireNotNull(createdAt),
-)
+fun SavedSearch.toResponse() =
+    SavedSearchResponse(
+        id = requireNotNull(id),
+        name = name,
+        queryString = queryString,
+        createdAt = requireNotNull(createdAt),
+    )

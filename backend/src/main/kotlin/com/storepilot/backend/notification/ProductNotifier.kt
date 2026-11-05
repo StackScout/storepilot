@@ -27,11 +27,12 @@ class ProductNotifier(
         sendSafely(
             to = settings.contactEmail,
             subject = "Low stock: ${product.name}",
-            body = buildString {
-                appendLine("${product.name} is running low — only ${product.stockQuantity} left in stock.")
-                appendLine()
-                appendLine("Restock it from your seller dashboard: ${productUrl(product)}")
-            },
+            body =
+                buildString {
+                    appendLine("${product.name} is running low — only ${product.stockQuantity} left in stock.")
+                    appendLine()
+                    appendLine("Restock it from your seller dashboard: ${productUrl(product)}")
+                },
         )
         val pushTitle = "Low stock: ${product.name}"
         val pushBody = "Only ${product.stockQuantity} left in stock — restock it soon."
@@ -39,7 +40,11 @@ class ProductNotifier(
         sellerNotificationService.notify(product.store.seller, SellerNotificationType.PRODUCT, pushTitle, pushBody, product.id)
     }
 
-    private fun sendPushToSeller(product: Product, title: String, body: String) {
+    private fun sendPushToSeller(
+        product: Product,
+        title: String,
+        body: String,
+    ) {
         val sellerId = product.store.seller.id ?: return
         val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
         if (tokens.isEmpty()) return
@@ -51,7 +56,11 @@ class ProductNotifier(
     }
 
     /** Mirrors OrderNotifier.sendSafely — never fails the triggering operation. */
-    private fun sendSafely(to: String, subject: String, body: String) {
+    private fun sendSafely(
+        to: String,
+        subject: String,
+        body: String,
+    ) {
         try {
             emailService.send(to, subject, body)
         } catch (e: Exception) {

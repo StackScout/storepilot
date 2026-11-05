@@ -12,36 +12,75 @@ interface OrderRepository : JpaRepository<Order, UUID> {
     /** Unpaged — used where the full set is genuinely needed (e.g. PayoutService's eligible-orders scan). See the Pageable overloads below for the seller dashboard's order list. */
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<Order>
 
-    fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus): List<Order>
+    fun findByStoreIdAndStatusOrderByCreatedAtDesc(
+        storeId: UUID,
+        status: OrderStatus,
+    ): List<Order>
 
     /** Used by StoreService.getStats for the seller dashboard's pending-order count. */
-    fun countByStoreIdAndStatus(storeId: UUID, status: OrderStatus): Long
+    fun countByStoreIdAndStatus(
+        storeId: UUID,
+        status: OrderStatus,
+    ): Long
 
-    fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Order>
+    fun findByStoreIdOrderByCreatedAtDesc(
+        storeId: UUID,
+        pageable: Pageable,
+    ): Page<Order>
 
-    fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: OrderStatus, pageable: Pageable): Page<Order>
+    fun findByStoreIdAndStatusOrderByCreatedAtDesc(
+        storeId: UUID,
+        status: OrderStatus,
+        pageable: Pageable,
+    ): Page<Order>
 
     /** Unpaged — internal cross-service use (e.g. BuyerExportService's full data-export bundle). GET /api/me/orders uses the paged overload below. */
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Order>
 
-    fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID, pageable: Pageable): Page<Order>
+    fun findByBuyerIdOrderByCreatedAtDesc(
+        buyerId: UUID,
+        pageable: Pageable,
+    ): Page<Order>
 
     /** Close-store precondition check — see StoreService.closeStore. */
-    fun existsByStoreIdAndStatusIn(storeId: UUID, statuses: Collection<OrderStatus>): Boolean
+    fun existsByStoreIdAndStatusIn(
+        storeId: UUID,
+        statuses: Collection<OrderStatus>,
+    ): Boolean
 
     /** Verified-purchase gate for a product review — see ReviewService.createProductReview. */
-    fun existsByBuyerIdAndStatusAndItems_ProductId(buyerId: UUID, status: OrderStatus, productId: UUID): Boolean
+    fun existsByBuyerIdAndStatusAndItems_ProductId(
+        buyerId: UUID,
+        status: OrderStatus,
+        productId: UUID,
+    ): Boolean
 
     /** Verified-purchase gate for a store review — see ReviewService.createStoreReview. */
-    fun existsByBuyerIdAndStoreIdAndStatus(buyerId: UUID, storeId: UUID, status: OrderStatus): Boolean
+    fun existsByBuyerIdAndStoreIdAndStatus(
+        buyerId: UUID,
+        storeId: UUID,
+        status: OrderStatus,
+    ): Boolean
 
     /** Stripe Connect direct charges auto-settle at charge time (see PaymentMethod.STRIPE's doc comment) — this is a read-only reconciliation view, not a ledger like Payout/FeeCollection. */
-    fun findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(storeId: UUID, paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, pageable: Pageable): Page<Order>
+    fun findByStoreIdAndPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(
+        storeId: UUID,
+        paymentMethod: PaymentMethod,
+        paymentStatus: PaymentStatus,
+        pageable: Pageable,
+    ): Page<Order>
 
     /** Unpaged — internal cross-service use (AccountingService.summary() needs every settled order to sum correctly). GET /api/admin/stripe-settlements uses the paged overload below. */
-    fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): List<Order>
+    fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(
+        paymentMethod: PaymentMethod,
+        paymentStatus: PaymentStatus,
+    ): List<Order>
 
-    fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, pageable: Pageable): Page<Order>
+    fun findByPaymentMethodAndPaymentStatusOrderByCreatedAtDesc(
+        paymentMethod: PaymentMethod,
+        paymentStatus: PaymentStatus,
+        pageable: Pageable,
+    ): Page<Order>
 
     fun findByOrderNumberIgnoreCase(orderNumber: String): Order?
 
@@ -83,7 +122,11 @@ interface OrderRepository : JpaRepository<Order, UUID> {
           and o.createdAt >= :from and o.createdAt < :to
         """,
     )
-    fun sumSubtotalForPaidOrders(storeId: UUID, from: Instant, to: Instant): Int
+    fun sumSubtotalForPaidOrders(
+        storeId: UUID,
+        from: Instant,
+        to: Instant,
+    ): Int
 
     @Query(
         """
@@ -94,7 +137,11 @@ interface OrderRepository : JpaRepository<Order, UUID> {
           and o.createdAt >= :from and o.createdAt < :to
         """,
     )
-    fun sumPlatformFeeForPaidOrders(storeId: UUID, from: Instant, to: Instant): Int
+    fun sumPlatformFeeForPaidOrders(
+        storeId: UUID,
+        from: Instant,
+        to: Instant,
+    ): Int
 
     /**
      * Bank-transfer orders still missing a receipt that are due a reminder

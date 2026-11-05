@@ -31,7 +31,10 @@ class BuyerNotificationService(
 ) {
     private val log = LoggerFactory.getLogger(BuyerNotificationService::class.java)
 
-    fun list(page: Int, size: Int): PageResponse<BuyerNotificationResponse> {
+    fun list(
+        page: Int,
+        size: Int,
+    ): PageResponse<BuyerNotificationResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return repository.findAllByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.toResponse() }
@@ -54,7 +57,8 @@ class BuyerNotificationService(
     @Transactional
     fun markAllRead() {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
-        repository.findAllByBuyerIdOrderByCreatedAtDesc(buyerId)
+        repository
+            .findAllByBuyerIdOrderByCreatedAtDesc(buyerId)
             .filter { !it.read }
             .forEach { it.read = true }
     }
@@ -67,11 +71,23 @@ class BuyerNotificationService(
      * triggered it.
      */
     @Transactional
-    fun notify(buyer: Buyer, type: BuyerNotificationType, title: String, body: String, entityId: UUID?) {
+    fun notify(
+        buyer: Buyer,
+        type: BuyerNotificationType,
+        title: String,
+        body: String,
+        entityId: UUID?,
+    ) {
         try {
             repository.save(BuyerNotification(buyer = buyer, type = type, title = title, body = body, entityId = entityId))
         } catch (e: Exception) {
-            log.warn("Failed to save buyer notification for buyer {} (type={}, title=\"{}\") — not failing the triggering operation", buyer.id, type, title, e)
+            log.warn(
+                "Failed to save buyer notification for buyer {} (type={}, title=\"{}\") — not failing the triggering operation",
+                buyer.id,
+                type,
+                title,
+                e,
+            )
         }
     }
 }

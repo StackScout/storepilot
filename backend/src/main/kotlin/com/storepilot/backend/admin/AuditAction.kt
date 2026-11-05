@@ -5,7 +5,9 @@ import com.storepilot.backend.common.WireValueEnumConverter
 import jakarta.persistence.Converter
 
 /** Every distinct action recorded in AuditLog — add a new constant here whenever a new admin action needs an audit trail. */
-enum class AuditAction(override val wireValue: String) : WireValue {
+enum class AuditAction(
+    override val wireValue: String,
+) : WireValue {
     STORE_APPROVED("store_approved"),
     STORE_REJECTED("store_rejected"),
     ADMIN_INVITED("admin_invited"),

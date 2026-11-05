@@ -1,7 +1,7 @@
 package com.storepilot.backend.payhere
 
-import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookableService
+import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookingRepository
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.booking.ServiceStatus
@@ -21,7 +21,6 @@ import com.storepilot.backend.store.StoreAddress
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -40,14 +39,15 @@ class PayHereServiceTest {
     private val bookingRepository = mockk<BookingRepository>()
     private val platformConfigService = mockk<PlatformConfigService>()
 
-    private val properties = PayHereProperties(
-        merchantId = "merchant-1",
-        merchantSecret = "top-secret",
-        sandbox = true,
-        notifyUrl = "http://localhost:8080/api/payments/payhere/notify",
-        returnUrlBase = "http://localhost:3000/orders",
-        bookingReturnUrlBase = "http://localhost:3000/bookings",
-    )
+    private val properties =
+        PayHereProperties(
+            merchantId = "merchant-1",
+            merchantSecret = "top-secret",
+            sandbox = true,
+            notifyUrl = "http://localhost:8080/api/payments/payhere/notify",
+            returnUrlBase = "http://localhost:3000/orders",
+            bookingReturnUrlBase = "http://localhost:3000/bookings",
+        )
 
     private val service = PayHereService(orderRepository, bookingRepository, properties, platformConfigService)
 
@@ -56,38 +56,40 @@ class PayHereServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
 
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot",
-            tagline = "tagline",
-            countryName = "Sri Lanka",
-            countryCode = "LK",
-            currencyCode = "LKR",
-            currencySymbol = "Rs",
-            currencyLocale = "en-LK",
-            platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 500,
-            proMonthlyPriceCents = 2900,
-            defaultCodEnabled = true,
-            defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true,
-            proPlanEnabled = true,
-            supportEmail = "hello@storepilot.au",
-            companyLocation = "Colombo",
-            timezone = "Asia/Colombo",
-            returnWindowDays = 14,
-        )
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Sri Lanka",
+                countryCode = "LK",
+                currencyCode = "LKR",
+                currencySymbol = "Rs",
+                currencyLocale = "en-LK",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 500,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Colombo",
+                timezone = "Asia/Colombo",
+                returnWindowDays = 14,
+            )
         every { orderRepository.save(any()) } answers { firstArg() }
         every { bookingRepository.save(any()) } answers { firstArg() }
     }
@@ -97,8 +99,12 @@ class PayHereServiceTest {
         return digest.joinToString("") { "%02x".format(it) }.uppercase(Locale.ROOT)
     }
 
-    private fun validSignature(orderId: String, amount: String, currency: String, statusCode: String): String =
-        md5Upper(properties.merchantId + orderId + amount + currency + statusCode + md5Upper(properties.merchantSecret))
+    private fun validSignature(
+        orderId: String,
+        amount: String,
+        currency: String,
+        statusCode: String,
+    ): String = md5Upper(properties.merchantId + orderId + amount + currency + statusCode + md5Upper(properties.merchantSecret))
 
     private fun order(
         id: UUID = UUID.randomUUID(),
@@ -131,16 +137,17 @@ class PayHereServiceTest {
         buyerName: String = "John Smith",
         status: BookingStatus = BookingStatus.PENDING,
     ): Booking {
-        val bookableService = BookableService(
-            store = store,
-            name = "A service",
-            slug = "a-service",
-            description = "description",
-            category = "handicrafts",
-            price = total,
-            durationMinutes = 60,
-            status = ServiceStatus.ACTIVE,
-        ).apply { this.id = UUID.randomUUID() }
+        val bookableService =
+            BookableService(
+                store = store,
+                name = "A service",
+                slug = "a-service",
+                description = "description",
+                category = "handicrafts",
+                price = total,
+                durationMinutes = 60,
+                status = ServiceStatus.ACTIVE,
+            ).apply { this.id = UUID.randomUUID() }
         return Booking(
             bookingNumber = "LK-20260101-5678",
             store = store,
@@ -280,7 +287,13 @@ class PayHereServiceTest {
 
     // ---- verifyAndApplyNotification ----
 
-    private fun notifyParams(orderId: String, amount: String, currency: String, statusCode: String, validSig: Boolean = true) = mapOf(
+    private fun notifyParams(
+        orderId: String,
+        amount: String,
+        currency: String,
+        statusCode: String,
+        validSig: Boolean = true,
+    ) = mapOf(
         "merchant_id" to properties.merchantId,
         "order_id" to orderId,
         "payhere_amount" to amount,

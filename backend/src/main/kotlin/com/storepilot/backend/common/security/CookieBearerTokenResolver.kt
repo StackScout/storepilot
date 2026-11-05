@@ -43,6 +43,9 @@ class CookieBearerTokenResolver : BearerTokenResolver {
     private val headerResolver = DefaultBearerTokenResolver()
 
     override fun resolve(request: HttpServletRequest): String? =
-        request.cookies?.firstOrNull { it.name == AuthCookies.ACCESS_TOKEN }?.value?.takeIf { it.isNotBlank() }
+        request.cookies
+            ?.firstOrNull { it.name == AuthCookies.ACCESS_TOKEN }
+            ?.value
+            ?.takeIf { it.isNotBlank() }
             ?: headerResolver.resolve(request)
 }

@@ -32,9 +32,17 @@ class BuyerNotificationServiceTest {
         every { currentActor.requireBuyer() } returns buyer
     }
 
-    private fun notification(read: Boolean = false) = BuyerNotification(
-        buyer = buyer, type = BuyerNotificationType.ORDER, title = "Order shipped", body = "Your order has shipped.", read = read,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun notification(read: Boolean = false) =
+        BuyerNotification(
+            buyer = buyer,
+            type = BuyerNotificationType.ORDER,
+            title = "Order shipped",
+            body = "Your order has shipped.",
+            read = read,
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
     @Test
     fun `list returns a page of the current buyer's notifications`() {
@@ -65,7 +73,11 @@ class BuyerNotificationServiceTest {
     @Test
     fun `markRead rejects a notification belonging to a different buyer`() {
         val otherBuyer = Buyer(email = "other@example.com", name = "Other").apply { id = UUID.randomUUID() }
-        val n = BuyerNotification(buyer = otherBuyer, type = BuyerNotificationType.ORDER, title = "t", body = "b").apply { id = UUID.randomUUID() }
+        val n =
+            BuyerNotification(buyer = otherBuyer, type = BuyerNotificationType.ORDER, title = "t", body = "b").apply {
+                id =
+                    UUID.randomUUID()
+            }
         every { repository.findById(n.id!!) } returns Optional.of(n)
 
         assertThrows(ForbiddenException::class.java) { service.markRead(n.id!!) }
@@ -104,7 +116,10 @@ class BuyerNotificationServiceTest {
         verify {
             repository.save(
                 match<BuyerNotification> {
-                    it.buyer == buyer && it.type == BuyerNotificationType.BOOKING && it.title == "Booking confirmed" && it.entityId == entityId
+                    it.buyer == buyer &&
+                        it.type == BuyerNotificationType.BOOKING &&
+                        it.title == "Booking confirmed" &&
+                        it.entityId == entityId
                 },
             )
         }

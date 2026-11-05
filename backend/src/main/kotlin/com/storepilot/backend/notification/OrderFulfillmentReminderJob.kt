@@ -39,13 +39,21 @@ class OrderFulfillmentReminderJob(
             val deadline = createdAt.plus(order.fulfillmentTimeHours.toLong(), ChronoUnit.HOURS)
             if (order.fulfillmentOverdueReminderSentAt == null && now >= deadline) {
                 overdue.add(order)
-            } else if (order.fulfillmentReminderSentAt == null && now >= deadline.minus(notificationProperties.fulfillmentDueSoonLeadHours, ChronoUnit.HOURS)) {
+            } else if (order.fulfillmentReminderSentAt == null &&
+                now >= deadline.minus(notificationProperties.fulfillmentDueSoonLeadHours, ChronoUnit.HOURS)
+            ) {
                 dueSoon.add(order)
             }
         }
 
-        dueSoon.forEach { orderNotifier.fulfillmentDueSoon(it); it.fulfillmentReminderSentAt = now }
-        overdue.forEach { orderNotifier.fulfillmentOverdue(it); it.fulfillmentOverdueReminderSentAt = now }
+        dueSoon.forEach {
+            orderNotifier.fulfillmentDueSoon(it)
+            it.fulfillmentReminderSentAt = now
+        }
+        overdue.forEach {
+            orderNotifier.fulfillmentOverdue(it)
+            it.fulfillmentOverdueReminderSentAt = now
+        }
 
         if (dueSoon.isNotEmpty() || overdue.isNotEmpty()) {
             orderRepository.saveAll(dueSoon + overdue)

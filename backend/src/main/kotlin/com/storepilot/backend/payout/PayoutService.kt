@@ -46,7 +46,11 @@ private const val MAX_PAGE_SIZE = 100
  * by realistic order volume over one settlement cycle, not the store's
  * entire history.
  */
-private fun <T : Any, R> List<T>.toPageResponseInMemory(requestedPage: Int, requestedSize: Int, mapper: (T) -> R): PageResponse<R> {
+private fun <T : Any, R> List<T>.toPageResponseInMemory(
+    requestedPage: Int,
+    requestedSize: Int,
+    mapper: (T) -> R,
+): PageResponse<R> {
     val boundedPage = requestedPage.coerceAtLeast(0)
     val boundedSize = requestedSize.coerceIn(1, MAX_PAGE_SIZE)
     val totalElements = size.toLong()
@@ -74,7 +78,11 @@ class PayoutService(
     private val auditLogService: AuditLogService,
     private val payoutNotifier: PayoutNotifier,
 ) {
-    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<PayoutResponse> {
+    fun listByStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<PayoutResponse> {
         requireSellerOwnsStore(storeId)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
@@ -90,13 +98,23 @@ class PayoutService(
      * Stripe Connect direct charges settle automatically at charge time
      * (see PaymentMethod.STRIPE's doc comment) — neither ever belongs here.
      */
-    fun getEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> {
+    fun getEligibleOrders(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> {
         requireSellerOwnsStore(storeId)
-        return eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
+        return eligibleOrderEntities(
+            storeId,
+        ).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
     /** Same eligibility rule as getEligibleOrders, for bookings — COMPLETED (the appointment-lifecycle analog of DELIVERED) + PAID + PAYHERE. */
-    fun getEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> {
+    fun getEligibleBookings(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<BookingResponse> {
         requireSellerOwnsStore(storeId)
         return eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
     }
@@ -112,11 +130,19 @@ class PayoutService(
      * "/api/admin" prefix, already gated to hasRole("ADMIN") by
      * SecurityConfig as a whole.
      */
-    fun adminGetEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> =
+    fun adminGetEligibleOrders(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> =
         eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
 
     /** Admin-facing equivalent of getEligibleBookings — see adminGetEligibleOrders's doc comment. */
-    fun adminGetEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> =
+    fun adminGetEligibleBookings(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<BookingResponse> =
         eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
 
     private fun requireSellerOwnsStore(storeId: UUID) {
@@ -126,10 +152,13 @@ class PayoutService(
     }
 
     private fun eligibleOrderEntities(storeId: UUID): List<Order> {
-        val alreadyIncluded = payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .flatMap { payout -> payout.sourceRefs.mapNotNull { it.orderId } }
-            .toSet()
-        return orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
+        val alreadyIncluded =
+            payoutRepository
+                .findByStoreIdOrderByCreatedAtDesc(storeId)
+                .flatMap { payout -> payout.sourceRefs.mapNotNull { it.orderId } }
+                .toSet()
+        return orderRepository
+            .findByStoreIdOrderByCreatedAtDesc(storeId)
             .filter {
                 it.status == OrderStatus.DELIVERED &&
                     it.paymentStatus == PaymentStatus.PAID &&
@@ -139,10 +168,13 @@ class PayoutService(
     }
 
     private fun eligibleBookingEntities(storeId: UUID): List<Booking> {
-        val alreadyIncluded = payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .flatMap { payout -> payout.sourceRefs.mapNotNull { it.bookingId } }
-            .toSet()
-        return bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
+        val alreadyIncluded =
+            payoutRepository
+                .findByStoreIdOrderByCreatedAtDesc(storeId)
+                .flatMap { payout -> payout.sourceRefs.mapNotNull { it.bookingId } }
+                .toSet()
+        return bookingRepository
+            .findByStoreIdOrderByCreatedAtDesc(storeId)
             .filter {
                 it.status == BookingStatus.COMPLETED &&
                     it.paymentStatus == PaymentStatus.PAID &&
@@ -163,15 +195,20 @@ class PayoutService(
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         val eligibleOrders = eligibleOrderEntities(storeId)
         val eligibleBookings = eligibleBookingEntities(storeId)
-        if (eligibleOrders.isEmpty() && eligibleBookings.isEmpty()) throw ConflictException("No eligible orders or bookings to pay out for this store")
+        if (eligibleOrders.isEmpty() &&
+            eligibleBookings.isEmpty()
+        ) {
+            throw ConflictException("No eligible orders or bookings to pay out for this store")
+        }
 
-        val payout = Payout(
-            store = store,
-            subtotal = eligibleOrders.sumOf { it.subtotal } + eligibleBookings.sumOf { it.servicePrice },
-            platformFee = eligibleOrders.sumOf { it.platformFee } + eligibleBookings.sumOf { it.platformFee },
-            net = eligibleOrders.sumOf { it.subtotal - it.platformFee } + eligibleBookings.sumOf { it.servicePrice - it.platformFee },
-            status = PayoutStatus.SCHEDULED,
-        )
+        val payout =
+            Payout(
+                store = store,
+                subtotal = eligibleOrders.sumOf { it.subtotal } + eligibleBookings.sumOf { it.servicePrice },
+                platformFee = eligibleOrders.sumOf { it.platformFee } + eligibleBookings.sumOf { it.platformFee },
+                net = eligibleOrders.sumOf { it.subtotal - it.platformFee } + eligibleBookings.sumOf { it.servicePrice - it.platformFee },
+                status = PayoutStatus.SCHEDULED,
+            )
         eligibleOrders.forEach { order ->
             payout.sourceRefs.add(
                 PayoutSourceRef(
@@ -201,7 +238,10 @@ class PayoutService(
 
     /** PATCH /api/admin/payouts/{payoutId} — admin confirms the bank transfer actually went out. */
     @Transactional
-    fun markPaid(payoutId: UUID, input: MarkPaidInput): PayoutResponse {
+    fun markPaid(
+        payoutId: UUID,
+        input: MarkPaidInput,
+    ): PayoutResponse {
         val payout = payoutRepository.findById(payoutId).orElseThrow { NotFoundException("Payout $payoutId not found") }
         payout.status = PayoutStatus.PAID
         payout.paidAt = Instant.now()
@@ -218,7 +258,10 @@ class PayoutService(
         return saved.toResponse()
     }
 
-    fun adminList(page: Int, size: Int): PageResponse<PayoutResponse> {
+    fun adminList(
+        page: Int,
+        size: Int,
+    ): PageResponse<PayoutResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return payoutRepository.findAllByOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
     }

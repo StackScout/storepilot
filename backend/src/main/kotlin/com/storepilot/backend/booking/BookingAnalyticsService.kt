@@ -51,18 +51,21 @@ class BookingAnalyticsService(
         val cancelled = bookings.count { it.status == BookingStatus.CANCELLED }
         val noShow = bookings.count { it.status == BookingStatus.NO_SHOW }
 
-        val topServices = completedAndPaid
-            .groupBy { it.serviceName }
-            .map { (name, group) -> ServiceAnalytics(serviceName = name, bookingCount = group.size, revenue = group.sumOf { it.total }) }
-            .sortedByDescending { it.revenue }
-            .take(5)
+        val topServices =
+            completedAndPaid
+                .groupBy { it.serviceName }
+                .map { (name, group) ->
+                    ServiceAnalytics(serviceName = name, bookingCount = group.size, revenue = group.sumOf { it.total })
+                }.sortedByDescending { it.revenue }
+                .take(5)
 
         val buyerBookingCounts = bookings.mapNotNull { it.buyer?.id }.groupingBy { it }.eachCount()
-        val repeatBuyerRate = if (buyerBookingCounts.isEmpty()) {
-            0.0
-        } else {
-            onePlace(buyerBookingCounts.values.count { it > 1 }.toDouble() / buyerBookingCounts.size * 100)
-        }
+        val repeatBuyerRate =
+            if (buyerBookingCounts.isEmpty()) {
+                0.0
+            } else {
+                onePlace(buyerBookingCounts.values.count { it > 1 }.toDouble() / buyerBookingCounts.size * 100)
+            }
 
         return BookingAnalyticsResponse(
             totalBookings = bookings.size,

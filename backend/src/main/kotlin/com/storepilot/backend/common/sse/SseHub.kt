@@ -22,7 +22,10 @@ class SseHub {
         val emitter = SseEmitter(EMITTER_TIMEOUT_MS)
         val topicSubscribers = subscribers.computeIfAbsent(topic) { CopyOnWriteArrayList() }
         topicSubscribers.add(emitter)
-        val remove = { topicSubscribers.remove(emitter); Unit }
+        val remove = {
+            topicSubscribers.remove(emitter)
+            Unit
+        }
         emitter.onCompletion(remove)
         emitter.onTimeout(remove)
         emitter.onError { remove() }
@@ -37,7 +40,11 @@ class SseHub {
     }
 
     /** Best-effort — a broken/closed connection here must never fail the write that triggered it, same principle as EmailService sends. */
-    fun publish(topic: String, eventName: String, data: Any) {
+    fun publish(
+        topic: String,
+        eventName: String,
+        data: Any,
+    ) {
         val topicSubscribers = subscribers[topic] ?: return
         topicSubscribers.forEach { emitter ->
             try {

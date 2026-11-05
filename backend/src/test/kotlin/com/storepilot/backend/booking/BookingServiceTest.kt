@@ -3,15 +3,15 @@ package com.storepilot.backend.booking
 import com.storepilot.backend.buyer.Buyer
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
+import com.storepilot.backend.common.GuestLookupOtpService
 import com.storepilot.backend.common.NotFoundException
+import com.storepilot.backend.common.PlatformConfigService
+import com.storepilot.backend.common.PlatformSettings
+import com.storepilot.backend.common.security.CurrentActor
+import com.storepilot.backend.common.sse.SseHub
 import com.storepilot.backend.coupon.CouponKind
 import com.storepilot.backend.coupon.CouponResolution
 import com.storepilot.backend.coupon.CouponService
-import com.storepilot.backend.common.GuestLookupOtpService
-import com.storepilot.backend.common.PlatformSettings
-import com.storepilot.backend.common.PlatformConfigService
-import com.storepilot.backend.common.security.CurrentActor
-import com.storepilot.backend.common.sse.SseHub
 import com.storepilot.backend.notification.BookingNotifier
 import com.storepilot.backend.order.PaymentMethod
 import com.storepilot.backend.order.PaymentStatus
@@ -56,24 +56,30 @@ class BookingServiceTest {
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = BookingService(
-        bookingRepository,
-        bookableServiceRepository,
-        storeRepository,
-        storeSettingsRepository,
-        storeAvailabilityRepository,
-        receiptStorageService,
-        bookingNotifier,
-        currentActor,
-        platformConfigService,
-        stripeService,
-        guestLookupOtpService,
-        sseHub,
-        couponService,
-        storeAccessService,
-    )
+    private val service =
+        BookingService(
+            bookingRepository,
+            bookableServiceRepository,
+            storeRepository,
+            storeSettingsRepository,
+            storeAvailabilityRepository,
+            receiptStorageService,
+            bookingNotifier,
+            currentActor,
+            platformConfigService,
+            stripeService,
+            guestLookupOtpService,
+            sseHub,
+            couponService,
+            storeAccessService,
+        )
 
-    private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private val seller =
+        Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply {
+            id =
+                UUID.randomUUID()
+            ; createdAt = Instant.now()
+        }
     private val storeId: UUID = UUID.randomUUID()
     private lateinit var store: Store
     private lateinit var settings: StoreSettings
@@ -81,51 +87,60 @@ class BookingServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "test-salon",
-            name = "Test Salon",
-            tagline = "tagline",
-            description = "description",
-            category = "beauty",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
-        settings = StoreSettings(
-            store = store,
-            contactEmail = "store@example.com",
-            contactPhone = "+61400000001",
-            bankAccountName = "Test",
-            bankAccountNumber = "123",
-            bankName = "Test Bank",
-            transactionFeePercent = BigDecimal("2.0"),
-            sellerType = com.storepilot.backend.store.SellerType.INDIVIDUAL,
-            bookingsEnabled = true,
-        )
-        bookableService = BookableService(
-            store = store,
-            name = "Haircut",
-            slug = "haircut",
-            description = "A haircut",
-            category = "beauty",
-            price = 5000,
-            durationMinutes = 30,
-            status = ServiceStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        store =
+            Store(
+                seller = seller,
+                slug = "test-salon",
+                name = "Test Salon",
+                tagline = "tagline",
+                description = "description",
+                category = "beauty",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
+        settings =
+            StoreSettings(
+                store = store,
+                contactEmail = "store@example.com",
+                contactPhone = "+61400000001",
+                bankAccountName = "Test",
+                bankAccountNumber = "123",
+                bankName = "Test Bank",
+                transactionFeePercent = BigDecimal("2.0"),
+                sellerType = com.storepilot.backend.store.SellerType.INDIVIDUAL,
+                bookingsEnabled = true,
+            )
+        bookableService =
+            BookableService(
+                store = store,
+                name = "Haircut",
+                slug = "haircut",
+                description = "A haircut",
+                category = "beauty",
+                price = 5000,
+                durationMinutes = 30,
+                status = ServiceStatus.ACTIVE,
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
 
         every { bookableServiceRepository.findById(requireNotNull(bookableService.id)) } returns Optional.of(bookableService)
         every { storeSettingsRepository.findById(storeId) } returns Optional.of(settings)
         every { storeAvailabilityRepository.findById(storeId) } returns Optional.of(StoreAvailability(store = store, leadTimeMinutes = 120))
-        every { platformConfigService.current() } returns mockk<PlatformSettings> {
-            every { countryCode } returns "AU"
-            every { defaultCodEnabled } returns true
-            every { defaultOnlinePaymentEnabled } returns true
-            every { defaultBankTransferEnabled } returns true
-            every { proPlanEnabled } returns true
-        }
+        every { platformConfigService.current() } returns
+            mockk<PlatformSettings> {
+                every { countryCode } returns "AU"
+                every { defaultCodEnabled } returns true
+                every { defaultOnlinePaymentEnabled } returns true
+                every { defaultBankTransferEnabled } returns true
+                every { proPlanEnabled } returns true
+            }
         every { currentActor.buyerOrNull() } returns null
-        every { bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(any(), any(), any(), any()) } returns emptyList()
+        every {
+            bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(any(), any(), any(), any())
+        } returns emptyList()
         every { bookingRepository.save(any()) } answers {
             firstArg<Booking>().apply {
                 if (id == null) id = UUID.randomUUID()
@@ -144,7 +159,11 @@ class BookingServiceTest {
         }
     }
 
-    private fun checkoutInput(scheduledStart: Instant, paymentMethod: String = "stripe", occurrenceCount: Int? = null) = CheckoutBookingInput(
+    private fun checkoutInput(
+        scheduledStart: Instant,
+        paymentMethod: String = "stripe",
+        occurrenceCount: Int? = null,
+    ) = CheckoutBookingInput(
         storeId = storeId,
         serviceId = requireNotNull(bookableService.id),
         scheduledStart = scheduledStart,
@@ -162,11 +181,27 @@ class BookingServiceTest {
         scheduledStart: Instant = Instant.now().plusSeconds(3 * 60 * 60),
         buyer: Buyer? = null,
     ) = Booking(
-        bookingNumber = "BK-AU-20260101-1000", store = store, service = bookableService, serviceName = "Haircut", servicePrice = 5000,
-        serviceDurationMinutes = 30, scheduledStart = scheduledStart, scheduledEnd = scheduledStart.plusSeconds(1800),
-        platformFee = 100, total = 5000, status = status, paymentMethod = paymentMethod, paymentStatus = paymentStatus,
-        buyerName = "Jane", buyerPhone = "+61400000002", buyerEmail = "jane@example.com", buyer = buyer,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        bookingNumber = "BK-AU-20260101-1000",
+        store = store,
+        service = bookableService,
+        serviceName = "Haircut",
+        servicePrice = 5000,
+        serviceDurationMinutes = 30,
+        scheduledStart = scheduledStart,
+        scheduledEnd = scheduledStart.plusSeconds(1800),
+        platformFee = 100,
+        total = 5000,
+        status = status,
+        paymentMethod = paymentMethod,
+        paymentStatus = paymentStatus,
+        buyerName = "Jane",
+        buyerPhone = "+61400000002",
+        buyerEmail = "jane@example.com",
+        buyer = buyer,
+    ).apply {
+        id = UUID.randomUUID()
+        createdAt = Instant.now()
+    }
 
     @Test
     fun `createBooking rejects when the store hasn't enabled bookings`() {
@@ -185,7 +220,9 @@ class BookingServiceTest {
 
     @Test
     fun `createBooking rejects a slot that overlaps an existing booking of the same service`() {
-        every { bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(any(), any(), any(), any()) } returns
+        every {
+            bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(any(), any(), any(), any())
+        } returns
             listOf(mockk<Booking>())
         assertThrows(ConflictException::class.java) {
             service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60)))
@@ -213,25 +250,27 @@ class BookingServiceTest {
     @Test
     fun `createBooking allows bank-transfer for a non-Pro seller when the deployment has no Pro tier concept`() {
         seller.plan = SellerPlan.FREE
-        every { platformConfigService.current() } returns mockk<PlatformSettings> {
-            every { countryCode } returns "AU"
-            every { defaultCodEnabled } returns true
-            every { defaultOnlinePaymentEnabled } returns true
-            every { defaultBankTransferEnabled } returns true
-            every { proPlanEnabled } returns false
-        }
+        every { platformConfigService.current() } returns
+            mockk<PlatformSettings> {
+                every { countryCode } returns "AU"
+                every { defaultCodEnabled } returns true
+                every { defaultOnlinePaymentEnabled } returns true
+                every { defaultBankTransferEnabled } returns true
+                every { proPlanEnabled } returns false
+            }
         val result = service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "bank-transfer"))
         assertEquals("bank-transfer", result.paymentMethod)
     }
 
     @Test
     fun `createBooking rejects PayHere when the platform doesn't offer online payment`() {
-        every { platformConfigService.current() } returns mockk<PlatformSettings> {
-            every { countryCode } returns "AU"
-            every { defaultCodEnabled } returns true
-            every { defaultOnlinePaymentEnabled } returns false
-            every { defaultBankTransferEnabled } returns true
-        }
+        every { platformConfigService.current() } returns
+            mockk<PlatformSettings> {
+                every { countryCode } returns "AU"
+                every { defaultCodEnabled } returns true
+                every { defaultOnlinePaymentEnabled } returns false
+                every { defaultBankTransferEnabled } returns true
+            }
         assertThrows(ConflictException::class.java) {
             service.createBooking(checkoutInput(Instant.now().plusSeconds(3 * 60 * 60), paymentMethod = "payhere"))
         }
@@ -255,13 +294,14 @@ class BookingServiceTest {
     fun `createBooking creates one weekly-spaced occurrence per count, sharing a recurrenceGroupId`() {
         var created: List<Booking> = emptyList()
         every { bookingRepository.saveAll(any<List<Booking>>()) } answers {
-            firstArg<List<Booking>>().map {
-                it.apply {
-                    if (id == null) id = UUID.randomUUID()
-                    if (createdAt == null) createdAt = Instant.now()
-                    updatedAt = Instant.now()
-                }
-            }.also { created = it }
+            firstArg<List<Booking>>()
+                .map {
+                    it.apply {
+                        if (id == null) id = UUID.randomUUID()
+                        if (createdAt == null) createdAt = Instant.now()
+                        updatedAt = Instant.now()
+                    }
+                }.also { created = it }
         }
 
         val start = Instant.now().plusSeconds(3 * 60 * 60)
@@ -283,24 +323,28 @@ class BookingServiceTest {
 
     @Test
     fun `updateStatus rejects an invalid transition`() {
-        val booking = Booking(
-            bookingNumber = "BK-AU-20260101-1000",
-            store = store,
-            service = bookableService,
-            serviceName = "Haircut",
-            servicePrice = 5000,
-            serviceDurationMinutes = 30,
-            scheduledStart = Instant.now().plusSeconds(3600),
-            scheduledEnd = Instant.now().plusSeconds(5400),
-            platformFee = 100,
-            total = 5000,
-            status = BookingStatus.CANCELLED,
-            paymentMethod = PaymentMethod.STRIPE,
-            paymentStatus = PaymentStatus.UNPAID,
-            buyerName = "Jane",
-            buyerPhone = "+61400000002",
-            buyerEmail = "jane@example.com",
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val booking =
+            Booking(
+                bookingNumber = "BK-AU-20260101-1000",
+                store = store,
+                service = bookableService,
+                serviceName = "Haircut",
+                servicePrice = 5000,
+                serviceDurationMinutes = 30,
+                scheduledStart = Instant.now().plusSeconds(3600),
+                scheduledEnd = Instant.now().plusSeconds(5400),
+                platformFee = 100,
+                total = 5000,
+                status = BookingStatus.CANCELLED,
+                paymentMethod = PaymentMethod.STRIPE,
+                paymentStatus = PaymentStatus.UNPAID,
+                buyerName = "Jane",
+                buyerPhone = "+61400000002",
+                buyerEmail = "jane@example.com",
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
         every { currentActor.requireSeller() } returns seller
 
@@ -311,24 +355,28 @@ class BookingServiceTest {
 
     @Test
     fun `updateStatus flips a COD booking to paid once completed, mirroring DELIVERED for orders`() {
-        val booking = Booking(
-            bookingNumber = "BK-AU-20260101-1001",
-            store = store,
-            service = bookableService,
-            serviceName = "Haircut",
-            servicePrice = 5000,
-            serviceDurationMinutes = 30,
-            scheduledStart = Instant.now().plusSeconds(3600),
-            scheduledEnd = Instant.now().plusSeconds(5400),
-            platformFee = 100,
-            total = 5000,
-            status = BookingStatus.CONFIRMED,
-            paymentMethod = PaymentMethod.COD,
-            paymentStatus = PaymentStatus.UNPAID,
-            buyerName = "Jane",
-            buyerPhone = "+61400000002",
-            buyerEmail = "jane@example.com",
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val booking =
+            Booking(
+                bookingNumber = "BK-AU-20260101-1001",
+                store = store,
+                service = bookableService,
+                serviceName = "Haircut",
+                servicePrice = 5000,
+                serviceDurationMinutes = 30,
+                scheduledStart = Instant.now().plusSeconds(3600),
+                scheduledEnd = Instant.now().plusSeconds(5400),
+                platformFee = 100,
+                total = 5000,
+                status = BookingStatus.CONFIRMED,
+                paymentMethod = PaymentMethod.COD,
+                paymentStatus = PaymentStatus.UNPAID,
+                buyerName = "Jane",
+                buyerPhone = "+61400000002",
+                buyerEmail = "jane@example.com",
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
         every { currentActor.requireSeller() } returns seller
 
@@ -340,24 +388,28 @@ class BookingServiceTest {
 
     @Test
     fun `cancelBooking rejects a cancellation too close to the scheduled appointment`() {
-        val booking = Booking(
-            bookingNumber = "BK-AU-20260101-1002",
-            store = store,
-            service = bookableService,
-            serviceName = "Haircut",
-            servicePrice = 5000,
-            serviceDurationMinutes = 30,
-            scheduledStart = Instant.now().plusSeconds(60 * 60),
-            scheduledEnd = Instant.now().plusSeconds(60 * 90),
-            platformFee = 100,
-            total = 5000,
-            status = BookingStatus.PENDING,
-            paymentMethod = PaymentMethod.STRIPE,
-            paymentStatus = PaymentStatus.UNPAID,
-            buyerName = "Jane",
-            buyerPhone = "+61400000002",
-            buyerEmail = "jane@example.com",
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val booking =
+            Booking(
+                bookingNumber = "BK-AU-20260101-1002",
+                store = store,
+                service = bookableService,
+                serviceName = "Haircut",
+                servicePrice = 5000,
+                serviceDurationMinutes = 30,
+                scheduledStart = Instant.now().plusSeconds(60 * 60),
+                scheduledEnd = Instant.now().plusSeconds(60 * 90),
+                platformFee = 100,
+                total = 5000,
+                status = BookingStatus.PENDING,
+                paymentMethod = PaymentMethod.STRIPE,
+                paymentStatus = PaymentStatus.UNPAID,
+                buyerName = "Jane",
+                buyerPhone = "+61400000002",
+                buyerEmail = "jane@example.com",
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
 
         assertThrows(ConflictException::class.java) {
@@ -367,24 +419,28 @@ class BookingServiceTest {
 
     @Test
     fun `cancelBooking succeeds outside the cutoff window`() {
-        val booking = Booking(
-            bookingNumber = "BK-AU-20260101-1003",
-            store = store,
-            service = bookableService,
-            serviceName = "Haircut",
-            servicePrice = 5000,
-            serviceDurationMinutes = 30,
-            scheduledStart = Instant.now().plusSeconds(3 * 60 * 60),
-            scheduledEnd = Instant.now().plusSeconds(3 * 60 * 60 + 1800),
-            platformFee = 100,
-            total = 5000,
-            status = BookingStatus.PENDING,
-            paymentMethod = PaymentMethod.STRIPE,
-            paymentStatus = PaymentStatus.UNPAID,
-            buyerName = "Jane",
-            buyerPhone = "+61400000002",
-            buyerEmail = "jane@example.com",
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val booking =
+            Booking(
+                bookingNumber = "BK-AU-20260101-1003",
+                store = store,
+                service = bookableService,
+                serviceName = "Haircut",
+                servicePrice = 5000,
+                serviceDurationMinutes = 30,
+                scheduledStart = Instant.now().plusSeconds(3 * 60 * 60),
+                scheduledEnd = Instant.now().plusSeconds(3 * 60 * 60 + 1800),
+                platformFee = 100,
+                total = 5000,
+                status = BookingStatus.PENDING,
+                paymentMethod = PaymentMethod.STRIPE,
+                paymentStatus = PaymentStatus.UNPAID,
+                buyerName = "Jane",
+                buyerPhone = "+61400000002",
+                buyerEmail = "jane@example.com",
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
         every { currentActor.sellerOrNull() } returns null
 
@@ -397,24 +453,28 @@ class BookingServiceTest {
 
     @Test
     fun `cancelBooking doesn't notify the seller when the seller themselves cancelled`() {
-        val booking = Booking(
-            bookingNumber = "BK-AU-20260101-1010",
-            store = store,
-            service = bookableService,
-            serviceName = "Haircut",
-            servicePrice = 5000,
-            serviceDurationMinutes = 30,
-            scheduledStart = Instant.now().plusSeconds(3 * 60 * 60),
-            scheduledEnd = Instant.now().plusSeconds(3 * 60 * 60 + 1800),
-            platformFee = 100,
-            total = 5000,
-            status = BookingStatus.PENDING,
-            paymentMethod = PaymentMethod.STRIPE,
-            paymentStatus = PaymentStatus.UNPAID,
-            buyerName = "Jane",
-            buyerPhone = "+61400000002",
-            buyerEmail = "jane@example.com",
-        ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+        val booking =
+            Booking(
+                bookingNumber = "BK-AU-20260101-1010",
+                store = store,
+                service = bookableService,
+                serviceName = "Haircut",
+                servicePrice = 5000,
+                serviceDurationMinutes = 30,
+                scheduledStart = Instant.now().plusSeconds(3 * 60 * 60),
+                scheduledEnd = Instant.now().plusSeconds(3 * 60 * 60 + 1800),
+                platformFee = 100,
+                total = 5000,
+                status = BookingStatus.PENDING,
+                paymentMethod = PaymentMethod.STRIPE,
+                paymentStatus = PaymentStatus.UNPAID,
+                buyerName = "Jane",
+                buyerPhone = "+61400000002",
+                buyerEmail = "jane@example.com",
+            ).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         every { bookingRepository.findById(requireNotNull(booking.id)) } returns Optional.of(booking)
         every { currentActor.sellerOrNull() } returns seller
 
@@ -425,7 +485,8 @@ class BookingServiceTest {
 
     @Test
     fun `createBooking applies a resolved coupon's discount and records its use`() {
-        every { couponService.resolve("SAVE10", storeId, CouponKind.BOOKING, 5000) } returns CouponResolution(couponId = UUID.randomUUID(), code = "SAVE10", discountAmount = 500)
+        every { couponService.resolve("SAVE10", storeId, CouponKind.BOOKING, 5000) } returns
+            CouponResolution(couponId = UUID.randomUUID(), code = "SAVE10", discountAmount = 500)
         every { couponService.recordUse(any()) } returns Unit
         val input = checkoutInput(Instant.now().plusSeconds(3 * 60 * 60)).copy(couponCode = "SAVE10")
 
@@ -456,7 +517,8 @@ class BookingServiceTest {
     fun `listByStore filters by status when provided`() {
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
-        every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(booking(status = BookingStatus.PENDING), booking(status = BookingStatus.CONFIRMED))
+        every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns
+            listOf(booking(status = BookingStatus.PENDING), booking(status = BookingStatus.CONFIRMED))
 
         val result = service.listByStore(storeId, "confirmed")
 
@@ -468,7 +530,8 @@ class BookingServiceTest {
     fun `listByStore returns everything when no status filter is given`() {
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
-        every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns listOf(booking(status = BookingStatus.PENDING), booking(status = BookingStatus.CONFIRMED))
+        every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns
+            listOf(booking(status = BookingStatus.PENDING), booking(status = BookingStatus.CONFIRMED))
 
         assertEquals(2, service.listByStore(storeId, null).size)
     }
@@ -608,7 +671,9 @@ class BookingServiceTest {
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
         every { currentActor.requireSeller() } returns otherSeller
 
-        assertThrows(ForbiddenException::class.java) { service.verifyBankTransfer(b.id!!, VerifyBookingBankTransferInput(approved = true, note = null)) }
+        assertThrows(ForbiddenException::class.java) {
+            service.verifyBankTransfer(b.id!!, VerifyBookingBankTransferInput(approved = true, note = null))
+        }
     }
 
     @Test
@@ -617,7 +682,9 @@ class BookingServiceTest {
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
         every { currentActor.requireSeller() } returns seller
 
-        assertThrows(ConflictException::class.java) { service.verifyBankTransfer(b.id!!, VerifyBookingBankTransferInput(approved = true, note = null)) }
+        assertThrows(ConflictException::class.java) {
+            service.verifyBankTransfer(b.id!!, VerifyBookingBankTransferInput(approved = true, note = null))
+        }
     }
 
     @Test
@@ -626,7 +693,9 @@ class BookingServiceTest {
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
         every { currentActor.requireSeller() } returns seller
 
-        assertThrows(ConflictException::class.java) { service.verifyBankTransfer(b.id!!, VerifyBookingBankTransferInput(approved = true, note = null)) }
+        assertThrows(ConflictException::class.java) {
+            service.verifyBankTransfer(b.id!!, VerifyBookingBankTransferInput(approved = true, note = null))
+        }
     }
 
     @Test
@@ -643,7 +712,11 @@ class BookingServiceTest {
 
     @Test
     fun `verifyBankTransfer clears the receipt on rejection`() {
-        val b = booking(paymentMethod = PaymentMethod.BANK_TRANSFER, paymentStatus = PaymentStatus.UNPAID).apply { receiptUrl = "receipts/receipt.jpg" }
+        val b =
+            booking(paymentMethod = PaymentMethod.BANK_TRANSFER, paymentStatus = PaymentStatus.UNPAID).apply {
+                receiptUrl =
+                    "receipts/receipt.jpg"
+            }
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
         every { currentActor.requireSeller() } returns seller
 
@@ -663,7 +736,16 @@ class BookingServiceTest {
 
     @Test
     fun `cancelBooking refunds a paid Stripe booking`() {
-        val b = booking(status = BookingStatus.CONFIRMED, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID, scheduledStart = Instant.now().plusSeconds(3 * 60 * 60))
+        val b =
+            booking(
+                status = BookingStatus.CONFIRMED,
+                paymentMethod = PaymentMethod.STRIPE,
+                paymentStatus = PaymentStatus.PAID,
+                scheduledStart =
+                    Instant.now().plusSeconds(
+                        3 * 60 * 60,
+                    ),
+            )
         every { bookingRepository.findById(b.id!!) } returns Optional.of(b)
         every { currentActor.sellerOrNull() } returns null
 

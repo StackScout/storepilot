@@ -47,15 +47,16 @@ class StripeConnectServiceTest {
     private val stripeProperties = StripeProperties(connectClientId = "ca_test123")
     private val cognitoProperties = CognitoProperties()
 
-    private val service = StripeConnectService(
-        storeRepository,
-        storeSettingsRepository,
-        currentActor,
-        notificationProperties,
-        platformConfigService,
-        stripeProperties,
-        cognitoProperties,
-    )
+    private val service =
+        StripeConnectService(
+            storeRepository,
+            storeSettingsRepository,
+            currentActor,
+            notificationProperties,
+            platformConfigService,
+            stripeProperties,
+            cognitoProperties,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -63,39 +64,41 @@ class StripeConnectServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot",
-            tagline = "tagline",
-            countryName = "Australia",
-            countryCode = "AU",
-            currencyCode = "AUD",
-            currencySymbol = "$",
-            currencyLocale = "en-AU",
-            platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000,
-            proMonthlyPriceCents = 2900,
-            defaultCodEnabled = true,
-            defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true,
-            proPlanEnabled = true,
-            supportEmail = "hello@storepilot.au",
-            companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney",
-            returnWindowDays = 14,
-        )
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
     }
 
     @AfterEach
@@ -103,17 +106,18 @@ class StripeConnectServiceTest {
         unmockkAll()
     }
 
-    private fun settings(accountId: String? = null) = StoreSettings(
-        store = store,
-        contactEmail = "store@example.com",
-        contactPhone = "+61400000001",
-        bankAccountName = "Store",
-        bankAccountNumber = "12345678",
-        bankName = "Test Bank",
-        transactionFeePercent = BigDecimal("5.0"),
-        sellerType = SellerType.INDIVIDUAL,
-        stripeAccountId = accountId,
-    ).apply { id = storeId }
+    private fun settings(accountId: String? = null) =
+        StoreSettings(
+            store = store,
+            contactEmail = "store@example.com",
+            contactPhone = "+61400000001",
+            bankAccountName = "Store",
+            bankAccountNumber = "12345678",
+            bankName = "Test Bank",
+            transactionFeePercent = BigDecimal("5.0"),
+            sellerType = SellerType.INDIVIDUAL,
+            stripeAccountId = accountId,
+        ).apply { id = storeId }
 
     // ---- startOnboarding ----
 
@@ -196,11 +200,12 @@ class StripeConnectServiceTest {
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
 
         mockkStatic(Account::class)
-        val fakeAccount = mockk<Account> {
-            every { id } returns "acct_existing"
-            every { chargesEnabled } returns true
-            every { payoutsEnabled } returns false
-        }
+        val fakeAccount =
+            mockk<Account> {
+                every { id } returns "acct_existing"
+                every { chargesEnabled } returns true
+                every { payoutsEnabled } returns false
+            }
         every { Account.retrieve("acct_existing") } returns fakeAccount
 
         service.refreshAccountStatus(storeId)
@@ -223,14 +228,19 @@ class StripeConnectServiceTest {
 
     @Test
     fun `syncAccountStatus treats null flags as false`() {
-        val existing = settings(accountId = "acct_1").apply { stripeChargesEnabled = true; stripePayoutsEnabled = true }
+        val existing =
+            settings(accountId = "acct_1").apply {
+                stripeChargesEnabled = true
+                stripePayoutsEnabled = true
+            }
         every { storeSettingsRepository.findByStripeAccountId("acct_1") } returns existing
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
-        val fakeAccount = mockk<Account> {
-            every { id } returns "acct_1"
-            every { chargesEnabled } returns null
-            every { payoutsEnabled } returns null
-        }
+        val fakeAccount =
+            mockk<Account> {
+                every { id } returns "acct_1"
+                every { chargesEnabled } returns null
+                every { payoutsEnabled } returns null
+            }
 
         service.syncAccountStatus(fakeAccount)
 

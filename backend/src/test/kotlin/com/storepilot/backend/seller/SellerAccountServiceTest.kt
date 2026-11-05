@@ -44,18 +44,19 @@ class SellerAccountServiceTest {
     private val cognitoClient = mockk<CognitoIdentityProviderClient>(relaxed = true)
     private val cognitoProperties = CognitoProperties(userPoolId = "pool-1")
 
-    private val service = SellerAccountService(
-        currentActor,
-        sellerRepository,
-        storeRepository,
-        storeSettingsRepository,
-        sellerBillingService,
-        stripeConnectService,
-        fileStorageService,
-        auditLogService,
-        cognitoClient,
-        cognitoProperties,
-    )
+    private val service =
+        SellerAccountService(
+            currentActor,
+            sellerRepository,
+            storeRepository,
+            storeSettingsRepository,
+            sellerBillingService,
+            stripeConnectService,
+            fileStorageService,
+            auditLogService,
+            cognitoClient,
+            cognitoProperties,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
 
@@ -63,13 +64,15 @@ class SellerAccountServiceTest {
     fun setUp() {
         every { currentActor.requireSeller() } returns seller
         every { sellerRepository.save(any()) } answers { firstArg() }
-        val jwt = Jwt.withTokenValue("token")
-            .header("alg", "none")
-            .subject("seller-sub")
-            .claim("username", "seller-sub")
-            .issuedAt(Instant.now())
-            .expiresAt(Instant.now().plusSeconds(60))
-            .build()
+        val jwt =
+            Jwt
+                .withTokenValue("token")
+                .header("alg", "none")
+                .subject("seller-sub")
+                .claim("username", "seller-sub")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build()
         SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt, emptyList())
     }
 
@@ -78,19 +81,23 @@ class SellerAccountServiceTest {
         SecurityContextHolder.clearContext()
     }
 
-    private fun store(status: StoreVerificationStatus) = Store(
-        seller = seller,
-        slug = "store",
-        name = "Store",
-        tagline = "tagline",
-        description = "description",
-        category = "handicrafts",
-        address = StoreAddress(city = "Sydney", state = "NSW"),
-        whatsappNumber = "+61400000000",
-        verificationStatus = status,
-    ).apply { id = UUID.randomUUID() }
+    private fun store(status: StoreVerificationStatus) =
+        Store(
+            seller = seller,
+            slug = "store",
+            name = "Store",
+            tagline = "tagline",
+            description = "description",
+            category = "handicrafts",
+            address = StoreAddress(city = "Sydney", state = "NSW"),
+            whatsappNumber = "+61400000000",
+            verificationStatus = status,
+        ).apply { id = UUID.randomUUID() }
 
-    private fun settingsFor(store: Store, stripeAccountId: String? = null) = StoreSettings(
+    private fun settingsFor(
+        store: Store,
+        stripeAccountId: String? = null,
+    ) = StoreSettings(
         store = store,
         contactEmail = "store@example.com",
         contactPhone = "+61400000001",
@@ -118,8 +125,16 @@ class SellerAccountServiceTest {
         assertEquals("Deleted seller", seller.name)
         assertEquals(SellerPlan.FREE, seller.plan)
         verify { sellerBillingService.cancelAndDeleteCustomer(seller) }
-        verify { cognitoClient.adminUserGlobalSignOut(any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminUserGlobalSignOutRequest>()) }
-        verify { cognitoClient.adminDeleteUser(any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminDeleteUserRequest>()) }
+        verify {
+            cognitoClient.adminUserGlobalSignOut(
+                any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminUserGlobalSignOutRequest>(),
+            )
+        }
+        verify {
+            cognitoClient.adminDeleteUser(
+                any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminDeleteUserRequest>(),
+            )
+        }
     }
 
     @Test
@@ -137,7 +152,8 @@ class SellerAccountServiceTest {
     fun `deleteCurrentSeller deauthorizes a connected Stripe account when one exists`() {
         val closedStore = store(StoreVerificationStatus.CLOSED)
         every { storeRepository.findBySellerId(seller.id!!) } returns closedStore
-        every { storeSettingsRepository.findById(closedStore.id!!) } returns Optional.of(settingsFor(closedStore, stripeAccountId = "acct_1"))
+        every { storeSettingsRepository.findById(closedStore.id!!) } returns
+            Optional.of(settingsFor(closedStore, stripeAccountId = "acct_1"))
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
 
         service.deleteCurrentSeller()
@@ -149,7 +165,8 @@ class SellerAccountServiceTest {
     fun `deleteCurrentSeller continues even when Stripe deauthorization fails`() {
         val closedStore = store(StoreVerificationStatus.CLOSED)
         every { storeRepository.findBySellerId(seller.id!!) } returns closedStore
-        every { storeSettingsRepository.findById(closedStore.id!!) } returns Optional.of(settingsFor(closedStore, stripeAccountId = "acct_1"))
+        every { storeSettingsRepository.findById(closedStore.id!!) } returns
+            Optional.of(settingsFor(closedStore, stripeAccountId = "acct_1"))
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
         every { stripeConnectService.deauthorize("acct_1") } throws RuntimeException("Stripe is down")
 

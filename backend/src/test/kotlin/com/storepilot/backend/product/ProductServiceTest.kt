@@ -13,9 +13,9 @@ import com.storepilot.backend.store.Store
 import com.storepilot.backend.store.StoreAccessService
 import com.storepilot.backend.store.StoreAddress
 import com.storepilot.backend.store.StoreRepository
-import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.store.StoreSettings
 import com.storepilot.backend.store.StoreSettingsRepository
+import com.storepilot.backend.store.StoreStaffMemberRepository
 import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
@@ -47,7 +47,17 @@ class ProductServiceTest {
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = ProductService(productRepository, storeRepository, storeSettingsRepository, currentActor, fileStorageService, wishlistItemRepository, categoryRepository, storeAccessService)
+    private val service =
+        ProductService(
+            productRepository,
+            storeRepository,
+            storeSettingsRepository,
+            currentActor,
+            fileStorageService,
+            wishlistItemRepository,
+            categoryRepository,
+            storeAccessService,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -56,17 +66,18 @@ class ProductServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "handicrafts-store",
-            name = "Handicrafts Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "handicrafts-store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
@@ -80,33 +91,54 @@ class ProductServiceTest {
         status: ProductStatus = ProductStatus.ACTIVE,
         sku: String? = null,
     ) = Product(
-        store = store, name = "Existing", slug = "existing", description = "description", category = "handicrafts",
-        price = 500, stockQuantity = stockQuantity, trackStock = trackStock, status = status, sku = sku,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now() }
+        store = store,
+        name = "Existing",
+        slug = "existing",
+        description = "description",
+        category = "handicrafts",
+        price = 500,
+        stockQuantity = stockQuantity,
+        trackStock = trackStock,
+        status = status,
+        sku = sku,
+    ).apply {
+        id = UUID.randomUUID()
+        createdAt = Instant.now()
+        updatedAt = Instant.now()
+    }
 
-    private fun storeSettings(stockManagementEnabled: Boolean) = StoreSettings(
-        store = store, contactEmail = "contact@store.example.com", contactPhone = "+61400000001",
-        bankAccountName = "Store Account", bankAccountNumber = "123456789", bankName = "Test Bank",
-        transactionFeePercent = BigDecimal("3.5"), sellerType = SellerType.INDIVIDUAL, stockManagementEnabled = stockManagementEnabled,
-    )
+    private fun storeSettings(stockManagementEnabled: Boolean) =
+        StoreSettings(
+            store = store,
+            contactEmail = "contact@store.example.com",
+            contactPhone = "+61400000001",
+            bankAccountName = "Store Account",
+            bankAccountNumber = "123456789",
+            bankName = "Test Bank",
+            transactionFeePercent = BigDecimal("3.5"),
+            sellerType = SellerType.INDIVIDUAL,
+            stockManagementEnabled = stockManagementEnabled,
+        )
 
-    private fun formInput(category: String) = ProductFormInput(
-        name = "A product",
-        description = "A description long enough",
-        category = category,
-        price = 1000,
-        compareAtPrice = null,
-        stockQuantity = 5,
-        trackStock = true,
-        sku = null,
-        status = "active",
-    )
+    private fun formInput(category: String) =
+        ProductFormInput(
+            name = "A product",
+            description = "A description long enough",
+            category = category,
+            price = 1000,
+            compareAtPrice = null,
+            stockQuantity = 5,
+            trackStock = true,
+            sku = null,
+            status = "active",
+        )
 
     @Test
     fun `create rejects a category that doesn't match the store's own category`() {
-        val ex = assertThrows(ConflictException::class.java) {
-            service.create(storeId, formInput("electronics"), listOf(image))
-        }
+        val ex =
+            assertThrows(ConflictException::class.java) {
+                service.create(storeId, formInput("electronics"), listOf(image))
+            }
         assert(ex.message!!.contains("handicrafts")) { "error should name the store's actual category" }
     }
 
@@ -139,16 +171,17 @@ class ProductServiceTest {
     @Test
     fun `update rejects changing category away from the store's own category`() {
         val productId = UUID.randomUUID()
-        val product = Product(
-            store = store,
-            name = "Existing",
-            slug = "existing",
-            description = "description",
-            category = "handicrafts",
-            price = 500,
-            stockQuantity = 1,
-            status = ProductStatus.ACTIVE,
-        )
+        val product =
+            Product(
+                store = store,
+                name = "Existing",
+                slug = "existing",
+                description = "description",
+                category = "handicrafts",
+                price = 500,
+                stockQuantity = 1,
+                status = ProductStatus.ACTIVE,
+            )
         every { productRepository.findById(productId) } returns Optional.of(product)
 
         assertThrows(ConflictException::class.java) {
@@ -167,9 +200,10 @@ class ProductServiceTest {
     fun `create rejects a duplicate SKU within the same store`() {
         every { productRepository.findByStoreIdAndSkuIgnoreCase(storeId, "SKU-1") } returns product(sku = "SKU-1")
 
-        val ex = assertThrows(ConflictException::class.java) {
-            service.create(storeId, formInput("handicrafts").copy(sku = "SKU-1"), listOf(image))
-        }
+        val ex =
+            assertThrows(ConflictException::class.java) {
+                service.create(storeId, formInput("handicrafts").copy(sku = "SKU-1"), listOf(image))
+            }
         assertTrue(ex.message!!.contains("SKU-1"))
     }
 
@@ -178,7 +212,15 @@ class ProductServiceTest {
         every { storeSettingsRepository.findById(storeId) } returns Optional.of(storeSettings(stockManagementEnabled = false))
         val savedSlot = slot<Product>()
         every { productRepository.save(capture(savedSlot)) } answers {
-            (firstArg() as Product).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now(); images.forEach { it.id = UUID.randomUUID() } }
+            (firstArg() as Product).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+                images.forEach {
+                    it.id =
+                        UUID.randomUUID()
+                }
+            }
         }
 
         service.create(storeId, formInput("handicrafts"), listOf(image))
@@ -190,7 +232,15 @@ class ProductServiceTest {
     fun `create forces out-of-stock status when trackStock is on and quantity is zero`() {
         val savedSlot = slot<Product>()
         every { productRepository.save(capture(savedSlot)) } answers {
-            (firstArg() as Product).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now(); images.forEach { it.id = UUID.randomUUID() } }
+            (firstArg() as Product).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+                images.forEach {
+                    it.id =
+                        UUID.randomUUID()
+                }
+            }
         }
 
         service.create(storeId, formInput("handicrafts").copy(stockQuantity = 0), listOf(image))
@@ -204,7 +254,15 @@ class ProductServiceTest {
         every { productRepository.findByStoreIdAndSlug(storeId, "a-product-2") } returns null
         val savedSlot = slot<Product>()
         every { productRepository.save(capture(savedSlot)) } answers {
-            (firstArg() as Product).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now(); images.forEach { it.id = UUID.randomUUID() } }
+            (firstArg() as Product).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+                images.forEach {
+                    it.id =
+                        UUID.randomUUID()
+                }
+            }
         }
 
         service.create(storeId, formInput("handicrafts"), listOf(image))
@@ -257,7 +315,8 @@ class ProductServiceTest {
         val existing = product()
         existing.images.add(ProductImage(product = existing, url = "old.jpg", alt = "old", sortOrder = 0).apply { id = UUID.randomUUID() })
         every { productRepository.findById(existing.id!!) } returns Optional.of(existing)
-        every { productRepository.save(any()) } answers { (firstArg() as Product).apply { images.forEach { if (it.id == null) it.id = UUID.randomUUID() } } }
+        every { productRepository.save(any()) } answers
+            { (firstArg() as Product).apply { images.forEach { if (it.id == null) it.id = UUID.randomUUID() } } }
 
         service.update(existing.id!!, formInput("handicrafts"), emptyList())
         assertEquals(1, existing.images.size)
@@ -471,7 +530,13 @@ class ProductServiceTest {
     fun `search uses the full-text path when a query is present`() {
         every {
             productRepository.searchFullText(
-                category = null, query = "vase", likePattern = "%vase%", minPrice = null, maxPrice = null, sortMode = "relevance", pageable = any(),
+                category = null,
+                query = "vase",
+                likePattern = "%vase%",
+                minPrice = null,
+                maxPrice = null,
+                sortMode = "relevance",
+                pageable = any(),
             )
         } returns PageImpl(listOf(product()), PageRequest.of(0, 20), 1)
 

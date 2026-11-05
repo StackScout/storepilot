@@ -44,7 +44,11 @@ class BookingNotifier(
         )
     }
 
-    private fun sendPushToSeller(booking: Booking, title: String, body: String) {
+    private fun sendPushToSeller(
+        booking: Booking,
+        title: String,
+        body: String,
+    ) {
         val sellerId = booking.store.seller.id ?: return
         val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
         if (tokens.isEmpty()) return
@@ -56,7 +60,11 @@ class BookingNotifier(
     }
 
     /** Push + notification-center entry for the buyer — mirrors OrderNotifier.notifyBuyer, see its doc comment for the guest-checkout no-op case. */
-    private fun notifyBuyer(booking: Booking, title: String, body: String) {
+    private fun notifyBuyer(
+        booking: Booking,
+        title: String,
+        body: String,
+    ) {
         val buyer = booking.buyer ?: return
         val buyerId = buyer.id ?: return
         val tokens = buyerPushTokenRepository.findByBuyerId(buyerId).map { it.token }
@@ -83,34 +91,44 @@ class BookingNotifier(
         sendSafely(
             to = booking.buyerEmail,
             subject = "Your ${platformConfig.name} booking ${booking.bookingNumber} is requested",
-            body = buildString {
-                appendLine("Thanks for booking with ${booking.store.name}!")
-                appendLine()
-                appendLine("Booking: ${booking.bookingNumber}")
-                appendLine("Service: ${booking.serviceName}")
-                appendLine("When: ${formatScheduledTime(booking)}")
-                appendLine("Total: ${platformConfig.currencyCode} ${formatMoney(booking.total)}")
-                appendLine()
-                appendLine("View your booking: ${bookingUrl(booking)}")
-            },
+            body =
+                buildString {
+                    appendLine("Thanks for booking with ${booking.store.name}!")
+                    appendLine()
+                    appendLine("Booking: ${booking.bookingNumber}")
+                    appendLine("Service: ${booking.serviceName}")
+                    appendLine("When: ${formatScheduledTime(booking)}")
+                    appendLine("Total: ${platformConfig.currencyCode} ${formatMoney(booking.total)}")
+                    appendLine()
+                    appendLine("View your booking: ${bookingUrl(booking)}")
+                },
         )
-        notifyBuyer(booking, title = "Booking requested", body = "Your booking for ${booking.serviceName} at ${formatScheduledTime(booking)} has been requested.")
+        notifyBuyer(
+            booking,
+            title = "Booking requested",
+            body = "Your booking for ${booking.serviceName} at ${formatScheduledTime(booking)} has been requested.",
+        )
     }
 
     fun bookingConfirmed(booking: Booking) {
         sendSafely(
             to = booking.buyerEmail,
             subject = "Booking ${booking.bookingNumber} confirmed",
-            body = buildString {
-                appendLine("${booking.store.name} has confirmed your booking.")
-                appendLine()
-                appendLine("Service: ${booking.serviceName}")
-                appendLine("When: ${formatScheduledTime(booking)}")
-                appendLine()
-                appendLine("View your booking: ${bookingUrl(booking)}")
-            },
+            body =
+                buildString {
+                    appendLine("${booking.store.name} has confirmed your booking.")
+                    appendLine()
+                    appendLine("Service: ${booking.serviceName}")
+                    appendLine("When: ${formatScheduledTime(booking)}")
+                    appendLine()
+                    appendLine("View your booking: ${bookingUrl(booking)}")
+                },
         )
-        notifyBuyer(booking, title = "Booking confirmed", body = "${booking.store.name} confirmed your booking for ${formatScheduledTime(booking)}.")
+        notifyBuyer(
+            booking,
+            title = "Booking confirmed",
+            body = "${booking.store.name} confirmed your booking for ${formatScheduledTime(booking)}.",
+        )
     }
 
     /** BookingService.updateStatus — seller marks the booking COMPLETED. */
@@ -118,13 +136,18 @@ class BookingNotifier(
         sendSafely(
             to = booking.buyerEmail,
             subject = "Booking ${booking.bookingNumber} completed",
-            body = buildString {
-                appendLine("Your appointment for ${booking.serviceName} with ${booking.store.name} is complete.")
-                appendLine()
-                appendLine("View your booking: ${bookingUrl(booking)}")
-            },
+            body =
+                buildString {
+                    appendLine("Your appointment for ${booking.serviceName} with ${booking.store.name} is complete.")
+                    appendLine()
+                    appendLine("View your booking: ${bookingUrl(booking)}")
+                },
         )
-        notifyBuyer(booking, title = "Booking completed", body = "Your appointment for ${booking.serviceName} with ${booking.store.name} is complete.")
+        notifyBuyer(
+            booking,
+            title = "Booking completed",
+            body = "Your appointment for ${booking.serviceName} with ${booking.store.name} is complete.",
+        )
     }
 
     /** BookingService.updateStatus — seller marks the booking NO_SHOW. */
@@ -132,51 +155,70 @@ class BookingNotifier(
         sendSafely(
             to = booking.buyerEmail,
             subject = "Booking ${booking.bookingNumber} marked as a no-show",
-            body = buildString {
-                appendLine("${booking.store.name} marked your booking for ${booking.serviceName} (${formatScheduledTime(booking)}) as a no-show.")
-                appendLine()
-                appendLine("Contact the store if you think this is a mistake: ${bookingUrl(booking)}")
-            },
+            body =
+                buildString {
+                    appendLine(
+                        "${booking.store.name} marked your booking for ${booking.serviceName} (${formatScheduledTime(
+                            booking,
+                        )}) as a no-show.",
+                    )
+                    appendLine()
+                    appendLine("Contact the store if you think this is a mistake: ${bookingUrl(booking)}")
+                },
         )
-        notifyBuyer(booking, title = "Marked as no-show", body = "${booking.store.name} marked your booking for ${booking.serviceName} as a no-show.")
+        notifyBuyer(
+            booking,
+            title = "Marked as no-show",
+            body = "${booking.store.name} marked your booking for ${booking.serviceName} as a no-show.",
+        )
     }
 
     fun bookingCancelled(booking: Booking) {
         sendSafely(
             to = booking.buyerEmail,
             subject = "Booking ${booking.bookingNumber} cancelled",
-            body = buildString {
-                appendLine("Your booking with ${booking.store.name} has been cancelled.")
-                appendLine()
-                appendLine("Service: ${booking.serviceName}")
-                appendLine("Was scheduled for: ${formatScheduledTime(booking)}")
-                if (!booking.cancellationReason.isNullOrBlank()) {
-                    appendLine("Reason: ${booking.cancellationReason}")
-                }
-                appendLine()
-                appendLine(bookingUrl(booking))
-            },
+            body =
+                buildString {
+                    appendLine("Your booking with ${booking.store.name} has been cancelled.")
+                    appendLine()
+                    appendLine("Service: ${booking.serviceName}")
+                    appendLine("Was scheduled for: ${formatScheduledTime(booking)}")
+                    if (!booking.cancellationReason.isNullOrBlank()) {
+                        appendLine("Reason: ${booking.cancellationReason}")
+                    }
+                    appendLine()
+                    appendLine(bookingUrl(booking))
+                },
         )
-        notifyBuyer(booking, title = "Booking cancelled", body = "Your booking for ${booking.serviceName} with ${booking.store.name} was cancelled.")
+        notifyBuyer(
+            booking,
+            title = "Booking cancelled",
+            body = "Your booking for ${booking.serviceName} with ${booking.store.name} was cancelled.",
+        )
     }
 
     fun bookingReminder(booking: Booking) {
         sendSafely(
             to = booking.buyerEmail,
             subject = "Reminder: your booking ${booking.bookingNumber} is coming up",
-            body = buildString {
-                appendLine("This is a reminder about your upcoming booking with ${booking.store.name}.")
-                appendLine()
-                appendLine("Service: ${booking.serviceName}")
-                appendLine("When: ${formatScheduledTime(booking)}")
-                appendLine()
-                appendLine("View your booking: ${bookingUrl(booking)}")
-            },
+            body =
+                buildString {
+                    appendLine("This is a reminder about your upcoming booking with ${booking.store.name}.")
+                    appendLine()
+                    appendLine("Service: ${booking.serviceName}")
+                    appendLine("When: ${formatScheduledTime(booking)}")
+                    appendLine()
+                    appendLine("View your booking: ${bookingUrl(booking)}")
+                },
         )
     }
 
     /** Mirrors OrderNotifier.sendSafely — never fails the triggering operation. */
-    private fun sendSafely(to: String, subject: String, body: String) {
+    private fun sendSafely(
+        to: String,
+        subject: String,
+        body: String,
+    ) {
         try {
             emailService.send(to, subject, body)
         } catch (e: Exception) {

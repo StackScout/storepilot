@@ -33,19 +33,40 @@ class OrderFulfillmentReminderJobTest {
     @BeforeEach
     fun setUp() {
         val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
     }
 
     /** fulfillmentTimeHours = 48 -> deadline = createdAt + 48h; the "due soon" lead is 6h. */
-    private fun order(createdAgoHours: Long) = Order(
-        orderNumber = "AU-1001", store = store, subtotal = 1000, deliveryMethod = DeliveryMethod.SHIPPING,
-        shippingFee = 0, platformFee = 35, total = 1000, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID,
-        shipping = ShippingDetails(), buyerEmail = "buyer@example.com", fulfillmentTimeHours = 48, deliveryTimeHours = 120,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now().minus(createdAgoHours, ChronoUnit.HOURS) }
+    private fun order(createdAgoHours: Long) =
+        Order(
+            orderNumber = "AU-1001",
+            store = store,
+            subtotal = 1000,
+            deliveryMethod = DeliveryMethod.SHIPPING,
+            shippingFee = 0,
+            platformFee = 35,
+            total = 1000,
+            paymentMethod = PaymentMethod.STRIPE,
+            paymentStatus = PaymentStatus.PAID,
+            shipping = ShippingDetails(),
+            buyerEmail = "buyer@example.com",
+            fulfillmentTimeHours = 48,
+            deliveryTimeHours = 120,
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now().minus(createdAgoHours, ChronoUnit.HOURS)
+        }
 
     @Test
     fun `sends a due-soon push once inside the lead window but not yet past the deadline`() {
@@ -89,10 +110,11 @@ class OrderFulfillmentReminderJobTest {
 
     @Test
     fun `sends neither push once both one-shot flags are already set`() {
-        val o = order(createdAgoHours = 50).apply {
-            fulfillmentReminderSentAt = Instant.now()
-            fulfillmentOverdueReminderSentAt = Instant.now()
-        }
+        val o =
+            order(createdAgoHours = 50).apply {
+                fulfillmentReminderSentAt = Instant.now()
+                fulfillmentOverdueReminderSentAt = Instant.now()
+            }
         every { orderRepository.findCandidatesForFulfillmentReminder() } returns listOf(o)
 
         job.run()

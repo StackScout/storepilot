@@ -38,15 +38,27 @@ class AdminManagementService(
     fun invite(input: InviteAdminInput): InviteAdminResult {
         try {
             cognitoClient.adminCreateUser(
-                AdminCreateUserRequest.builder()
+                AdminCreateUserRequest
+                    .builder()
                     .userPoolId(cognitoProperties.userPoolId)
                     .username(input.email)
                     .userAttributes(
-                        AttributeType.builder().name("email").value(input.email).build(),
-                        AttributeType.builder().name("email_verified").value("true").build(),
-                        AttributeType.builder().name("name").value(input.name).build(),
-                    )
-                    .messageAction(MessageActionType.SUPPRESS)
+                        AttributeType
+                            .builder()
+                            .name("email")
+                            .value(input.email)
+                            .build(),
+                        AttributeType
+                            .builder()
+                            .name("email_verified")
+                            .value("true")
+                            .build(),
+                        AttributeType
+                            .builder()
+                            .name("name")
+                            .value(input.name)
+                            .build(),
+                    ).messageAction(MessageActionType.SUPPRESS)
                     .build(),
             )
         } catch (e: UsernameExistsException) {
@@ -56,7 +68,8 @@ class AdminManagementService(
         }
 
         cognitoClient.adminSetUserPassword(
-            AdminSetUserPasswordRequest.builder()
+            AdminSetUserPasswordRequest
+                .builder()
                 .userPoolId(cognitoProperties.userPoolId)
                 .username(input.email)
                 .password(input.password)
@@ -64,7 +77,8 @@ class AdminManagementService(
                 .build(),
         )
         cognitoClient.adminAddUserToGroup(
-            AdminAddUserToGroupRequest.builder()
+            AdminAddUserToGroupRequest
+                .builder()
                 .userPoolId(cognitoProperties.userPoolId)
                 .username(input.email)
                 .groupName("admin")
@@ -82,19 +96,23 @@ class AdminManagementService(
 
     /** Reads Cognito's `admin` group directly rather than the local Admin table, so an invited admin who hasn't logged in yet (no JIT-provisioned row) still shows up. */
     fun list(): List<AdminSummaryResponse> {
-        val result = cognitoClient.listUsersInGroup(
-            ListUsersInGroupRequest.builder()
-                .userPoolId(cognitoProperties.userPoolId)
-                .groupName("admin")
-                .build(),
-        )
-        return result.users().map { user ->
-            val attributes = user.attributes().associate { it.name() to it.value() }
-            AdminSummaryResponse(
-                email = attributes["email"] ?: user.username(),
-                name = attributes["name"] ?: attributes["email"] ?: user.username(),
-                invitedAt = user.userCreateDate(),
+        val result =
+            cognitoClient.listUsersInGroup(
+                ListUsersInGroupRequest
+                    .builder()
+                    .userPoolId(cognitoProperties.userPoolId)
+                    .groupName("admin")
+                    .build(),
             )
-        }.sortedByDescending { it.invitedAt }
+        return result
+            .users()
+            .map { user ->
+                val attributes = user.attributes().associate { it.name() to it.value() }
+                AdminSummaryResponse(
+                    email = attributes["email"] ?: user.username(),
+                    name = attributes["name"] ?: attributes["email"] ?: user.username(),
+                    invitedAt = user.userCreateDate(),
+                )
+            }.sortedByDescending { it.invitedAt }
     }
 }

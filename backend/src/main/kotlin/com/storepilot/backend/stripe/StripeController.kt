@@ -23,7 +23,9 @@ class StripeController(
 
     /** POST /api/stores/{storeId}/stripe-connect/refresh — see StripeConnectService.refreshAccountStatus's doc comment. */
     @PostMapping("/api/stores/{storeId}/stripe-connect/refresh")
-    fun refreshStripeStatus(@PathVariable storeId: UUID): ResponseEntity<Void> {
+    fun refreshStripeStatus(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<Void> {
         stripeConnectService.refreshAccountStatus(storeId)
         return ResponseEntity.noContent().build()
     }
@@ -36,7 +38,9 @@ class StripeController(
     ): StripeCheckoutSessionResponse = stripeService.createCheckoutSession(id, mobile = platform == "mobile")
 
     @PostMapping("/api/bookings/{id}/stripe-checkout")
-    fun bookingCheckout(@PathVariable id: UUID): StripeCheckoutSessionResponse = stripeService.createBookingCheckoutSession(id)
+    fun bookingCheckout(
+        @PathVariable id: UUID,
+    ): StripeCheckoutSessionResponse = stripeService.createBookingCheckoutSession(id)
 
     /**
      * Raw JSON body, not deserialized — Stripe's signature covers the exact

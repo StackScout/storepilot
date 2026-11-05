@@ -35,13 +35,27 @@ class BookingAnalyticsServiceTest {
     private lateinit var seller: Seller
     private lateinit var store: Store
 
-    private fun platformSettings(proPlanEnabled: Boolean) = PlatformSettings(
-        name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
-        currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
-        flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-        defaultBankTransferEnabled = true, proPlanEnabled = proPlanEnabled, supportEmail = "hello@storepilot.au",
-        companyLocation = "Sydney, Australia", timezone = "Australia/Sydney", returnWindowDays = 14,
-    )
+    private fun platformSettings(proPlanEnabled: Boolean) =
+        PlatformSettings(
+            name = "StorePilot",
+            tagline = "tagline",
+            countryName = "Australia",
+            countryCode = "AU",
+            currencyCode = "AUD",
+            currencySymbol = "$",
+            currencyLocale = "en-AU",
+            platformFeePercent = BigDecimal("3.5"),
+            flatShippingFee = 1000,
+            proMonthlyPriceCents = 2900,
+            defaultCodEnabled = true,
+            defaultOnlinePaymentEnabled = false,
+            defaultBankTransferEnabled = true,
+            proPlanEnabled = proPlanEnabled,
+            supportEmail = "hello@storepilot.au",
+            companyLocation = "Sydney, Australia",
+            timezone = "Australia/Sydney",
+            returnWindowDays = 14,
+        )
 
     @BeforeEach
     fun setUp() {
@@ -110,11 +124,12 @@ class BookingAnalyticsServiceTest {
 
     @Test
     fun `getAnalytics computes revenue only from completed and paid bookings`() {
-        val bookings = listOf(
-            booking("Haircut", 5000, BookingStatus.COMPLETED, PaymentStatus.PAID),
-            booking("Haircut", 5000, BookingStatus.COMPLETED, PaymentStatus.UNPAID),
-            booking("Haircut", 5000, BookingStatus.PENDING, PaymentStatus.PAID),
-        )
+        val bookings =
+            listOf(
+                booking("Haircut", 5000, BookingStatus.COMPLETED, PaymentStatus.PAID),
+                booking("Haircut", 5000, BookingStatus.COMPLETED, PaymentStatus.UNPAID),
+                booking("Haircut", 5000, BookingStatus.PENDING, PaymentStatus.PAID),
+            )
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns bookings
 
         val result = service.getAnalytics(storeId)
@@ -126,12 +141,13 @@ class BookingAnalyticsServiceTest {
 
     @Test
     fun `getAnalytics computes the no-show rate as a percent`() {
-        val bookings = listOf(
-            booking("Haircut", 5000, BookingStatus.COMPLETED, PaymentStatus.PAID),
-            booking("Haircut", 5000, BookingStatus.NO_SHOW, PaymentStatus.UNPAID),
-            booking("Haircut", 5000, BookingStatus.NO_SHOW, PaymentStatus.UNPAID),
-            booking("Haircut", 5000, BookingStatus.CANCELLED, PaymentStatus.UNPAID),
-        )
+        val bookings =
+            listOf(
+                booking("Haircut", 5000, BookingStatus.COMPLETED, PaymentStatus.PAID),
+                booking("Haircut", 5000, BookingStatus.NO_SHOW, PaymentStatus.UNPAID),
+                booking("Haircut", 5000, BookingStatus.NO_SHOW, PaymentStatus.UNPAID),
+                booking("Haircut", 5000, BookingStatus.CANCELLED, PaymentStatus.UNPAID),
+            )
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns bookings
 
         val result = service.getAnalytics(storeId)
@@ -143,11 +159,12 @@ class BookingAnalyticsServiceTest {
 
     @Test
     fun `getAnalytics ranks top services by revenue, highest first`() {
-        val bookings = listOf(
-            booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID),
-            booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID),
-            booking("Massage", 8000, BookingStatus.COMPLETED, PaymentStatus.PAID),
-        )
+        val bookings =
+            listOf(
+                booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID),
+                booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID),
+                booking("Massage", 8000, BookingStatus.COMPLETED, PaymentStatus.PAID),
+            )
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns bookings
 
         val result = service.getAnalytics(storeId)
@@ -167,12 +184,13 @@ class BookingAnalyticsServiceTest {
         val oneTimeBuyer: Buyer = mockk()
         every { oneTimeBuyer.id } returns UUID.randomUUID()
 
-        val bookings = listOf(
-            booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = repeatBuyer),
-            booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = repeatBuyer),
-            booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = oneTimeBuyer),
-            booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = null),
-        )
+        val bookings =
+            listOf(
+                booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = repeatBuyer),
+                booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = repeatBuyer),
+                booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = oneTimeBuyer),
+                booking("Haircut", 3000, BookingStatus.COMPLETED, PaymentStatus.PAID, buyer = null),
+            )
         every { bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId) } returns bookings
 
         val result = service.getAnalytics(storeId)

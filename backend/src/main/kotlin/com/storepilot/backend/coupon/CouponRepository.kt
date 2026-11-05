@@ -12,7 +12,10 @@ interface CouponRepository : JpaRepository<Coupon, UUID> {
     /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/coupons uses the paged overload below. */
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<Coupon>
 
-    fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Coupon>
+    fun findByStoreIdOrderByCreatedAtDesc(
+        storeId: UUID,
+        pageable: Pageable,
+    ): Page<Coupon>
 
     fun findByStoreIdIsNullOrderByCreatedAtDesc(pageable: Pageable): Page<Coupon>
 }

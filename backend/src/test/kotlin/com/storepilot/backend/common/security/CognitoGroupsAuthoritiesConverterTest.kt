@@ -11,8 +11,7 @@ import org.springframework.security.oauth2.jwt.Jwt
 class CognitoGroupsAuthoritiesConverterTest {
     private val converter = CognitoGroupsAuthoritiesConverter()
 
-    private fun jwtWithGroups(groups: List<String>?): Jwt =
-        mockk<Jwt> { every { getClaimAsStringList("cognito:groups") } returns groups }
+    private fun jwtWithGroups(groups: List<String>?): Jwt = mockk<Jwt> { every { getClaimAsStringList("cognito:groups") } returns groups }
 
     @Test
     fun `maps a single app-recognized group to its ROLE authority`() {

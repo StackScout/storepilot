@@ -6,8 +6,8 @@ import com.storepilot.backend.order.OrderResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
@@ -57,8 +57,9 @@ class PayoutController(
     ): PageResponse<BookingResponse> = payoutService.adminGetEligibleBookings(storeId, page, size)
 
     @PostMapping("/api/admin/stores/{storeId}/payouts")
-    fun createBatch(@PathVariable storeId: UUID): ResponseEntity<PayoutResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(payoutService.createBatch(storeId))
+    fun createBatch(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<PayoutResponse> = ResponseEntity.status(HttpStatus.CREATED).body(payoutService.createBatch(storeId))
 
     @GetMapping("/api/admin/payouts")
     fun adminList(

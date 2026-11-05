@@ -39,7 +39,16 @@ class BookableServiceServiceTest {
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = BookableServiceService(serviceRepository, bookingRepository, storeRepository, currentActor, fileStorageService, categoryRepository, storeAccessService)
+    private val service =
+        BookableServiceService(
+            serviceRepository,
+            bookingRepository,
+            storeRepository,
+            currentActor,
+            fileStorageService,
+            categoryRepository,
+            storeAccessService,
+        )
 
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
     private val storeId: UUID = UUID.randomUUID()
@@ -48,26 +57,50 @@ class BookableServiceServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller, slug = "studio", name = "Studio", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "studio",
+                name = "Studio",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
         every { serviceRepository.findByStoreIdAndSlug(storeId, any()) } returns null
         every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
-    private fun formInput(category: String = "handicrafts") = BookableServiceFormInput(
-        name = "A service", description = "A description long enough", category = category,
-        price = 5000, durationMinutes = 30, bufferMinutes = 0, status = "active",
-    )
+    private fun formInput(category: String = "handicrafts") =
+        BookableServiceFormInput(
+            name = "A service",
+            description = "A description long enough",
+            category = category,
+            price = 5000,
+            durationMinutes = 30,
+            bufferMinutes = 0,
+            status = "active",
+        )
 
-    private fun bookableService(status: ServiceStatus = ServiceStatus.ACTIVE) = BookableService(
-        store = store, name = "Existing", slug = "existing", description = "description", category = "handicrafts",
-        price = 5000, durationMinutes = 30, status = status,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now() }
+    private fun bookableService(status: ServiceStatus = ServiceStatus.ACTIVE) =
+        BookableService(
+            store = store,
+            name = "Existing",
+            slug = "existing",
+            description = "description",
+            category = "handicrafts",
+            price = 5000,
+            durationMinutes = 30,
+            status = status,
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+            updatedAt = Instant.now()
+        }
 
     @Test
     fun `create rejects a category that doesn't match the store's own category`() {
@@ -86,7 +119,15 @@ class BookableServiceServiceTest {
     @Test
     fun `create succeeds when the category matches the store's category`() {
         every { serviceRepository.save(any()) } answers {
-            (firstArg() as BookableService).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now(); images.forEach { it.id = UUID.randomUUID() } }
+            (firstArg() as BookableService).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+                images.forEach {
+                    it.id =
+                        UUID.randomUUID()
+                }
+            }
         }
 
         val result = service.create(storeId, formInput(), listOf(image))
@@ -100,7 +141,15 @@ class BookableServiceServiceTest {
         every { serviceRepository.findByStoreIdAndSlug(storeId, "a-service-2") } returns null
         val savedSlot = slot<BookableService>()
         every { serviceRepository.save(capture(savedSlot)) } answers {
-            (firstArg() as BookableService).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now(); images.forEach { it.id = UUID.randomUUID() } }
+            (firstArg() as BookableService).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+                images.forEach {
+                    it.id =
+                        UUID.randomUUID()
+                }
+            }
         }
 
         service.create(storeId, formInput(), listOf(image))
@@ -111,7 +160,11 @@ class BookableServiceServiceTest {
     @Test
     fun `create works with no images`() {
         every { serviceRepository.save(any()) } answers {
-            (firstArg() as BookableService).apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now() }
+            (firstArg() as BookableService).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+            }
         }
 
         val result = service.create(storeId, formInput(), emptyList())
@@ -148,7 +201,12 @@ class BookableServiceServiceTest {
     @Test
     fun `update keeps existing images when none are provided`() {
         val existing = bookableService()
-        existing.images.add(BookableServiceImage(service = existing, url = "old.jpg", alt = "old", sortOrder = 0).apply { id = UUID.randomUUID() })
+        existing.images.add(
+            BookableServiceImage(service = existing, url = "old.jpg", alt = "old", sortOrder = 0).apply {
+                id =
+                    UUID.randomUUID()
+            },
+        )
         every { serviceRepository.findById(existing.id!!) } returns Optional.of(existing)
         every { serviceRepository.save(any()) } answers { firstArg() }
 
@@ -161,9 +219,15 @@ class BookableServiceServiceTest {
     @Test
     fun `update replaces the whole image set when new files are provided`() {
         val existing = bookableService()
-        existing.images.add(BookableServiceImage(service = existing, url = "old.jpg", alt = "old", sortOrder = 0).apply { id = UUID.randomUUID() })
+        existing.images.add(
+            BookableServiceImage(service = existing, url = "old.jpg", alt = "old", sortOrder = 0).apply {
+                id =
+                    UUID.randomUUID()
+            },
+        )
         every { serviceRepository.findById(existing.id!!) } returns Optional.of(existing)
-        every { serviceRepository.save(any()) } answers { (firstArg() as BookableService).apply { images.forEach { if (it.id == null) it.id = UUID.randomUUID() } } }
+        every { serviceRepository.save(any()) } answers
+            { (firstArg() as BookableService).apply { images.forEach { if (it.id == null) it.id = UUID.randomUUID() } } }
 
         service.update(existing.id!!, formInput(), listOf(image))
 

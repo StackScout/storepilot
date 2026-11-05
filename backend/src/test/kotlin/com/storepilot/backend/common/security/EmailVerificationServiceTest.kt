@@ -27,26 +27,27 @@ class EmailVerificationServiceTest {
 
     @BeforeEach
     fun setUp() {
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot",
-            tagline = "tagline",
-            countryName = "Australia",
-            countryCode = "AU",
-            currencyCode = "AUD",
-            currencySymbol = "$",
-            currencyLocale = "en-AU",
-            platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000,
-            proMonthlyPriceCents = 2900,
-            defaultCodEnabled = true,
-            defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true,
-            proPlanEnabled = true,
-            supportEmail = "hello@storepilot.au",
-            companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney",
-            returnWindowDays = 14,
-        )
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
         every { repository.save(any()) } answers { firstArg() }
     }
 
@@ -72,7 +73,15 @@ class EmailVerificationServiceTest {
 
     @Test
     fun `sendCode overwrites an existing record and resets attempts`() {
-        val existing = EmailVerificationCode(email = "buyer@example.com", codeHash = "stale-hash", expiresAt = Instant.now().minusSeconds(3600)).apply { attempts = 3 }
+        val existing =
+            EmailVerificationCode(
+                email = "buyer@example.com",
+                codeHash = "stale-hash",
+                expiresAt = Instant.now().minusSeconds(3600),
+            ).apply {
+                attempts =
+                    3
+            }
         every { repository.findByEmail("buyer@example.com") } returns existing
         every { repository.save(any()) } answers { firstArg() }
 
@@ -100,7 +109,12 @@ class EmailVerificationServiceTest {
 
     @Test
     fun `verifyCode throws when the code has expired`() {
-        val record = EmailVerificationCode(email = "buyer@example.com", codeHash = sha256("123456"), expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES))
+        val record =
+            EmailVerificationCode(
+                email = "buyer@example.com",
+                codeHash = sha256("123456"),
+                expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES),
+            )
         every { repository.findByEmail("buyer@example.com") } returns record
 
         assertThrows(IllegalArgumentException::class.java) { service.verifyCode("buyer@example.com", "123456") }
@@ -108,7 +122,15 @@ class EmailVerificationServiceTest {
 
     @Test
     fun `verifyCode throws after too many incorrect attempts`() {
-        val record = EmailVerificationCode(email = "buyer@example.com", codeHash = sha256("123456"), expiresAt = Instant.now().plusSeconds(600)).apply { attempts = 5 }
+        val record =
+            EmailVerificationCode(
+                email = "buyer@example.com",
+                codeHash = sha256("123456"),
+                expiresAt = Instant.now().plusSeconds(600),
+            ).apply {
+                attempts =
+                    5
+            }
         every { repository.findByEmail("buyer@example.com") } returns record
 
         assertThrows(IllegalArgumentException::class.java) { service.verifyCode("buyer@example.com", "123456") }
@@ -116,7 +138,8 @@ class EmailVerificationServiceTest {
 
     @Test
     fun `verifyCode increments attempts on a wrong code`() {
-        val record = EmailVerificationCode(email = "buyer@example.com", codeHash = sha256("123456"), expiresAt = Instant.now().plusSeconds(600))
+        val record =
+            EmailVerificationCode(email = "buyer@example.com", codeHash = sha256("123456"), expiresAt = Instant.now().plusSeconds(600))
         every { repository.findByEmail("buyer@example.com") } returns record
 
         assertThrows(IllegalArgumentException::class.java) { service.verifyCode("buyer@example.com", "000000") }
@@ -127,7 +150,8 @@ class EmailVerificationServiceTest {
 
     @Test
     fun `verifyCode deletes the record once verified successfully`() {
-        val record = EmailVerificationCode(email = "buyer@example.com", codeHash = sha256("123456"), expiresAt = Instant.now().plusSeconds(600))
+        val record =
+            EmailVerificationCode(email = "buyer@example.com", codeHash = sha256("123456"), expiresAt = Instant.now().plusSeconds(600))
         every { repository.findByEmail("buyer@example.com") } returns record
         every { repository.delete(record) } returns Unit
 

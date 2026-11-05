@@ -16,12 +16,12 @@ interface WireValue {
 }
 
 /**
- * Generic JPA converter so each enum only has to declare
- * `class FooConverter : WireValueEnumConverter<Foo>(Foo.entries.toTypedArray())`
- * instead of hand-writing `convertToDatabaseColumn`/`convertToEntityAttribute`
- * every time.
+ * Parses a wire string (e.g. "food-beverage") back into its enum constant,
+ * for use in service-layer code (not just JPA conversion).
+ *
+ * Throws IllegalArgumentException — mapped to 400 VALIDATION_ERROR by
+ * GlobalExceptionHandler — if the value doesn't match any constant.
  */
-/** Parses a wire string (e.g. "food-beverage") back into its enum constant, for use in service-layer code (not just JPA conversion). Throws IllegalArgumentException — mapped to 400 VALIDATION_ERROR by GlobalExceptionHandler — if the value doesn't match any constant. */
 inline fun <reified T> wireValueOf(value: String): T where T : Enum<T>, T : WireValue =
     enumValues<T>().firstOrNull { it.wireValue == value }
         ?: throw IllegalArgumentException(
@@ -29,11 +29,16 @@ inline fun <reified T> wireValueOf(value: String): T where T : Enum<T>, T : Wire
                 enumValues<T>().joinToString(", ") { it.wireValue },
         )
 
+/**
+ * Generic JPA converter so each enum only has to declare
+ * `class FooConverter : WireValueEnumConverter<Foo>(Foo.entries.toTypedArray())`
+ * instead of hand-writing `convertToDatabaseColumn`/`convertToEntityAttribute`
+ * every time.
+ */
 abstract class WireValueEnumConverter<T>(
     private val values: Array<T>,
 ) : AttributeConverter<T, String> where T : Enum<T>, T : WireValue {
     override fun convertToDatabaseColumn(attribute: T?): String? = attribute?.wireValue
 
-    override fun convertToEntityAttribute(dbData: String?): T? =
-        dbData?.let { value -> values.first { it.wireValue == value } }
+    override fun convertToEntityAttribute(dbData: String?): T? = dbData?.let { value -> values.first { it.wireValue == value } }
 }

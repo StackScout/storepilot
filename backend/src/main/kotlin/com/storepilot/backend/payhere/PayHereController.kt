@@ -12,10 +12,14 @@ class PayHereController(
     private val payHereService: PayHereService,
 ) {
     @PostMapping("/api/orders/{id}/payhere-checkout")
-    fun checkout(@PathVariable id: UUID): PayHereCheckoutResponse = payHereService.buildCheckoutPayload(id)
+    fun checkout(
+        @PathVariable id: UUID,
+    ): PayHereCheckoutResponse = payHereService.buildCheckoutPayload(id)
 
     @PostMapping("/api/bookings/{id}/payhere-checkout")
-    fun bookingCheckout(@PathVariable id: UUID): PayHereCheckoutResponse = payHereService.buildBookingCheckoutPayload(id)
+    fun bookingCheckout(
+        @PathVariable id: UUID,
+    ): PayHereCheckoutResponse = payHereService.buildBookingCheckoutPayload(id)
 
     /**
      * PayHere's webhook posts application/x-www-form-urlencoded, not JSON.
@@ -24,7 +28,9 @@ class PayHereController(
      * PAYHERE_NOTIFY_URL pointed at it.
      */
     @PostMapping("/api/payments/payhere/notify", consumes = ["application/x-www-form-urlencoded"])
-    fun notify(@RequestParam params: Map<String, String>): ResponseEntity<Void> {
+    fun notify(
+        @RequestParam params: Map<String, String>,
+    ): ResponseEntity<Void> {
         payHereService.verifyAndApplyNotification(params)
         return ResponseEntity.ok().build()
     }

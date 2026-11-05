@@ -7,7 +7,6 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest
@@ -83,22 +82,40 @@ class AdminManagementServiceTest {
 
     @Test
     fun `list sorts admins by most recently invited first`() {
-        val older = UserType.builder()
-            .username("older@example.com")
-            .userCreateDate(Instant.now().minusSeconds(3600))
-            .attributes(
-                AttributeType.builder().name("email").value("older@example.com").build(),
-                AttributeType.builder().name("name").value("Older Admin").build(),
-            )
-            .build()
-        val newer = UserType.builder()
-            .username("newer@example.com")
-            .userCreateDate(Instant.now())
-            .attributes(
-                AttributeType.builder().name("email").value("newer@example.com").build(),
-                AttributeType.builder().name("name").value("Newer Admin").build(),
-            )
-            .build()
+        val older =
+            UserType
+                .builder()
+                .username("older@example.com")
+                .userCreateDate(Instant.now().minusSeconds(3600))
+                .attributes(
+                    AttributeType
+                        .builder()
+                        .name("email")
+                        .value("older@example.com")
+                        .build(),
+                    AttributeType
+                        .builder()
+                        .name("name")
+                        .value("Older Admin")
+                        .build(),
+                ).build()
+        val newer =
+            UserType
+                .builder()
+                .username("newer@example.com")
+                .userCreateDate(Instant.now())
+                .attributes(
+                    AttributeType
+                        .builder()
+                        .name("email")
+                        .value("newer@example.com")
+                        .build(),
+                    AttributeType
+                        .builder()
+                        .name("name")
+                        .value("Newer Admin")
+                        .build(),
+                ).build()
         every { cognitoClient.listUsersInGroup(any<ListUsersInGroupRequest>()) } returns
             ListUsersInGroupResponse.builder().users(older, newer).build()
 
@@ -110,10 +127,12 @@ class AdminManagementServiceTest {
 
     @Test
     fun `list falls back to the username when name and email attributes are missing`() {
-        val bareUser = UserType.builder()
-            .username("bare-username")
-            .userCreateDate(Instant.now())
-            .build()
+        val bareUser =
+            UserType
+                .builder()
+                .username("bare-username")
+                .userCreateDate(Instant.now())
+                .build()
         every { cognitoClient.listUsersInGroup(any<ListUsersInGroupRequest>()) } returns
             ListUsersInGroupResponse.builder().users(bareUser).build()
 

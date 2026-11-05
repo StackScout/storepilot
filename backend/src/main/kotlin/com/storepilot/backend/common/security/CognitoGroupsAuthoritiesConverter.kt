@@ -21,7 +21,8 @@ import org.springframework.security.oauth2.jwt.Jwt
  */
 class CognitoGroupsAuthoritiesConverter : Converter<Jwt, Collection<GrantedAuthority>> {
     override fun convert(jwt: Jwt): Collection<GrantedAuthority> =
-        jwt.getClaimAsStringList("cognito:groups")
+        jwt
+            .getClaimAsStringList("cognito:groups")
             ?.filter { it in APP_COGNITO_ROLES }
             ?.map { SimpleGrantedAuthority("ROLE_${it.uppercase()}") }
             ?: emptyList()

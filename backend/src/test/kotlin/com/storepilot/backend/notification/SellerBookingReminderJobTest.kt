@@ -40,27 +40,66 @@ class SellerBookingReminderJobTest {
     @BeforeEach
     fun setUp() {
         val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Studio", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
-        service = BookableService(store = store, name = "Haircut", slug = "haircut", description = "description", category = "handicrafts", price = 5000, durationMinutes = 30, status = ServiceStatus.ACTIVE)
-            .apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Studio",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
+        service =
+            BookableService(
+                store = store,
+                name = "Haircut",
+                slug = "haircut",
+                description = "description",
+                category = "handicrafts",
+                price = 5000,
+                durationMinutes = 30,
+                status = ServiceStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
     }
 
-    private fun booking(scheduledStart: Instant) = Booking(
-        bookingNumber = "BK-1001", store = store, service = service, serviceName = service.name, servicePrice = service.price,
-        serviceDurationMinutes = service.durationMinutes, scheduledStart = scheduledStart, scheduledEnd = scheduledStart.plusSeconds(1800),
-        platformFee = 175, total = 5000, status = BookingStatus.CONFIRMED, paymentMethod = PaymentMethod.STRIPE, paymentStatus = PaymentStatus.PAID,
-        buyerName = "Jane Buyer", buyerPhone = "+61400000002", buyerEmail = "buyer@example.com",
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun booking(scheduledStart: Instant) =
+        Booking(
+            bookingNumber = "BK-1001",
+            store = store,
+            service = service,
+            serviceName = service.name,
+            servicePrice = service.price,
+            serviceDurationMinutes = service.durationMinutes,
+            scheduledStart = scheduledStart,
+            scheduledEnd = scheduledStart.plusSeconds(1800),
+            platformFee = 175,
+            total = 5000,
+            status = BookingStatus.CONFIRMED,
+            paymentMethod = PaymentMethod.STRIPE,
+            paymentStatus = PaymentStatus.PAID,
+            buyerName = "Jane Buyer",
+            buyerPhone = "+61400000002",
+            buyerEmail = "buyer@example.com",
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
-    private fun storeSettings(minutesBefore: Int) = StoreSettings(
-        store = store, contactEmail = "contact@store.example.com", contactPhone = "+61400000001",
-        bankAccountName = "Store Account", bankAccountNumber = "123456789", bankName = "Test Bank",
-        transactionFeePercent = BigDecimal("3.5"), sellerType = SellerType.INDIVIDUAL, sellerBookingReminderMinutesBefore = minutesBefore,
-    )
+    private fun storeSettings(minutesBefore: Int) =
+        StoreSettings(
+            store = store,
+            contactEmail = "contact@store.example.com",
+            contactPhone = "+61400000001",
+            bankAccountName = "Store Account",
+            bankAccountNumber = "123456789",
+            bankName = "Test Bank",
+            transactionFeePercent = BigDecimal("3.5"),
+            sellerType = SellerType.INDIVIDUAL,
+            sellerBookingReminderMinutesBefore = minutesBefore,
+        )
 
     @Test
     fun `reminds a booking once inside the store's own configured lead time`() {

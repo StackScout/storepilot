@@ -48,8 +48,9 @@ class StoreVerificationChangeRequestService(
     /** GET /api/stores/{storeId}/verification-change-requests/current — the seller's own open request, or null. */
     fun current(storeId: UUID): StoreVerificationChangeRequestResponse? {
         requireOwnedStore(storeId)
-        val pending = changeRequestRepository.findByStoreIdAndStatus(storeId, StoreVerificationChangeRequestStatus.PENDING)
-            ?: return null
+        val pending =
+            changeRequestRepository.findByStoreIdAndStatus(storeId, StoreVerificationChangeRequestStatus.PENDING)
+                ?: return null
         return pending.toResponse(storeSettingsRepository.findById(storeId).orElse(null), fileStorageService)
     }
 
@@ -71,14 +72,17 @@ class StoreVerificationChangeRequestService(
     ): StoreVerificationChangeRequestResponse {
         val store = requireOwnedStore(storeId)
         if (store.verificationStatus != StoreVerificationStatus.ACTIVE) {
-            throw ConflictException("Only an already-approved store can submit a verification change request — edit settings directly instead")
+            throw ConflictException(
+                "Only an already-approved store can submit a verification change request — edit settings directly instead",
+            )
         }
         if (changeRequestRepository.findByStoreIdAndStatus(storeId, StoreVerificationChangeRequestStatus.PENDING) != null) {
             throw ConflictException("A verification change request is already pending review for this store")
         }
-        val current = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val current =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
         // Compared against current, not just checked for presence — the
         // seller-facing form always resends every field (prefilled with
         // its current value), so a plain non-null check here let a
@@ -88,11 +92,15 @@ class StoreVerificationChangeRequestService(
         // current, so nothing renders there at all. Blank counts the
         // same as null on both sides — an empty-string ABN and a null
         // one both mean "no ABN on file", not a real change.
-        val hasTextChange = (input.sellerType != null && wireValueOf<SellerType>(input.sellerType) != current.sellerType) ||
-            (!input.driverLicenceNumber.isNullOrBlank() && input.driverLicenceNumber != current.driverLicenceNumber) ||
-            (!input.abn.isNullOrBlank() && input.abn != current.abn) ||
-            (!input.nicNumber.isNullOrBlank() && input.nicNumber != current.nicNumber) ||
-            (!input.businessRegistrationNumber.isNullOrBlank() && input.businessRegistrationNumber != current.businessRegistrationNumber)
+        val hasTextChange =
+            (input.sellerType != null && wireValueOf<SellerType>(input.sellerType) != current.sellerType) ||
+                (!input.driverLicenceNumber.isNullOrBlank() && input.driverLicenceNumber != current.driverLicenceNumber) ||
+                (!input.abn.isNullOrBlank() && input.abn != current.abn) ||
+                (!input.nicNumber.isNullOrBlank() && input.nicNumber != current.nicNumber) ||
+                (
+                    !input.businessRegistrationNumber.isNullOrBlank() &&
+                        input.businessRegistrationNumber != current.businessRegistrationNumber
+                )
         val hasFileChange = driverLicenceDocument != null || abnDocument != null || nicDocument != null || businessRegDocument != null
         require(hasTextChange || hasFileChange) { "Include at least one changed field or document" }
 
@@ -107,18 +115,19 @@ class StoreVerificationChangeRequestService(
             current.gstRegistered,
         )
 
-        val request = StoreVerificationChangeRequest(
-            store = store,
-            sellerType = input.sellerType?.let { wireValueOf<SellerType>(it) },
-            driverLicenceNumber = input.driverLicenceNumber,
-            abn = input.abn,
-            nicNumber = input.nicNumber,
-            businessRegistrationNumber = input.businessRegistrationNumber,
-            driverLicenceDocumentUrl = driverLicenceDocument?.let { storeDocument(it) },
-            abnDocumentUrl = abnDocument?.let { storeDocument(it) },
-            nicDocumentUrl = nicDocument?.let { storeDocument(it) },
-            businessRegDocumentUrl = businessRegDocument?.let { storeDocument(it) },
-        )
+        val request =
+            StoreVerificationChangeRequest(
+                store = store,
+                sellerType = input.sellerType?.let { wireValueOf<SellerType>(it) },
+                driverLicenceNumber = input.driverLicenceNumber,
+                abn = input.abn,
+                nicNumber = input.nicNumber,
+                businessRegistrationNumber = input.businessRegistrationNumber,
+                driverLicenceDocumentUrl = driverLicenceDocument?.let { storeDocument(it) },
+                abnDocumentUrl = abnDocument?.let { storeDocument(it) },
+                nicDocumentUrl = nicDocument?.let { storeDocument(it) },
+                businessRegDocumentUrl = businessRegDocument?.let { storeDocument(it) },
+            )
         val saved = changeRequestRepository.save(request)
 
         auditLogService.recordAsSeller(
@@ -149,15 +158,22 @@ class StoreVerificationChangeRequestService(
 
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
-    fun adminList(status: String?, page: Int, size: Int): PageResponse<StoreVerificationChangeRequestResponse> {
+    fun adminList(
+        status: String?,
+        page: Int,
+        size: Int,
+    ): PageResponse<StoreVerificationChangeRequestResponse> {
         val statusEnum = status?.let { wireValueOf<StoreVerificationChangeRequestStatus>(it) }
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        val requests = if (statusEnum != null) {
-            changeRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum, pageable)
-        } else {
-            changeRequestRepository.findAllByOrderByCreatedAtDesc(pageable)
+        val requests =
+            if (statusEnum != null) {
+                changeRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum, pageable)
+            } else {
+                changeRequestRepository.findAllByOrderByCreatedAtDesc(pageable)
+            }
+        return requests.toPageResponse {
+            it.toResponse(storeSettingsRepository.findById(requireNotNull(it.store.id)).orElse(null), fileStorageService)
         }
-        return requests.toPageResponse { it.toResponse(storeSettingsRepository.findById(requireNotNull(it.store.id)).orElse(null), fileStorageService) }
     }
 
     /** Applies every proposed field/document onto the real StoreSettings row, then closes the request. */
@@ -206,7 +222,10 @@ class StoreVerificationChangeRequestService(
     }
 
     @Transactional
-    fun adminReject(requestId: UUID, input: VerificationChangeRequestReviewInput): StoreVerificationChangeRequestResponse {
+    fun adminReject(
+        requestId: UUID,
+        input: VerificationChangeRequestReviewInput,
+    ): StoreVerificationChangeRequestResponse {
         require(!input.rejectionReason.isNullOrBlank()) { "A rejection reason is required" }
         val request = requireOpenRequest(requestId)
         val storeId = requireNotNull(request.store.id)

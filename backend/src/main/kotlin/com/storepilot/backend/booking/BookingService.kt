@@ -39,28 +39,31 @@ private const val MAX_RECURRING_OCCURRENCES = 12
 /** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
 private const val MAX_PAGE_SIZE = 100
 
-private val BOOKING_NUMBER_DATE_FORMAT: DateTimeFormatter = DateTimeFormatterBuilder()
-    .appendValue(ChronoField.YEAR, 4)
-    .appendValue(ChronoField.MONTH_OF_YEAR, 2)
-    .appendValue(ChronoField.DAY_OF_MONTH, 2)
-    .toFormatter()
+private val BOOKING_NUMBER_DATE_FORMAT: DateTimeFormatter =
+    DateTimeFormatterBuilder()
+        .appendValue(ChronoField.YEAR, 4)
+        .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+        .appendValue(ChronoField.DAY_OF_MONTH, 2)
+        .toFormatter()
 
-private val STATUS_LABELS = mapOf(
-    BookingStatus.PENDING to "Booking requested",
-    BookingStatus.CONFIRMED to "Booking confirmed",
-    BookingStatus.COMPLETED to "Appointment completed",
-    BookingStatus.CANCELLED to "Cancelled",
-    BookingStatus.NO_SHOW to "Marked as no-show",
-)
+private val STATUS_LABELS =
+    mapOf(
+        BookingStatus.PENDING to "Booking requested",
+        BookingStatus.CONFIRMED to "Booking confirmed",
+        BookingStatus.COMPLETED to "Appointment completed",
+        BookingStatus.CANCELLED to "Cancelled",
+        BookingStatus.NO_SHOW to "Marked as no-show",
+    )
 
 /** Mirrors OrderService.ALLOWED_STATUS_TRANSITIONS — no "shipped" analog, but adds NO_SHOW off CONFIRMED. */
-private val ALLOWED_STATUS_TRANSITIONS: Map<BookingStatus, Set<BookingStatus>> = mapOf(
-    BookingStatus.PENDING to setOf(BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.CANCELLED),
-    BookingStatus.CONFIRMED to setOf(BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.NO_SHOW),
-    BookingStatus.COMPLETED to setOf(BookingStatus.COMPLETED),
-    BookingStatus.CANCELLED to setOf(BookingStatus.CANCELLED),
-    BookingStatus.NO_SHOW to setOf(BookingStatus.NO_SHOW),
-)
+private val ALLOWED_STATUS_TRANSITIONS: Map<BookingStatus, Set<BookingStatus>> =
+    mapOf(
+        BookingStatus.PENDING to setOf(BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.CANCELLED),
+        BookingStatus.CONFIRMED to setOf(BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.CANCELLED, BookingStatus.NO_SHOW),
+        BookingStatus.COMPLETED to setOf(BookingStatus.COMPLETED),
+        BookingStatus.CANCELLED to setOf(BookingStatus.CANCELLED),
+        BookingStatus.NO_SHOW to setOf(BookingStatus.NO_SHOW),
+    )
 
 /** Mirrors OrderService end to end — fee computation, payment-method Pro/country gating, status state machine — see docs/features/bookings.md. */
 @Service
@@ -89,7 +92,10 @@ class BookingService(
     }
 
     /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/bookings uses the paged overload below. */
-    fun listByStore(storeId: UUID, status: String?): List<BookingResponse> {
+    fun listByStore(
+        storeId: UUID,
+        status: String?,
+    ): List<BookingResponse> {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         storeAccessService.requireOperationalAccess(store)
         val statusEnum = status?.let { wireValueOf<BookingStatus>(it) }
@@ -99,16 +105,22 @@ class BookingService(
     }
 
     /** Paged sibling of the above — GET /api/stores/{storeId}/bookings itself. Pushes the optional status filter into SQL (unlike the unpaged version above) so pagination is correct against the filtered set, not the full one. */
-    fun listByStore(storeId: UUID, status: String?, page: Int, size: Int): PageResponse<BookingResponse> {
+    fun listByStore(
+        storeId: UUID,
+        status: String?,
+        page: Int,
+        size: Int,
+    ): PageResponse<BookingResponse> {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         storeAccessService.requireOperationalAccess(store)
         val statusEnum = status?.let { wireValueOf<BookingStatus>(it) }
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        val bookings = if (statusEnum != null) {
-            bookingRepository.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, statusEnum, pageable)
-        } else {
-            bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable)
-        }
+        val bookings =
+            if (statusEnum != null) {
+                bookingRepository.findByStoreIdAndStatusOrderByCreatedAtDesc(storeId, statusEnum, pageable)
+            } else {
+                bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable)
+            }
         return bookings.toPageResponse { it.toResponse(receiptStorageService) }
     }
 
@@ -121,10 +133,17 @@ class BookingService(
 
     /** Paged sibling of the above — GET /api/me/bookings itself. */
     @Transactional
-    fun listByCurrentBuyer(page: Int, size: Int): PageResponse<BookingResponse> {
+    fun listByCurrentBuyer(
+        page: Int,
+        size: Int,
+    ): PageResponse<BookingResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return bookingRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.toResponse(receiptStorageService) }
+        return bookingRepository
+            .findByBuyerIdOrderByCreatedAtDesc(
+                buyerId,
+                pageable,
+            ).toPageResponse { it.toResponse(receiptStorageService) }
     }
 
     fun getById(id: UUID): BookingResponse =
@@ -134,7 +153,10 @@ class BookingService(
     fun findEntity(id: UUID): Booking? = bookingRepository.findById(id).orElse(null)
 
     /** Booking number (exact, case-insensitive) + last 9 digits of phone — the first factor of guest lookup, mirrors OrderService.resolveByNumberAndPhone. */
-    private fun resolveByNumberAndPhone(bookingNumber: String, phone: String): Booking? {
+    private fun resolveByNumberAndPhone(
+        bookingNumber: String,
+        phone: String,
+    ): Booking? {
         val normalizedInput = phone.replace(Regex("\\s+"), "")
         val suffix = normalizedInput.takeLast(9)
         val booking = bookingRepository.findByBookingNumberIgnoreCase(bookingNumber.trim()) ?: return null
@@ -144,7 +166,10 @@ class BookingService(
 
     /** First step of guest lookup — mirrors OrderService.requestLookupCode's doc comment exactly. */
     @Transactional
-    fun requestLookupCode(bookingNumber: String, phone: String) {
+    fun requestLookupCode(
+        bookingNumber: String,
+        phone: String,
+    ) {
         val booking = resolveByNumberAndPhone(bookingNumber, phone) ?: return
         guestLookupOtpService.requestCode(
             targetType = "booking",
@@ -156,7 +181,11 @@ class BookingService(
 
     /** Second step of guest lookup — replaces the old GET /api/bookings/lookup?bookingNumber=&phone=. */
     @Transactional
-    fun verifyLookupCode(bookingNumber: String, phone: String, code: String): BookingResponse {
+    fun verifyLookupCode(
+        bookingNumber: String,
+        phone: String,
+        code: String,
+    ): BookingResponse {
         val booking = resolveByNumberAndPhone(bookingNumber, phone) ?: throw NotFoundException("Booking not found")
         guestLookupOtpService.verifyCode("booking", requireNotNull(booking.id), code)
         return booking.toResponse(receiptStorageService)
@@ -165,8 +194,10 @@ class BookingService(
     /** POST /api/bookings — booking checkout. */
     @Transactional
     fun createBooking(input: CheckoutBookingInput): BookingResponse {
-        val service = bookableServiceRepository.findById(input.serviceId)
-            .orElseThrow { NotFoundException("Service ${input.serviceId} not found") }
+        val service =
+            bookableServiceRepository
+                .findById(input.serviceId)
+                .orElseThrow { NotFoundException("Service ${input.serviceId} not found") }
         val store = service.store
         val storeSettings = store.id?.let { storeSettingsRepository.findById(it).orElse(null) }
         if (storeSettings?.bookingsEnabled != true) {
@@ -180,15 +211,18 @@ class BookingService(
         // identically, but is only recorded as one use of the coupon (below),
         // treating the whole series as a single checkout. See
         // OrderService.createOrder for the equivalent order-side comment.
-        val couponResolution = input.couponCode?.takeIf { it.isNotBlank() }
-            ?.let { couponService.resolve(it, requireNotNull(store.id), CouponKind.BOOKING, service.price) }
+        val couponResolution =
+            input.couponCode
+                ?.takeIf { it.isNotBlank() }
+                ?.let { couponService.resolve(it, requireNotNull(store.id), CouponKind.BOOKING, service.price) }
         val discountAmount = couponResolution?.discountAmount ?: 0
         val discountedPrice = service.price - discountAmount
 
         val feePercent = storeSettings.transactionFeePercent
-        val platformFee = (BigDecimal(discountedPrice) * feePercent)
-            .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
-            .toInt()
+        val platformFee =
+            (BigDecimal(discountedPrice) * feePercent)
+                .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
+                .toInt()
 
         val paymentMethod = wireValueOf<PaymentMethod>(input.paymentMethod)
         // Same defense-in-depth as OrderService.createOrder — bank-transfer
@@ -196,13 +230,18 @@ class BookingService(
         // the confirmed product decision (see docs/features/bookings.md).
         // Skipped on a deployment with no Pro tier concept — see
         // PlatformSettings.proPlanEnabled's doc comment.
-        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) && store.seller.plan != SellerPlan.PRO && platformConfig.proPlanEnabled) {
+        if ((paymentMethod == PaymentMethod.COD || paymentMethod == PaymentMethod.BANK_TRANSFER) &&
+            store.seller.plan != SellerPlan.PRO &&
+            platformConfig.proPlanEnabled
+        ) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
         // Platform-wide ceiling, admin-configurable — same mechanism as
         // OrderService.createOrder, see PlatformSettings' default*Enabled
         // doc comments.
-        if ((paymentMethod == PaymentMethod.PAYHERE || paymentMethod == PaymentMethod.STRIPE) && !platformConfig.defaultOnlinePaymentEnabled) {
+        if ((paymentMethod == PaymentMethod.PAYHERE || paymentMethod == PaymentMethod.STRIPE) &&
+            !platformConfig.defaultOnlinePaymentEnabled
+        ) {
             throw ConflictException("This store doesn't offer ${paymentMethod.wireValue} payments")
         }
         if (paymentMethod == PaymentMethod.COD && !platformConfig.defaultCodEnabled) {
@@ -241,46 +280,54 @@ class BookingService(
         val excludedStatuses = setOf(BookingStatus.CANCELLED, BookingStatus.NO_SHOW)
         scheduledStarts.forEach { start ->
             val end = start.plusSeconds(service.durationMinutes * 60L)
-            val overlapping = bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(
-                requireNotNull(service.id),
-                excludedStatuses,
-                end,
-                start,
-            )
+            val overlapping =
+                bookingRepository.findByServiceIdAndStatusNotInAndScheduledStartLessThanAndScheduledEndGreaterThan(
+                    requireNotNull(service.id),
+                    excludedStatuses,
+                    end,
+                    start,
+                )
             if (overlapping.isNotEmpty()) throw ConflictException("This time slot is no longer available")
         }
 
         val now = Instant.now()
         val buyer = currentActor.buyerOrNull()
         val recurrenceGroupId = if (occurrenceCount > 1) UUID.randomUUID() else null
-        val bookings = scheduledStarts.map { start ->
-            val booking = Booking(
-                bookingNumber = generateBookingNumber(now, platformConfig.countryCode),
-                store = store,
-                service = service,
-                serviceName = service.name,
-                servicePrice = service.price,
-                serviceDurationMinutes = service.durationMinutes,
-                scheduledStart = start,
-                scheduledEnd = start.plusSeconds(service.durationMinutes * 60L),
-                platformFee = platformFee,
-                total = discountedPrice,
-                couponCode = couponResolution?.code,
-                discountAmount = discountAmount,
-                status = BookingStatus.PENDING,
-                paymentMethod = paymentMethod,
-                paymentStatus = PaymentStatus.UNPAID,
-                buyerName = input.buyerName,
-                buyerPhone = input.buyerPhone,
-                buyerEmail = input.buyerEmail,
-                buyer = buyer,
-                recurrenceGroupId = recurrenceGroupId,
-            )
-            booking.timeline.add(
-                BookingTimelineEntry(booking = booking, status = BookingStatus.PENDING, label = STATUS_LABELS.getValue(BookingStatus.PENDING), timestamp = now),
-            )
-            booking
-        }
+        val bookings =
+            scheduledStarts.map { start ->
+                val booking =
+                    Booking(
+                        bookingNumber = generateBookingNumber(now, platformConfig.countryCode),
+                        store = store,
+                        service = service,
+                        serviceName = service.name,
+                        servicePrice = service.price,
+                        serviceDurationMinutes = service.durationMinutes,
+                        scheduledStart = start,
+                        scheduledEnd = start.plusSeconds(service.durationMinutes * 60L),
+                        platformFee = platformFee,
+                        total = discountedPrice,
+                        couponCode = couponResolution?.code,
+                        discountAmount = discountAmount,
+                        status = BookingStatus.PENDING,
+                        paymentMethod = paymentMethod,
+                        paymentStatus = PaymentStatus.UNPAID,
+                        buyerName = input.buyerName,
+                        buyerPhone = input.buyerPhone,
+                        buyerEmail = input.buyerEmail,
+                        buyer = buyer,
+                        recurrenceGroupId = recurrenceGroupId,
+                    )
+                booking.timeline.add(
+                    BookingTimelineEntry(
+                        booking = booking,
+                        status = BookingStatus.PENDING,
+                        label = STATUS_LABELS.getValue(BookingStatus.PENDING),
+                        timestamp = now,
+                    ),
+                )
+                booking
+            }
 
         val saved = bookingRepository.saveAll(bookings)
         couponResolution?.let { couponService.recordUse(it.couponId) }
@@ -296,7 +343,10 @@ class BookingService(
 
     /** PATCH /api/bookings/{id}/status — seller-driven transitions. */
     @Transactional
-    fun updateStatus(id: UUID, input: BookingStatusUpdateInput): BookingResponse {
+    fun updateStatus(
+        id: UUID,
+        input: BookingStatusUpdateInput,
+    ): BookingResponse {
         val booking = bookingRepository.findById(id).orElseThrow { NotFoundException("Booking $id not found") }
         requireSellerOwnsBooking(booking)
         val status = wireValueOf<BookingStatus>(input.status)
@@ -314,7 +364,13 @@ class BookingService(
         if (status == BookingStatus.CANCELLED) applyCancellationSideEffects(booking)
 
         booking.timeline.add(
-            BookingTimelineEntry(booking = booking, status = status, label = STATUS_LABELS.getValue(status), timestamp = Instant.now(), note = input.note),
+            BookingTimelineEntry(
+                booking = booking,
+                status = status,
+                label = STATUS_LABELS.getValue(status),
+                timestamp = Instant.now(),
+                note = input.note,
+            ),
         )
         val saved = bookingRepository.save(booking)
         when (status) {
@@ -329,7 +385,10 @@ class BookingService(
 
     /** POST /api/bookings/{id}/receipt — buyer uploads proof of a bank transfer, mirrors OrderService.uploadReceipt. */
     @Transactional
-    fun uploadReceipt(id: UUID, file: MultipartFile): BookingResponse {
+    fun uploadReceipt(
+        id: UUID,
+        file: MultipartFile,
+    ): BookingResponse {
         val booking = bookingRepository.findById(id).orElseThrow { NotFoundException("Booking $id not found") }
         if (booking.paymentMethod != PaymentMethod.BANK_TRANSFER) {
             throw ConflictException("Booking $id is not a bank transfer payment")
@@ -339,14 +398,23 @@ class BookingService(
         }
         booking.receiptUrl = receiptStorageService.store(file)
         booking.timeline.add(
-            BookingTimelineEntry(booking = booking, status = booking.status, label = "Payment receipt uploaded", timestamp = Instant.now(), note = "Awaiting seller verification"),
+            BookingTimelineEntry(
+                booking = booking,
+                status = booking.status,
+                label = "Payment receipt uploaded",
+                timestamp = Instant.now(),
+                note = "Awaiting seller verification",
+            ),
         )
         return publishBookingEvent(bookingRepository.save(booking))
     }
 
     /** POST /api/bookings/{id}/verify-bank-transfer — mirrors OrderService.verifyBankTransfer. */
     @Transactional
-    fun verifyBankTransfer(id: UUID, input: VerifyBookingBankTransferInput): BookingResponse {
+    fun verifyBankTransfer(
+        id: UUID,
+        input: VerifyBookingBankTransferInput,
+    ): BookingResponse {
         val booking = bookingRepository.findById(id).orElseThrow { NotFoundException("Booking $id not found") }
         requireSellerOwnsBooking(booking)
         if (booking.paymentMethod != PaymentMethod.BANK_TRANSFER) {
@@ -360,12 +428,24 @@ class BookingService(
             booking.paymentStatus = PaymentStatus.PAID
             if (booking.status == BookingStatus.PENDING) booking.status = BookingStatus.CONFIRMED
             booking.timeline.add(
-                BookingTimelineEntry(booking = booking, status = booking.status, label = "Payment confirmed by seller", timestamp = Instant.now(), note = input.note),
+                BookingTimelineEntry(
+                    booking = booking,
+                    status = booking.status,
+                    label = "Payment confirmed by seller",
+                    timestamp = Instant.now(),
+                    note = input.note,
+                ),
             )
         } else {
             booking.receiptUrl = null
             booking.timeline.add(
-                BookingTimelineEntry(booking = booking, status = booking.status, label = "Payment receipt rejected", timestamp = Instant.now(), note = input.note),
+                BookingTimelineEntry(
+                    booking = booking,
+                    status = booking.status,
+                    label = "Payment receipt rejected",
+                    timestamp = Instant.now(),
+                    note = input.note,
+                ),
             )
         }
         val saved = bookingRepository.save(booking)
@@ -381,7 +461,10 @@ class BookingService(
      * comment.
      */
     @Transactional
-    fun cancelBooking(id: UUID, input: CancelBookingInput): BookingResponse {
+    fun cancelBooking(
+        id: UUID,
+        input: CancelBookingInput,
+    ): BookingResponse {
         val booking = bookingRepository.findById(id).orElseThrow { NotFoundException("Booking $id not found") }
         if (booking.status !in setOf(BookingStatus.PENDING, BookingStatus.CONFIRMED)) {
             throw ConflictException("Booking $id can no longer be cancelled")
@@ -395,7 +478,13 @@ class BookingService(
         booking.cancellationReason = input.reason
         applyCancellationSideEffects(booking)
         booking.timeline.add(
-            BookingTimelineEntry(booking = booking, status = BookingStatus.CANCELLED, label = "Cancelled", timestamp = Instant.now(), note = input.reason),
+            BookingTimelineEntry(
+                booking = booking,
+                status = BookingStatus.CANCELLED,
+                label = "Cancelled",
+                timestamp = Instant.now(),
+                note = input.reason,
+            ),
         )
         val saved = bookingRepository.save(booking)
         bookingNotifier.bookingCancelled(saved)
@@ -421,7 +510,10 @@ class BookingService(
         }
     }
 
-    private fun generateBookingNumber(now: Instant, countryCode: String): String {
+    private fun generateBookingNumber(
+        now: Instant,
+        countryCode: String,
+    ): String {
         val datePart = BOOKING_NUMBER_DATE_FORMAT.format(now.atZone(java.time.ZoneOffset.UTC))
         val randomPart = Random.nextInt(1000, 10000)
         return "BK-$countryCode-$datePart-$randomPart"

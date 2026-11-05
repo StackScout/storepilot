@@ -42,7 +42,10 @@ object ProductSpecifications {
             if (category == null) null else cb.equal(root.get<String>("category"), category)
         }
 
-    fun priceBetween(minPrice: Int?, maxPrice: Int?): Specification<Product> =
+    fun priceBetween(
+        minPrice: Int?,
+        maxPrice: Int?,
+    ): Specification<Product> =
         Specification { root, _, cb ->
             when {
                 minPrice != null && maxPrice != null -> cb.between(root.get("price"), minPrice, maxPrice)

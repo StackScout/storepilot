@@ -20,11 +20,14 @@ class SavedSearchController(
     fun list(): List<SavedSearchResponse> = savedSearchService.list()
 
     @PostMapping("/api/me/saved-searches")
-    fun create(@Valid @RequestBody input: SavedSearchInput): ResponseEntity<SavedSearchResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(savedSearchService.create(input))
+    fun create(
+        @Valid @RequestBody input: SavedSearchInput,
+    ): ResponseEntity<SavedSearchResponse> = ResponseEntity.status(HttpStatus.CREATED).body(savedSearchService.create(input))
 
     @DeleteMapping("/api/me/saved-searches/{id}")
-    fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
+    fun delete(
+        @PathVariable id: UUID,
+    ): ResponseEntity<Void> {
         savedSearchService.delete(id)
         return ResponseEntity.noContent().build()
     }

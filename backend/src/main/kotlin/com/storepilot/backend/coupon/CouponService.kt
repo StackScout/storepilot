@@ -19,7 +19,11 @@ import java.util.UUID
 /** Hard cap regardless of what a caller requests via `size` — same convention as ProductService/StoreService's own MAX_PAGE_SIZE. */
 private const val MAX_PAGE_SIZE = 100
 
-data class CouponResolution(val couponId: UUID, val code: String, val discountAmount: Int)
+data class CouponResolution(
+    val couponId: UUID,
+    val code: String,
+    val discountAmount: Int,
+)
 
 /**
  * Owns coupon CRUD (dual-scoped: store-specific via the seller-facing
@@ -48,32 +52,43 @@ class CouponService(
     }
 
     /** Paged sibling of the above — GET /api/stores/{storeId}/coupons itself. */
-    fun listForStore(storeId: UUID, page: Int, size: Int): PageResponse<CouponResponse> {
+    fun listForStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<CouponResponse> {
         requireOwnedStore(storeId)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return couponRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
     }
 
     @Transactional
-    fun createForStore(storeId: UUID, input: CouponInput): CouponResponse {
+    fun createForStore(
+        storeId: UUID,
+        input: CouponInput,
+    ): CouponResponse {
         val store = requireOwnedStore(storeId)
-        val coupon = Coupon(
-            code = normalizeCode(input.code),
-            store = store,
-            discountType = wireValueOf<DiscountType>(input.discountType),
-            discountValue = input.discountValue,
-            appliesToOrders = input.appliesToOrders,
-            appliesToBookings = input.appliesToBookings,
-            maxUses = input.maxUses,
-            minSubtotal = input.minSubtotal,
-            expiresAt = input.expiresAt,
-            active = input.active,
-        )
+        val coupon =
+            Coupon(
+                code = normalizeCode(input.code),
+                store = store,
+                discountType = wireValueOf<DiscountType>(input.discountType),
+                discountValue = input.discountValue,
+                appliesToOrders = input.appliesToOrders,
+                appliesToBookings = input.appliesToBookings,
+                maxUses = input.maxUses,
+                minSubtotal = input.minSubtotal,
+                expiresAt = input.expiresAt,
+                active = input.active,
+            )
         return save(coupon).toResponse()
     }
 
     @Transactional
-    fun updateForStore(id: UUID, input: CouponInput): CouponResponse {
+    fun updateForStore(
+        id: UUID,
+        input: CouponInput,
+    ): CouponResponse {
         val coupon = requireCoupon(id)
         val storeId = coupon.store?.id ?: throw NotFoundException("Coupon $id not found")
         requireOwnedStore(storeId)
@@ -91,7 +106,10 @@ class CouponService(
 
     // --- Admin-scoped (platform-wide coupons) ---
 
-    fun listPlatformWide(page: Int, size: Int): PageResponse<CouponResponse> {
+    fun listPlatformWide(
+        page: Int,
+        size: Int,
+    ): PageResponse<CouponResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return couponRepository.findByStoreIdIsNullOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
     }
@@ -99,23 +117,27 @@ class CouponService(
     @Transactional
     fun createPlatformWide(input: CouponInput): CouponResponse {
         currentActor.requireAdmin()
-        val coupon = Coupon(
-            code = normalizeCode(input.code),
-            store = null,
-            discountType = wireValueOf<DiscountType>(input.discountType),
-            discountValue = input.discountValue,
-            appliesToOrders = input.appliesToOrders,
-            appliesToBookings = input.appliesToBookings,
-            maxUses = input.maxUses,
-            minSubtotal = input.minSubtotal,
-            expiresAt = input.expiresAt,
-            active = input.active,
-        )
+        val coupon =
+            Coupon(
+                code = normalizeCode(input.code),
+                store = null,
+                discountType = wireValueOf<DiscountType>(input.discountType),
+                discountValue = input.discountValue,
+                appliesToOrders = input.appliesToOrders,
+                appliesToBookings = input.appliesToBookings,
+                maxUses = input.maxUses,
+                minSubtotal = input.minSubtotal,
+                expiresAt = input.expiresAt,
+                active = input.active,
+            )
         return save(coupon).toResponse()
     }
 
     @Transactional
-    fun updatePlatformWide(id: UUID, input: CouponInput): CouponResponse {
+    fun updatePlatformWide(
+        id: UUID,
+        input: CouponInput,
+    ): CouponResponse {
         currentActor.requireAdmin()
         val coupon = requireCoupon(id)
         if (coupon.store != null) throw NotFoundException("Coupon $id not found")
@@ -151,7 +173,12 @@ class CouponService(
      * BookingService's createOrder/createBooking), since propagation joins
      * the existing transaction rather than starting a new read-only one.
      */
-    fun resolve(code: String, storeId: UUID, kind: CouponKind, amount: Int): CouponResolution {
+    fun resolve(
+        code: String,
+        storeId: UUID,
+        kind: CouponKind,
+        amount: Int,
+    ): CouponResolution {
         val coupon = couponRepository.findByCode(normalizeCode(code)) ?: throw ConflictException("Invalid coupon code")
         if (!coupon.active) throw ConflictException("Invalid coupon code")
         val expiresAt = coupon.expiresAt
@@ -166,12 +193,14 @@ class CouponService(
         }
         if (amount < coupon.minSubtotal) throw ConflictException("This coupon needs a minimum spend to apply")
 
-        val discount = when (coupon.discountType) {
-            DiscountType.PERCENT -> (BigDecimal(amount) * BigDecimal(coupon.discountValue))
-                .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
-                .toInt()
-            DiscountType.FIXED -> coupon.discountValue
-        }.coerceIn(0, amount)
+        val discount =
+            when (coupon.discountType) {
+                DiscountType.PERCENT ->
+                    (BigDecimal(amount) * BigDecimal(coupon.discountValue))
+                        .divide(BigDecimal(100), 0, RoundingMode.HALF_UP)
+                        .toInt()
+                DiscountType.FIXED -> coupon.discountValue
+            }.coerceIn(0, amount)
 
         return CouponResolution(couponId = requireNotNull(coupon.id), code = coupon.code, discountAmount = discount)
     }
@@ -186,7 +215,10 @@ class CouponService(
 
     // --- Shared helpers ---
 
-    private fun applyInput(coupon: Coupon, input: CouponInput) {
+    private fun applyInput(
+        coupon: Coupon,
+        input: CouponInput,
+    ) {
         coupon.code = normalizeCode(input.code)
         coupon.discountType = wireValueOf<DiscountType>(input.discountType)
         coupon.discountValue = input.discountValue
@@ -209,6 +241,9 @@ class CouponService(
 
     private fun requireCoupon(id: UUID): Coupon = couponRepository.findById(id).orElseThrow { NotFoundException("Coupon $id not found") }
 
-    private fun requireOwnedStore(storeId: UUID) = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
-        .let { storeAccessService.requireOperationalAccess(it) }
+    private fun requireOwnedStore(storeId: UUID) =
+        storeRepository
+            .findById(storeId)
+            .orElseThrow { NotFoundException("Store $storeId not found") }
+            .let { storeAccessService.requireOperationalAccess(it) }
 }

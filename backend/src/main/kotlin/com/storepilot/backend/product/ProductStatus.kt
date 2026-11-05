@@ -4,7 +4,9 @@ import com.storepilot.backend.common.WireValue
 import com.storepilot.backend.common.WireValueEnumConverter
 import jakarta.persistence.Converter
 
-enum class ProductStatus(override val wireValue: String) : WireValue {
+enum class ProductStatus(
+    override val wireValue: String,
+) : WireValue {
     ACTIVE("active"),
     DRAFT("draft"),
     OUT_OF_STOCK("out-of-stock"),

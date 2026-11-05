@@ -12,26 +12,46 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
     /** Unpaged — internal cross-service use (BookingAnalyticsService needs every booking to compute stats; SellerExportService's full data-export bundle). GET /api/stores/{storeId}/bookings uses the paged overloads below. */
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<Booking>
 
-    fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Booking>
+    fun findByStoreIdOrderByCreatedAtDesc(
+        storeId: UUID,
+        pageable: Pageable,
+    ): Page<Booking>
 
-    fun findByStoreIdAndStatusOrderByCreatedAtDesc(storeId: UUID, status: BookingStatus, pageable: Pageable): Page<Booking>
+    fun findByStoreIdAndStatusOrderByCreatedAtDesc(
+        storeId: UUID,
+        status: BookingStatus,
+        pageable: Pageable,
+    ): Page<Booking>
 
     /** Unpaged — internal cross-service use (e.g. BuyerAccountService's account-deletion sweep). GET /api/me/bookings uses the paged overload below. */
     fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID): List<Booking>
 
-    fun findByBuyerIdOrderByCreatedAtDesc(buyerId: UUID, pageable: Pageable): Page<Booking>
+    fun findByBuyerIdOrderByCreatedAtDesc(
+        buyerId: UUID,
+        pageable: Pageable,
+    ): Page<Booking>
 
     /** Close-store precondition check — see StoreService.closeStore. */
-    fun existsByStoreIdAndStatusIn(storeId: UUID, statuses: Collection<BookingStatus>): Boolean
+    fun existsByStoreIdAndStatusIn(
+        storeId: UUID,
+        statuses: Collection<BookingStatus>,
+    ): Boolean
 
     /** Verified-purchase gate for a store review — see ReviewService.createStoreReview. */
-    fun existsByBuyerIdAndStoreIdAndStatus(buyerId: UUID, storeId: UUID, status: BookingStatus): Boolean
+    fun existsByBuyerIdAndStoreIdAndStatus(
+        buyerId: UUID,
+        storeId: UUID,
+        status: BookingStatus,
+    ): Boolean
 
     /** GET /api/bookings/lookup — mirrors OrderRepository.findByOrderNumberIgnoreCase, suffix-matched against buyerPhone in BookingService. */
     fun findByBookingNumberIgnoreCase(bookingNumber: String): Booking?
 
     /** Delete-guard for BookableServiceService.delete — see BookableService's doc comment on why deletion is refused while a live obligation exists. */
-    fun existsByServiceIdAndStatusNotIn(serviceId: UUID, statuses: Collection<BookingStatus>): Boolean
+    fun existsByServiceIdAndStatusNotIn(
+        serviceId: UUID,
+        statuses: Collection<BookingStatus>,
+    ): Boolean
 
     /**
      * The slot-overlap check's hot path — see AvailabilityService.computeSlots
@@ -58,7 +78,10 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
           and b.scheduledStart >= :windowStart and b.scheduledStart < :windowEnd
         """,
     )
-    fun findDueForReminder(@Param("windowStart") windowStart: Instant, @Param("windowEnd") windowEnd: Instant): List<Booking>
+    fun findDueForReminder(
+        @Param("windowStart") windowStart: Instant,
+        @Param("windowEnd") windowEnd: Instant,
+    ): List<Booking>
 
     /**
      * Candidate pool for SellerBookingReminderJob — every seller offset is
@@ -76,7 +99,10 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
           and b.scheduledStart > :now and b.scheduledStart < :maxLookahead
         """,
     )
-    fun findCandidatesForSellerReminder(@Param("now") now: Instant, @Param("maxLookahead") maxLookahead: Instant): List<Booking>
+    fun findCandidatesForSellerReminder(
+        @Param("now") now: Instant,
+        @Param("maxLookahead") maxLookahead: Instant,
+    ): List<Booking>
 
     /** GET /api/bookings/recurrence/{groupId} — every occurrence of a recurring series, in chronological order. */
     fun findByRecurrenceGroupIdOrderByScheduledStartAsc(recurrenceGroupId: UUID): List<Booking>
@@ -98,7 +124,11 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
           and b.createdAt >= :from and b.createdAt < :to
         """,
     )
-    fun sumServicePriceForPaidBookings(storeId: UUID, from: Instant, to: Instant): Int
+    fun sumServicePriceForPaidBookings(
+        storeId: UUID,
+        from: Instant,
+        to: Instant,
+    ): Int
 
     @Query(
         """
@@ -109,5 +139,9 @@ interface BookingRepository : JpaRepository<Booking, UUID> {
           and b.createdAt >= :from and b.createdAt < :to
         """,
     )
-    fun sumPlatformFeeForPaidBookings(storeId: UUID, from: Instant, to: Instant): Int
+    fun sumPlatformFeeForPaidBookings(
+        storeId: UUID,
+        from: Instant,
+        to: Instant,
+    ): Int
 }

@@ -46,12 +46,12 @@ class CurrentActor(
     private val cognitoClient: CognitoIdentityProviderClient,
     private val cognitoProperties: CognitoProperties,
 ) {
-    private fun jwtOrNull(): Jwt? =
-        (SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken)?.token
+    private fun jwtOrNull(): Jwt? = (SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken)?.token
 
     private fun hasRole(role: String): Boolean =
         (SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken)
-            ?.authorities?.any { it.authority == "ROLE_$role" } ?: false
+            ?.authorities
+            ?.any { it.authority == "ROLE_$role" } ?: false
 
     /**
      * AdminGetUser needs Cognito's actual Username, which is NOT
@@ -72,15 +72,18 @@ class CurrentActor(
      */
     private fun fetchProfileFromCognito(jwt: Jwt): Pair<String, String>? {
         val username = requireNotNull(jwt.getClaimAsString("username")) { "JWT has no username claim" }
-        val request = AdminGetUserRequest.builder()
-            .userPoolId(cognitoProperties.userPoolId)
-            .username(username)
-            .build()
-        val attributes = try {
-            cognitoClient.adminGetUser(request).userAttributes()
-        } catch (e: UserNotFoundException) {
-            return null
-        }.associate { it.name() to it.value() }
+        val request =
+            AdminGetUserRequest
+                .builder()
+                .userPoolId(cognitoProperties.userPoolId)
+                .username(username)
+                .build()
+        val attributes =
+            try {
+                cognitoClient.adminGetUser(request).userAttributes()
+            } catch (e: UserNotFoundException) {
+                return null
+            }.associate { it.name() to it.value() }
         val email = requireNotNull(attributes["email"]) { "Cognito user $username has no email attribute" }
         val name = attributes["name"] ?: email
         return email to name
@@ -186,4 +189,9 @@ class CurrentActor(
 }
 
 /** `username` (not `sub`) is what Cognito Admin* APIs require as the lookup/mutation key — see fetchProfileFromCognito's doc comment. */
-data class CognitoIdentity(val sub: String, val username: String, val email: String, val name: String)
+data class CognitoIdentity(
+    val sub: String,
+    val username: String,
+    val email: String,
+    val name: String,
+)

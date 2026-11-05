@@ -26,7 +26,10 @@ class MessagingNotifier(
 ) {
     private val log = LoggerFactory.getLogger(MessagingNotifier::class.java)
 
-    fun sellerMessageReceived(conversation: Conversation, message: Message) {
+    fun sellerMessageReceived(
+        conversation: Conversation,
+        message: Message,
+    ) {
         val title = "New message from ${conversation.buyer.name}"
         val body = message.body.take(120)
         val sellerId = conversation.store.seller.id
@@ -34,7 +37,16 @@ class MessagingNotifier(
             val tokens = pushTokenRepository.findBySellerId(sellerId).map { it.token }
             if (tokens.isNotEmpty()) {
                 try {
-                    pushNotificationService.send(tokens, title, body, data = mapOf("type" to "conversation", "id" to conversation.id.toString()))
+                    pushNotificationService.send(
+                        tokens,
+                        title,
+                        body,
+                        data =
+                            mapOf(
+                                "type" to "conversation",
+                                "id" to conversation.id.toString(),
+                            ),
+                    )
                 } catch (e: Exception) {
                     log.warn("Failed to send message push to seller {} — not failing the triggering operation", sellerId, e)
                 }
@@ -43,14 +55,22 @@ class MessagingNotifier(
         sellerNotificationService.notify(conversation.store.seller, SellerNotificationType.CONVERSATION, title, body, conversation.id)
     }
 
-    fun buyerMessageReceived(conversation: Conversation, message: Message) {
+    fun buyerMessageReceived(
+        conversation: Conversation,
+        message: Message,
+    ) {
         val title = "New message from ${conversation.store.name}"
         val body = message.body.take(120)
         val buyerId = conversation.buyer.id ?: return
         val tokens = buyerPushTokenRepository.findByBuyerId(buyerId).map { it.token }
         if (tokens.isNotEmpty()) {
             try {
-                pushNotificationService.send(tokens, title, body, data = mapOf("type" to "conversation", "id" to conversation.id.toString()))
+                pushNotificationService.send(
+                    tokens,
+                    title,
+                    body,
+                    data = mapOf("type" to "conversation", "id" to conversation.id.toString()),
+                )
             } catch (e: Exception) {
                 log.warn("Failed to send message push to buyer {} — not failing the triggering operation", buyerId, e)
             }

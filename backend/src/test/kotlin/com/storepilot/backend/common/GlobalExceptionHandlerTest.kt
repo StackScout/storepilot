@@ -80,10 +80,11 @@ class GlobalExceptionHandlerTest {
     @Test
     fun `handleValidation collects every field error into the fields map`() {
         val bindingResult = mockk<BindingResult>()
-        every { bindingResult.fieldErrors } returns listOf(
-            FieldError("input", "email", "must not be blank"),
-            FieldError("input", "name", "must not be blank"),
-        )
+        every { bindingResult.fieldErrors } returns
+            listOf(
+                FieldError("input", "email", "must not be blank"),
+                FieldError("input", "name", "must not be blank"),
+            )
         val ex = mockk<MethodArgumentNotValidException>()
         every { ex.bindingResult } returns bindingResult
 

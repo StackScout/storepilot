@@ -13,12 +13,13 @@ data class AuditLogResponse(
     val createdAt: Instant,
 )
 
-fun AuditLog.toResponse() = AuditLogResponse(
-    id = requireNotNull(id),
-    actorEmail = actorEmail,
-    action = action.wireValue,
-    targetType = targetType,
-    targetId = targetId,
-    description = description,
-    createdAt = requireNotNull(createdAt),
-)
+fun AuditLog.toResponse() =
+    AuditLogResponse(
+        id = requireNotNull(id),
+        actorEmail = actorEmail,
+        action = action.wireValue,
+        targetType = targetType,
+        targetId = targetId,
+        description = description,
+        createdAt = requireNotNull(createdAt),
+    )

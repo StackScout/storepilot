@@ -17,6 +17,5 @@ class AuditLogController(
         @RequestParam targetType: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "50") size: Int,
-    ): PageResponse<AuditLogResponse> =
-        auditLogService.list(action?.let { wireValueOf<AuditAction>(it) }, targetType, page, size)
+    ): PageResponse<AuditLogResponse> = auditLogService.list(action?.let { wireValueOf<AuditAction>(it) }, targetType, page, size)
 }

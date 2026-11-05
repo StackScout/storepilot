@@ -61,17 +61,32 @@ class MessagingService(
 
     /** GET /api/me/conversations — buyer-scoped list, newest activity first. */
     @Transactional
-    fun listMyConversations(page: Int, size: Int): PageResponse<ConversationResponse> {
+    fun listMyConversations(
+        page: Int,
+        size: Int,
+    ): PageResponse<ConversationResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return conversationRepository.findByBuyerIdOrderByLastMessageAtDesc(buyerId, pageable).toPageResponse { it.toResponse(SenderType.BUYER) }
+        return conversationRepository
+            .findByBuyerIdOrderByLastMessageAtDesc(
+                buyerId,
+                pageable,
+            ).toPageResponse { it.toResponse(SenderType.BUYER) }
     }
 
     /** GET /api/stores/{storeId}/conversations — seller-scoped list. */
-    fun listStoreConversations(storeId: UUID, page: Int, size: Int): PageResponse<ConversationResponse> {
+    fun listStoreConversations(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<ConversationResponse> {
         requireOwnedStore(storeId)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return conversationRepository.findByStoreIdOrderByLastMessageAtDesc(storeId, pageable).toPageResponse { it.toResponse(SenderType.SELLER) }
+        return conversationRepository
+            .findByStoreIdOrderByLastMessageAtDesc(
+                storeId,
+                pageable,
+            ).toPageResponse { it.toResponse(SenderType.SELLER) }
     }
 
     fun getById(id: UUID): ConversationResponse {
@@ -92,7 +107,11 @@ class MessagingService(
 
     /** GET /api/conversations/{id}/messages — also marks every message as read for the calling side. */
     @Transactional
-    fun listMessages(id: UUID, page: Int, size: Int): PageResponse<MessageResponse> {
+    fun listMessages(
+        id: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<MessageResponse> {
         val conversation = requireConversation(id)
         val side = requireParticipant(conversation)
         if (side == SenderType.BUYER) conversation.buyerUnreadCount = 0 else conversation.sellerUnreadCount = 0
@@ -103,7 +122,10 @@ class MessagingService(
 
     /** POST /api/conversations/{id}/messages */
     @Transactional
-    fun sendMessage(id: UUID, input: SendMessageInput): MessageResponse {
+    fun sendMessage(
+        id: UUID,
+        input: SendMessageInput,
+    ): MessageResponse {
         val conversation = requireConversation(id)
         val side = requireParticipant(conversation)
         val now = Instant.now()

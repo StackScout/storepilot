@@ -22,14 +22,22 @@ class CategoryServiceTest {
 
     private val service = CategoryService(categoryRepository, storeRepository, productRepository, bookableServiceRepository)
 
-    private fun category(wireValue: String = "handicrafts", active: Boolean = true) =
-        Category(name = "Handicrafts", wireValue = wireValue, icon = "hand", sortOrder = 1, active = active)
-            .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun category(
+        wireValue: String = "handicrafts",
+        active: Boolean = true,
+    ) = Category(name = "Handicrafts", wireValue = wireValue, icon = "hand", sortOrder = 1, active = active)
+        .apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
     @BeforeEach
     fun setUp() {
         every { categoryRepository.save(any()) } answers {
-            (firstArg() as Category).apply { if (id == null) id = UUID.randomUUID(); if (createdAt == null) createdAt = Instant.now() }
+            (firstArg() as Category).apply {
+                if (id == null) id = UUID.randomUUID()
+                if (createdAt == null) createdAt = Instant.now()
+            }
         }
     }
 
@@ -95,7 +103,11 @@ class CategoryServiceTest {
         every { categoryRepository.findById(existing.id!!) } returns Optional.of(existing)
         every { categoryRepository.findByWireValue("handicrafts") } returns existing
 
-        val result = service.update(existing.id!!, CategoryFormInput(name = "Renamed", wireValue = "handicrafts", icon = "hand", sortOrder = 5, active = false))
+        val result =
+            service.update(
+                existing.id!!,
+                CategoryFormInput(name = "Renamed", wireValue = "handicrafts", icon = "hand", sortOrder = 5, active = false),
+            )
 
         assertEquals("Renamed", result.name)
         assertEquals(5, result.sortOrder)
@@ -103,7 +115,8 @@ class CategoryServiceTest {
     }
 
     private fun assertFalseActive(response: CategoryResponse) {
-        org.junit.jupiter.api.Assertions.assertFalse(response.active)
+        org.junit.jupiter.api.Assertions
+            .assertFalse(response.active)
     }
 
     @Test

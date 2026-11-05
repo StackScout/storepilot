@@ -6,8 +6,8 @@ import com.storepilot.backend.order.OrderResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
@@ -57,8 +57,9 @@ class FeeCollectionController(
     ): PageResponse<BookingResponse> = feeCollectionService.adminGetEligibleBookings(storeId, page, size)
 
     @PostMapping("/api/admin/stores/{storeId}/fee-collections")
-    fun createBatch(@PathVariable storeId: UUID): ResponseEntity<FeeCollectionResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(feeCollectionService.createBatch(storeId))
+    fun createBatch(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<FeeCollectionResponse> = ResponseEntity.status(HttpStatus.CREATED).body(feeCollectionService.createBatch(storeId))
 
     @GetMapping("/api/admin/fee-collections")
     fun adminList(

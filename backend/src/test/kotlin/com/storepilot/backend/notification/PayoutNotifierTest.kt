@@ -11,7 +11,6 @@ import com.storepilot.backend.store.StoreVerificationStatus
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
@@ -32,28 +31,54 @@ class PayoutNotifierTest {
     @BeforeEach
     fun setUp() {
         seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
-        store = Store(
-            seller = seller, slug = "store", name = "Handicrafts Store", tagline = "tagline", description = "description",
-            category = "handicrafts", address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000", verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
-            currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true, proPlanEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney", returnWindowDays = 14,
-        )
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
         every { pushTokenRepository.findBySellerId(any()) } returns emptyList()
     }
 
-    private fun payout() = Payout(store = store, subtotal = 10100, platformFee = 100, net = 10000, status = PayoutStatus.PAID)
-        .apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun payout() =
+        Payout(store = store, subtotal = 10100, platformFee = 100, net = 10000, status = PayoutStatus.PAID)
+            .apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
 
     @Test
     fun `payoutMarkedPaid pushes every registered device with the net amount`() {
         val p = payout()
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
 
         notifier.payoutMarkedPaid(p)
 
@@ -75,7 +100,8 @@ class PayoutNotifierTest {
 
     @Test
     fun `payoutMarkedPaid swallows a push failure`() {
-        every { pushTokenRepository.findBySellerId(seller.id!!) } returns listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
+        every { pushTokenRepository.findBySellerId(seller.id!!) } returns
+            listOf(PushToken(seller = seller, token = "token-1", platform = "ios").apply { id = UUID.randomUUID() })
         every { pushNotificationService.send(any(), any(), any(), any()) } throws RuntimeException("Expo is down")
 
         notifier.payoutMarkedPaid(payout())

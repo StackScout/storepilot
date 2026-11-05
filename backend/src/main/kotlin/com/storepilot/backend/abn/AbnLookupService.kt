@@ -37,10 +37,12 @@ class AbnLookupService(
 
         val digits = rawAbn.filter { it.isDigit() }
         return try {
-            val raw = restClient.get()
-                .uri("https://abr.business.gov.au/json/AbnDetails.aspx?abn={abn}&guid={guid}", digits, abrProperties.guid)
-                .retrieve()
-                .body(AbrRawResponse::class.java)
+            val raw =
+                restClient
+                    .get()
+                    .uri("https://abr.business.gov.au/json/AbnDetails.aspx?abn={abn}&guid={guid}", digits, abrProperties.guid)
+                    .retrieve()
+                    .body(AbrRawResponse::class.java)
 
             if (raw == null || raw.entityName.isNullOrBlank()) {
                 log.warn("ABN lookup for {} returned no entity name (message: {})", digits, raw?.message)

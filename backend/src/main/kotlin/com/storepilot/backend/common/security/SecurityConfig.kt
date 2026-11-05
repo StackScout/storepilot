@@ -58,8 +58,7 @@ class SecurityConfig(
             .exceptionHandling {
                 it.authenticationEntryPoint(JsonAuthenticationEntryPoint())
                 it.accessDeniedHandler(JsonAccessDeniedHandler())
-            }
-            .authorizeHttpRequests { auth ->
+            }.authorizeHttpRequests { auth ->
                 endpointPermissionsProperties.rules
                     .fold(auth) { registry, rule -> applyRule(registry, rule) }
                     // Everything not matched by a permissions.yml rule above
@@ -67,9 +66,9 @@ class SecurityConfig(
                     // be a valid participant, so MessagingService.requireParticipant
                     // is the actual gate). Not expressible in permissions.yml
                     // since it's anyRequest(), not a path-pattern rule.
-                    .anyRequest().authenticated()
-            }
-            .oauth2ResourceServer { oauth2 ->
+                    .anyRequest()
+                    .authenticated()
+            }.oauth2ResourceServer { oauth2 ->
                 oauth2
                     .bearerTokenResolver(CookieBearerTokenResolver())
                     .jwt { jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter) }

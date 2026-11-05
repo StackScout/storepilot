@@ -31,17 +31,18 @@ class AdminNotificationServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Handicrafts Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
         every { adminNotificationRepository.save(any()) } answers {
             (firstArg() as AdminNotification).apply {
                 if (id == null) id = UUID.randomUUID()
@@ -50,12 +51,16 @@ class AdminNotificationServiceTest {
         }
     }
 
-    private fun notification(read: Boolean = false) = AdminNotification(
-        type = AdminNotificationType.BANK_DETAILS_CHANGED,
-        message = "Test notification",
-        storeId = store.id,
-        read = read,
-    ).apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+    private fun notification(read: Boolean = false) =
+        AdminNotification(
+            type = AdminNotificationType.BANK_DETAILS_CHANGED,
+            message = "Test notification",
+            storeId = store.id,
+            read = read,
+        ).apply {
+            id = UUID.randomUUID()
+            createdAt = Instant.now()
+        }
 
     @Test
     fun `summary reports the unread count`() {
@@ -98,7 +103,11 @@ class AdminNotificationServiceTest {
 
         verify {
             adminNotificationRepository.save(
-                match<AdminNotification> { it.type == AdminNotificationType.BANK_DETAILS_CHANGED && it.message.contains("6789") && !it.message.contains("123456789") },
+                match<AdminNotification> {
+                    it.type == AdminNotificationType.BANK_DETAILS_CHANGED &&
+                        it.message.contains("6789") &&
+                        !it.message.contains("123456789")
+                },
             )
         }
         verify { emailService.send(to = "admin@storepilot.au", subject = any(), body = any(), attachment = any()) }
@@ -106,7 +115,8 @@ class AdminNotificationServiceTest {
 
     @Test
     fun `notifyBankDetailsChanged skips the email when no admin address is configured`() {
-        val serviceWithNoEmail = AdminNotificationService(adminNotificationRepository, emailService, NotificationProperties(adminNotificationEmail = ""))
+        val serviceWithNoEmail =
+            AdminNotificationService(adminNotificationRepository, emailService, NotificationProperties(adminNotificationEmail = ""))
 
         serviceWithNoEmail.notifyBankDetailsChanged(store, "Test Bank", "Store Account", "123456789")
 

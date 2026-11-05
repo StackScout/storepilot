@@ -20,17 +20,25 @@ class AddressController(
     fun list(): List<AddressResponse> = addressService.list()
 
     @PostMapping("/api/me/addresses")
-    fun create(@Valid @RequestBody input: AddressInput): AddressResponse = addressService.create(input)
+    fun create(
+        @Valid @RequestBody input: AddressInput,
+    ): AddressResponse = addressService.create(input)
 
     @PatchMapping("/api/me/addresses/{id}")
-    fun update(@PathVariable id: UUID, @Valid @RequestBody input: AddressInput): AddressResponse =
-        addressService.update(id, input)
+    fun update(
+        @PathVariable id: UUID,
+        @Valid @RequestBody input: AddressInput,
+    ): AddressResponse = addressService.update(id, input)
 
     @PostMapping("/api/me/addresses/{id}/default")
-    fun setDefault(@PathVariable id: UUID): AddressResponse = addressService.setDefault(id)
+    fun setDefault(
+        @PathVariable id: UUID,
+    ): AddressResponse = addressService.setDefault(id)
 
     @DeleteMapping("/api/me/addresses/{id}")
-    fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
+    fun delete(
+        @PathVariable id: UUID,
+    ): ResponseEntity<Void> {
         addressService.delete(id)
         return ResponseEntity.noContent().build()
     }

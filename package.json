@@ -7,6 +7,11 @@
     "packages/*"
   ],
   "devDependencies": {
-    "@types/react": "~19.2.2"
+    "@types/react": "~19.2.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0"
+  },
+  "scripts": {
+    "prepare": "husky"
   }
 }

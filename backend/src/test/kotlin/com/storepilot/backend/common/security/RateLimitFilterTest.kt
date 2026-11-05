@@ -14,7 +14,10 @@ import java.time.Instant
 class RateLimitFilterTest {
     private val filter = RateLimitFilter()
 
-    private fun request(path: String, ip: String = "10.0.0.1") = MockHttpServletRequest("POST", path).apply { remoteAddr = ip }
+    private fun request(
+        path: String,
+        ip: String = "10.0.0.1",
+    ) = MockHttpServletRequest("POST", path).apply { remoteAddr = ip }
 
     @Test
     fun `passes through untouched for a path with no rate-limit policy`() {

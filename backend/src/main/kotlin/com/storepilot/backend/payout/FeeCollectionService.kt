@@ -34,7 +34,11 @@ import java.util.UUID
 private const val MAX_PAGE_SIZE = 100
 
 /** Mirrors PayoutService's own private helper of the same name — see its doc comment for why eligible-orders/eligible-bookings use in-memory "shallow" pagination rather than a Pageable-driven DB query. */
-private fun <T : Any, R> List<T>.toPageResponseInMemory(requestedPage: Int, requestedSize: Int, mapper: (T) -> R): PageResponse<R> {
+private fun <T : Any, R> List<T>.toPageResponseInMemory(
+    requestedPage: Int,
+    requestedSize: Int,
+    mapper: (T) -> R,
+): PageResponse<R> {
     val boundedPage = requestedPage.coerceAtLeast(0)
     val boundedSize = requestedSize.coerceIn(1, MAX_PAGE_SIZE)
     val totalElements = size.toLong()
@@ -62,7 +66,11 @@ class FeeCollectionService(
     private val currentActor: CurrentActor,
     private val auditLogService: AuditLogService,
 ) {
-    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<FeeCollectionResponse> {
+    fun listByStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<FeeCollectionResponse> {
         requireSellerOwnsStore(storeId)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
@@ -74,13 +82,23 @@ class FeeCollectionService(
      * is holding that the platform hasn't been paid its cut on. Mirrors
      * PayoutService#eligibleOrders, opposite direction.
      */
-    fun getEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> {
+    fun getEligibleOrders(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> {
         requireSellerOwnsStore(storeId)
-        return eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
+        return eligibleOrderEntities(
+            storeId,
+        ).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
     }
 
     /** Mirrors getEligibleOrders, opposite direction, for bookings paid via "Pay at venue"/bank-transfer. */
-    fun getEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> {
+    fun getEligibleBookings(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<BookingResponse> {
         requireSellerOwnsStore(storeId)
         return eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
     }
@@ -94,11 +112,19 @@ class FeeCollectionService(
      * only under the "/api/admin" prefix, already gated to hasRole("ADMIN")
      * by SecurityConfig as a whole.
      */
-    fun adminGetEligibleOrders(storeId: UUID, page: Int, size: Int): PageResponse<OrderResponse> =
+    fun adminGetEligibleOrders(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<OrderResponse> =
         eligibleOrderEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService, fileStorageService) }
 
     /** Admin-facing equivalent of getEligibleBookings — see adminGetEligibleOrders's doc comment. */
-    fun adminGetEligibleBookings(storeId: UUID, page: Int, size: Int): PageResponse<BookingResponse> =
+    fun adminGetEligibleBookings(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<BookingResponse> =
         eligibleBookingEntities(storeId).toPageResponseInMemory(page, size) { it.toResponse(receiptStorageService) }
 
     private fun requireSellerOwnsStore(storeId: UUID) {
@@ -108,10 +134,13 @@ class FeeCollectionService(
     }
 
     private fun eligibleOrderEntities(storeId: UUID): List<Order> {
-        val alreadyIncluded = feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .flatMap { feeCollection -> feeCollection.sourceRefs.mapNotNull { it.orderId } }
-            .toSet()
-        return orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
+        val alreadyIncluded =
+            feeCollectionRepository
+                .findByStoreIdOrderByCreatedAtDesc(storeId)
+                .flatMap { feeCollection -> feeCollection.sourceRefs.mapNotNull { it.orderId } }
+                .toSet()
+        return orderRepository
+            .findByStoreIdOrderByCreatedAtDesc(storeId)
             .filter {
                 it.status == OrderStatus.DELIVERED &&
                     it.paymentStatus == PaymentStatus.PAID &&
@@ -121,10 +150,13 @@ class FeeCollectionService(
     }
 
     private fun eligibleBookingEntities(storeId: UUID): List<Booking> {
-        val alreadyIncluded = feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-            .flatMap { feeCollection -> feeCollection.sourceRefs.mapNotNull { it.bookingId } }
-            .toSet()
-        return bookingRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
+        val alreadyIncluded =
+            feeCollectionRepository
+                .findByStoreIdOrderByCreatedAtDesc(storeId)
+                .flatMap { feeCollection -> feeCollection.sourceRefs.mapNotNull { it.bookingId } }
+                .toSet()
+        return bookingRepository
+            .findByStoreIdOrderByCreatedAtDesc(storeId)
             .filter {
                 it.status == BookingStatus.COMPLETED &&
                     it.paymentStatus == PaymentStatus.PAID &&
@@ -139,14 +171,19 @@ class FeeCollectionService(
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         val eligibleOrders = eligibleOrderEntities(storeId)
         val eligibleBookings = eligibleBookingEntities(storeId)
-        if (eligibleOrders.isEmpty() && eligibleBookings.isEmpty()) throw ConflictException("No eligible orders or bookings to collect fees for from this store")
+        if (eligibleOrders.isEmpty() &&
+            eligibleBookings.isEmpty()
+        ) {
+            throw ConflictException("No eligible orders or bookings to collect fees for from this store")
+        }
 
-        val feeCollection = FeeCollection(
-            store = store,
-            subtotal = eligibleOrders.sumOf { it.subtotal } + eligibleBookings.sumOf { it.servicePrice },
-            platformFee = eligibleOrders.sumOf { it.platformFee } + eligibleBookings.sumOf { it.platformFee },
-            status = FeeCollectionStatus.PENDING,
-        )
+        val feeCollection =
+            FeeCollection(
+                store = store,
+                subtotal = eligibleOrders.sumOf { it.subtotal } + eligibleBookings.sumOf { it.servicePrice },
+                platformFee = eligibleOrders.sumOf { it.platformFee } + eligibleBookings.sumOf { it.platformFee },
+                status = FeeCollectionStatus.PENDING,
+            )
         eligibleOrders.forEach { order ->
             feeCollection.sourceRefs.add(
                 FeeCollectionSourceRef(
@@ -174,9 +211,14 @@ class FeeCollectionService(
 
     /** PATCH /api/admin/fee-collections/{id} — admin confirms the seller actually paid the platform its fee. */
     @Transactional
-    fun markCollected(feeCollectionId: UUID, input: MarkCollectedInput): FeeCollectionResponse {
-        val feeCollection = feeCollectionRepository.findById(feeCollectionId)
-            .orElseThrow { NotFoundException("Fee collection $feeCollectionId not found") }
+    fun markCollected(
+        feeCollectionId: UUID,
+        input: MarkCollectedInput,
+    ): FeeCollectionResponse {
+        val feeCollection =
+            feeCollectionRepository
+                .findById(feeCollectionId)
+                .orElseThrow { NotFoundException("Fee collection $feeCollectionId not found") }
         feeCollection.status = FeeCollectionStatus.COLLECTED
         feeCollection.collectedAt = Instant.now()
         feeCollection.reference = input.reference
@@ -191,7 +233,10 @@ class FeeCollectionService(
         return saved.toResponse()
     }
 
-    fun adminList(page: Int, size: Int): PageResponse<FeeCollectionResponse> {
+    fun adminList(
+        page: Int,
+        size: Int,
+    ): PageResponse<FeeCollectionResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return feeCollectionRepository.findAllByOrderByCreatedAtDesc(pageable).toPageResponse { it.toResponse() }
     }

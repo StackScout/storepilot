@@ -32,11 +32,12 @@ class SellerBookingReminderJob(
         val maxLookahead = now.plus(30, ChronoUnit.DAYS)
 
         val candidates = bookingRepository.findCandidatesForSellerReminder(now, maxLookahead)
-        val due = candidates.filter { booking ->
-            val storeId = booking.store.id ?: return@filter false
-            val minutesBefore = storeSettingsRepository.findById(storeId).map { it.sellerBookingReminderMinutesBefore }.orElse(60)
-            now >= booking.scheduledStart.minus(minutesBefore.toLong(), ChronoUnit.MINUTES)
-        }
+        val due =
+            candidates.filter { booking ->
+                val storeId = booking.store.id ?: return@filter false
+                val minutesBefore = storeSettingsRepository.findById(storeId).map { it.sellerBookingReminderMinutesBefore }.orElse(60)
+                now >= booking.scheduledStart.minus(minutesBefore.toLong(), ChronoUnit.MINUTES)
+            }
 
         due.forEach { booking ->
             bookingNotifier.sellerBookingReminder(booking)

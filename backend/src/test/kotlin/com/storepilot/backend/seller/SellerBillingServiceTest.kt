@@ -22,24 +22,22 @@ import io.mockk.unmockkAll
 import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
-import java.time.Instant
 import java.util.UUID
 
 class SellerBillingServiceTest {
     private val sellerRepository = mockk<SellerRepository>()
     private val currentActor = mockk<CurrentActor>()
     private val platformConfigService = mockk<PlatformConfigService>()
-    private val stripeProperties = StripeProperties(
-        billingSuccessUrlBase = "http://localhost:3000/dashboard/settings",
-        billingCancelUrlBase = "http://localhost:3000/dashboard/settings",
-    )
+    private val stripeProperties =
+        StripeProperties(
+            billingSuccessUrlBase = "http://localhost:3000/dashboard/settings",
+            billingCancelUrlBase = "http://localhost:3000/dashboard/settings",
+        )
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
@@ -50,26 +48,27 @@ class SellerBillingServiceTest {
     @BeforeEach
     fun setUp() {
         every { currentActor.requireSeller() } returns seller
-        every { platformConfigService.current() } returns PlatformSettings(
-            name = "StorePilot",
-            tagline = "tagline",
-            countryName = "Australia",
-            countryCode = "AU",
-            currencyCode = "AUD",
-            currencySymbol = "$",
-            currencyLocale = "en-AU",
-            platformFeePercent = BigDecimal("3.5"),
-            flatShippingFee = 1000,
-            proMonthlyPriceCents = 2900,
-            defaultCodEnabled = true,
-            defaultOnlinePaymentEnabled = false,
-            defaultBankTransferEnabled = true,
-            proPlanEnabled = true,
-            supportEmail = "hello@storepilot.au",
-            companyLocation = "Sydney, Australia",
-            timezone = "Australia/Sydney",
-            returnWindowDays = 14,
-        )
+        every { platformConfigService.current() } returns
+            PlatformSettings(
+                name = "StorePilot",
+                tagline = "tagline",
+                countryName = "Australia",
+                countryCode = "AU",
+                currencyCode = "AUD",
+                currencySymbol = "$",
+                currencyLocale = "en-AU",
+                platformFeePercent = BigDecimal("3.5"),
+                flatShippingFee = 1000,
+                proMonthlyPriceCents = 2900,
+                defaultCodEnabled = true,
+                defaultOnlinePaymentEnabled = false,
+                defaultBankTransferEnabled = true,
+                proPlanEnabled = true,
+                supportEmail = "hello@storepilot.au",
+                companyLocation = "Sydney, Australia",
+                timezone = "Australia/Sydney",
+                returnWindowDays = 14,
+            )
         every { sellerRepository.save(any()) } answers { firstArg() }
     }
 
@@ -78,7 +77,12 @@ class SellerBillingServiceTest {
         unmockkAll()
     }
 
-    private fun subscriptionMock(status: String, cancelAtPeriodEnd: Boolean? = false, periodEndEpoch: Long? = 1893456000L, id: String = "sub_123"): Subscription {
+    private fun subscriptionMock(
+        status: String,
+        cancelAtPeriodEnd: Boolean? = false,
+        periodEndEpoch: Long? = 1893456000L,
+        id: String = "sub_123",
+    ): Subscription {
         val item = mockk<SubscriptionItem> { every { currentPeriodEnd } returns periodEndEpoch }
         val itemCollection = mockk<SubscriptionItemCollection> { every { data } returns listOf(item) }
         return mockk<Subscription> {
@@ -183,7 +187,11 @@ class SellerBillingServiceTest {
         seller.stripeSubscriptionId = null
         seller.stripeCustomerId = "cus_1"
         mockkStatic(Subscription::class)
-        val collection = mockk<com.stripe.model.SubscriptionCollection> { every { data } returns listOf(subscriptionMock(status = "trialing")) }
+        val collection =
+            mockk<com.stripe.model.SubscriptionCollection> {
+                every { data } returns
+                    listOf(subscriptionMock(status = "trialing"))
+            }
         every { Subscription.list(any<SubscriptionListParams>()) } returns collection
 
         val result = service.refreshFromStripe()
@@ -215,10 +223,11 @@ class SellerBillingServiceTest {
     @Test
     fun `handleCheckoutCompleted ignores a session with no matching seller`() {
         val id = UUID.randomUUID()
-        val session = mockk<Session> {
-            every { mode } returns "subscription"
-            every { clientReferenceId } returns id.toString()
-        }
+        val session =
+            mockk<Session> {
+                every { mode } returns "subscription"
+                every { clientReferenceId } returns id.toString()
+            }
         every { sellerRepository.findById(id) } returns java.util.Optional.empty()
 
         service.handleCheckoutCompleted(session)
@@ -228,12 +237,13 @@ class SellerBillingServiceTest {
 
     @Test
     fun `handleCheckoutCompleted records the customer id even when no subscription id is present yet`() {
-        val session = mockk<Session> {
-            every { mode } returns "subscription"
-            every { clientReferenceId } returns seller.id.toString()
-            every { customer } returns "cus_1"
-            every { subscription } returns null
-        }
+        val session =
+            mockk<Session> {
+                every { mode } returns "subscription"
+                every { clientReferenceId } returns seller.id.toString()
+                every { customer } returns "cus_1"
+                every { subscription } returns null
+            }
         every { sellerRepository.findById(seller.id!!) } returns java.util.Optional.of(seller)
 
         service.handleCheckoutCompleted(session)
@@ -243,12 +253,13 @@ class SellerBillingServiceTest {
 
     @Test
     fun `handleCheckoutCompleted syncs plan from the subscription when one is present`() {
-        val session = mockk<Session> {
-            every { mode } returns "subscription"
-            every { clientReferenceId } returns seller.id.toString()
-            every { customer } returns "cus_1"
-            every { subscription } returns "sub_123"
-        }
+        val session =
+            mockk<Session> {
+                every { mode } returns "subscription"
+                every { clientReferenceId } returns seller.id.toString()
+                every { customer } returns "cus_1"
+                every { subscription } returns "sub_123"
+            }
         every { sellerRepository.findById(seller.id!!) } returns java.util.Optional.of(seller)
         mockkStatic(Subscription::class)
         every { Subscription.retrieve("sub_123") } returns subscriptionMock(status = "active")

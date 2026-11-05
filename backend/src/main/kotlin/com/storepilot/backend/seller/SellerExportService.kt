@@ -76,11 +76,14 @@ class SellerExportService(
             store = store,
             storeSettings = storeId?.let { storeService.getSettings(it) },
             products = storeId?.let { productService.listByStore(it) } ?: emptyList(),
-            orders = storeId?.let { orderRepository.findByStoreIdOrderByCreatedAtDesc(it) }
-                ?.map { it.toResponse(receiptStorageService, fileStorageService) } ?: emptyList(),
+            orders =
+                storeId
+                    ?.let { orderRepository.findByStoreIdOrderByCreatedAtDesc(it) }
+                    ?.map { it.toResponse(receiptStorageService, fileStorageService) } ?: emptyList(),
             bookings = storeId?.let { bookingService.listByStore(it, status = null) } ?: emptyList(),
             payouts = storeId?.let { payoutRepository.findByStoreIdOrderByCreatedAtDesc(it) }?.map { it.toResponse() } ?: emptyList(),
-            feeCollections = storeId?.let { feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(it) }?.map { it.toResponse() } ?: emptyList(),
+            feeCollections =
+                storeId?.let { feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(it) }?.map { it.toResponse() } ?: emptyList(),
             reviews = storeId?.let { reviewRepository.findByStoreIdOrderByCreatedAtDesc(it) }?.map { it.toResponse() } ?: emptyList(),
             coupons = storeId?.let { couponRepository.findByStoreIdOrderByCreatedAtDesc(it) }?.map { it.toResponse() } ?: emptyList(),
         )

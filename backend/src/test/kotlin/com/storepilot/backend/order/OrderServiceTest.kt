@@ -63,24 +63,29 @@ class OrderServiceTest {
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = OrderService(
-        orderRepository,
-        storeRepository,
-        storeSettingsRepository,
-        productService,
-        receiptStorageService,
-        fileStorageService,
-        orderNotifier,
-        currentActor,
-        platformConfigService,
-        stripeService,
-        guestLookupOtpService,
-        sseHub,
-        couponService,
-        storeAccessService,
-    )
+    private val service =
+        OrderService(
+            orderRepository,
+            storeRepository,
+            storeSettingsRepository,
+            productService,
+            receiptStorageService,
+            fileStorageService,
+            orderNotifier,
+            currentActor,
+            platformConfigService,
+            stripeService,
+            guestLookupOtpService,
+            sseHub,
+            couponService,
+            storeAccessService,
+        )
 
-    private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID() }
+    private val seller =
+        Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply {
+            id =
+                UUID.randomUUID()
+        }
     private val storeId: UUID = UUID.randomUUID()
     private lateinit var store: Store
     private lateinit var storeSettings: StoreSettings
@@ -89,41 +94,44 @@ class OrderServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "handicrafts-store",
-            name = "Handicrafts Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-        ).apply { id = storeId }
+        store =
+            Store(
+                seller = seller,
+                slug = "handicrafts-store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+            ).apply { id = storeId }
 
-        storeSettings = StoreSettings(
-            store = store,
-            contactEmail = "store@example.com",
-            contactPhone = "+61400000001",
-            bankAccountName = "Handicrafts Store",
-            bankAccountNumber = "12345678",
-            bankName = "Test Bank",
-            transactionFeePercent = BigDecimal("5.0"),
-            sellerType = SellerType.INDIVIDUAL,
-            pickupEnabled = true,
-        )
+        storeSettings =
+            StoreSettings(
+                store = store,
+                contactEmail = "store@example.com",
+                contactPhone = "+61400000001",
+                bankAccountName = "Handicrafts Store",
+                bankAccountNumber = "12345678",
+                bankName = "Test Bank",
+                transactionFeePercent = BigDecimal("5.0"),
+                sellerType = SellerType.INDIVIDUAL,
+                pickupEnabled = true,
+            )
 
-        product = Product(
-            store = store,
-            name = "A product",
-            slug = "a-product",
-            description = "description",
-            category = "handicrafts",
-            price = 1000,
-            stockQuantity = 10,
-            trackStock = true,
-            status = ProductStatus.ACTIVE,
-        ).apply { id = productId }
+        product =
+            Product(
+                store = store,
+                name = "A product",
+                slug = "a-product",
+                description = "description",
+                category = "handicrafts",
+                price = 1000,
+                stockQuantity = 10,
+                trackStock = true,
+                status = ProductStatus.ACTIVE,
+            ).apply { id = productId }
 
         every { currentActor.requireSeller() } returns seller
         every { currentActor.buyerOrNull() } returns null
@@ -183,14 +191,15 @@ class OrderServiceTest {
     ) = CheckoutInput(
         storeId = storeId,
         items = listOf(CheckoutItemInput(productId = productId, quantity = quantity)),
-        shipping = ShippingDetailsInput(
-            fullName = fullName,
-            phone = phone,
-            addressLine1 = addressLine1,
-            city = city,
-            state = state,
-            postalCode = postalCode,
-        ),
+        shipping =
+            ShippingDetailsInput(
+                fullName = fullName,
+                phone = phone,
+                addressLine1 = addressLine1,
+                city = city,
+                state = state,
+                postalCode = postalCode,
+            ),
         paymentMethod = paymentMethod,
         deliveryMethod = deliveryMethod,
         email = "buyer@example.com",
@@ -266,9 +275,10 @@ class OrderServiceTest {
 
     @Test
     fun `createOrder skips the address requirement for pickup and zeroes shipping fee`() {
-        val result = service.createOrder(
-            checkoutInput(deliveryMethod = "pickup", addressLine1 = null, city = null, state = null, postalCode = null),
-        )
+        val result =
+            service.createOrder(
+                checkoutInput(deliveryMethod = "pickup", addressLine1 = null, city = null, state = null, postalCode = null),
+            )
         assertEquals(0, result.shippingFee)
         assertEquals("pickup", result.deliveryMethod)
     }
@@ -357,7 +367,11 @@ class OrderServiceTest {
 
         val slot = slot<Order>()
         every { orderRepository.save(capture(slot)) } answers {
-            slot.captured.apply { id = UUID.randomUUID(); createdAt = Instant.now(); updatedAt = Instant.now() }
+            slot.captured.apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+                updatedAt = Instant.now()
+            }
         }
 
         service.createOrder(checkoutInput())
@@ -387,7 +401,10 @@ class OrderServiceTest {
 
     // ---- updateStatus ----
 
-    private fun pendingOrder(paymentMethod: PaymentMethod = PaymentMethod.COD, paymentStatus: PaymentStatus = PaymentStatus.UNPAID) = Order(
+    private fun pendingOrder(
+        paymentMethod: PaymentMethod = PaymentMethod.COD,
+        paymentStatus: PaymentStatus = PaymentStatus.UNPAID,
+    ) = Order(
         orderNumber = "AU-20260101-1234",
         store = store,
         subtotal = 1000,
@@ -404,7 +421,9 @@ class OrderServiceTest {
     ).apply {
         id = UUID.randomUUID()
         createdAt = Instant.now()
-        items.add(OrderItem(order = this, productId = productId, productName = "A product", productImageUrl = "", unitPrice = 1000, quantity = 1))
+        items.add(
+            OrderItem(order = this, productId = productId, productName = "A product", productImageUrl = "", unitPrice = 1000, quantity = 1),
+        )
     }
 
     @Test
@@ -503,11 +522,12 @@ class OrderServiceTest {
         order.status = OrderStatus.CONFIRMED
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
 
-        val result = service.updateStatus(
-            order.id!!,
-            OrderStatusUpdateInput(status = "shipped", trackingNumber = "TRACK123", courierServiceName = "Auspost"),
-            null,
-        )
+        val result =
+            service.updateStatus(
+                order.id!!,
+                OrderStatusUpdateInput(status = "shipped", trackingNumber = "TRACK123", courierServiceName = "Auspost"),
+                null,
+            )
 
         assertEquals("shipped", result.status)
         assertEquals("TRACK123", result.trackingNumber)
@@ -521,7 +541,9 @@ class OrderServiceTest {
     fun `uploadReceipt rejects a non-bank-transfer order`() {
         val order = pendingOrder(paymentMethod = PaymentMethod.COD)
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
-        val file = org.springframework.mock.web.MockMultipartFile("file", "receipt.jpg", "image/jpeg", byteArrayOf(1))
+        val file =
+            org.springframework.mock.web
+                .MockMultipartFile("file", "receipt.jpg", "image/jpeg", byteArrayOf(1))
 
         assertThrows(ConflictException::class.java) { service.uploadReceipt(order.id!!, file) }
     }
@@ -530,7 +552,9 @@ class OrderServiceTest {
     fun `uploadReceipt rejects an order that's already paid`() {
         val order = pendingOrder(paymentMethod = PaymentMethod.BANK_TRANSFER, paymentStatus = PaymentStatus.PAID)
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
-        val file = org.springframework.mock.web.MockMultipartFile("file", "receipt.jpg", "image/jpeg", byteArrayOf(1))
+        val file =
+            org.springframework.mock.web
+                .MockMultipartFile("file", "receipt.jpg", "image/jpeg", byteArrayOf(1))
 
         assertThrows(ConflictException::class.java) { service.uploadReceipt(order.id!!, file) }
     }
@@ -540,7 +564,9 @@ class OrderServiceTest {
         val order = pendingOrder(paymentMethod = PaymentMethod.BANK_TRANSFER)
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
         every { receiptStorageService.store(any()) } returns "receipts/abc.jpg"
-        val file = org.springframework.mock.web.MockMultipartFile("file", "receipt.jpg", "image/jpeg", byteArrayOf(1))
+        val file =
+            org.springframework.mock.web
+                .MockMultipartFile("file", "receipt.jpg", "image/jpeg", byteArrayOf(1))
 
         service.uploadReceipt(order.id!!, file)
 
@@ -623,20 +649,32 @@ class OrderServiceTest {
         val result = service.cancelBankTransferOrder(order.id!!)
 
         assertEquals("cancelled", result.status)
-        assertTrue(result.timeline.last().note!!.contains("before a payment receipt"))
+        assertTrue(
+            result.timeline
+                .last()
+                .note!!
+                .contains("before a payment receipt"),
+        )
         verify { orderNotifier.orderCancelledByBuyer(any()) }
     }
 
     @Test
     fun `cancelBankTransferOrder is available again after a rejected receipt`() {
         val order = pendingOrder(paymentMethod = PaymentMethod.BANK_TRANSFER)
-        order.timeline.add(OrderTimelineEntry(order = order, status = OrderStatus.PENDING, label = "Payment receipt rejected", timestamp = Instant.now()))
+        order.timeline.add(
+            OrderTimelineEntry(order = order, status = OrderStatus.PENDING, label = "Payment receipt rejected", timestamp = Instant.now()),
+        )
         every { orderRepository.findById(order.id!!) } returns Optional.of(order)
 
         val result = service.cancelBankTransferOrder(order.id!!)
 
         assertEquals("cancelled", result.status)
-        assertTrue(result.timeline.last().note!!.contains("receipt was rejected"))
+        assertTrue(
+            result.timeline
+                .last()
+                .note!!
+                .contains("receipt was rejected"),
+        )
     }
 
     // ---- guest lookup ----
@@ -694,7 +732,8 @@ class OrderServiceTest {
     fun `listByStore returns the store's orders`() {
         val order = pendingOrder()
         every { orderRepository.findByStoreIdOrderByCreatedAtDesc(storeId, any()) } returns
-            org.springframework.data.domain.PageImpl(listOf(order))
+            org.springframework.data.domain
+                .PageImpl(listOf(order))
 
         val result = service.listByStore(storeId, null, 0, 20)
 

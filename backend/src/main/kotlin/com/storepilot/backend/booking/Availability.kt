@@ -139,5 +139,6 @@ class ServiceWeeklyAvailabilityRule(
 @Converter
 class DayOfWeekIntConverter : AttributeConverter<DayOfWeek, Int> {
     override fun convertToDatabaseColumn(attribute: DayOfWeek?): Int? = attribute?.value
+
     override fun convertToEntityAttribute(dbData: Int?): DayOfWeek? = dbData?.let { DayOfWeek.of(it) }
 }

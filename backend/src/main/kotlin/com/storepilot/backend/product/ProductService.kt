@@ -72,34 +72,38 @@ class ProductService(
         val boundedSize = size.coerceIn(1, MAX_PAGE_SIZE)
 
         if (!trimmedQuery.isNullOrBlank()) {
-            val sortMode = when (sort) {
-                "price-asc", "price-desc", "rating" -> sort
-                else -> "relevance"
-            }
-            val results = productRepository.searchFullText(
-                category = validatedCategory,
-                query = trimmedQuery,
-                likePattern = "%${trimmedQuery.lowercase()}%",
-                minPrice = minPrice,
-                maxPrice = maxPrice,
-                sortMode = sortMode,
-                pageable = PageRequest.of(boundedPage, boundedSize),
-            )
+            val sortMode =
+                when (sort) {
+                    "price-asc", "price-desc", "rating" -> sort
+                    else -> "relevance"
+                }
+            val results =
+                productRepository.searchFullText(
+                    category = validatedCategory,
+                    query = trimmedQuery,
+                    likePattern = "%${trimmedQuery.lowercase()}%",
+                    minPrice = minPrice,
+                    maxPrice = maxPrice,
+                    sortMode = sortMode,
+                    pageable = PageRequest.of(boundedPage, boundedSize),
+                )
             return results.toPageResponse { it.toResponse(fileStorageService) }
         }
 
-        val spec = Specification.allOf(
-            ProductSpecifications.storeActive(),
-            ProductSpecifications.notDraft(),
-            ProductSpecifications.hasCategory(validatedCategory),
-            ProductSpecifications.priceBetween(minPrice, maxPrice),
-        )
-        val sortOrder = when (sort) {
-            "price-asc" -> Sort.by("price").ascending()
-            "price-desc" -> Sort.by("price").descending()
-            "rating" -> Sort.by("rating").descending()
-            else -> Sort.by("createdAt").descending()
-        }
+        val spec =
+            Specification.allOf(
+                ProductSpecifications.storeActive(),
+                ProductSpecifications.notDraft(),
+                ProductSpecifications.hasCategory(validatedCategory),
+                ProductSpecifications.priceBetween(minPrice, maxPrice),
+            )
+        val sortOrder =
+            when (sort) {
+                "price-asc" -> Sort.by("price").ascending()
+                "price-desc" -> Sort.by("price").descending()
+                "rating" -> Sort.by("rating").descending()
+                else -> Sort.by("createdAt").descending()
+            }
         val pageable = PageRequest.of(boundedPage, boundedSize, sortOrder)
         val results = productRepository.findAll(spec, pageable)
         return results.toPageResponse { it.toResponse(fileStorageService) }
@@ -170,11 +174,12 @@ class ProductService(
 
     /** Unpaged — internal cross-service use (e.g. SellerExportService's full data-export bundle). GET /api/stores/{storeId}/products uses the paged overload below. */
     fun listByStore(storeId: UUID): List<ProductResponse> {
-        val products = if (isOwnedByCurrentSeller(storeId)) {
-            productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId)
-        } else {
-            productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT)
-        }
+        val products =
+            if (isOwnedByCurrentSeller(storeId)) {
+                productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId)
+            } else {
+                productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT)
+            }
         return products.map { it.toResponse(fileStorageService) }
     }
 
@@ -185,18 +190,27 @@ class ProductService(
      * whether the caller owns this store, not on a query param a public
      * caller could just set themselves.
      */
-    fun listByStore(storeId: UUID, page: Int, size: Int): PageResponse<ProductResponse> {
+    fun listByStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<ProductResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        val products = if (isOwnedByCurrentSeller(storeId)) {
-            productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
-        } else {
-            productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT, pageable)
-        }
+        val products =
+            if (isOwnedByCurrentSeller(storeId)) {
+                productRepository.findByStoreIdOrderByUpdatedAtDesc(storeId, pageable)
+            } else {
+                productRepository.findByStoreIdAndStatusNotOrderByUpdatedAtDesc(storeId, ProductStatus.DRAFT, pageable)
+            }
         return products.toPageResponse { it.toResponse(fileStorageService) }
     }
 
     @Transactional
-    fun create(storeId: UUID, input: ProductFormInput, images: List<MultipartFile>): ProductResponse {
+    fun create(
+        storeId: UUID,
+        input: ProductFormInput,
+        images: List<MultipartFile>,
+    ): ProductResponse {
         require(images.isNotEmpty()) { "Upload at least one product image" }
         val store = requireStore(storeId)
         requireOwnership(store)
@@ -205,19 +219,20 @@ class ProductService(
         val trackStock = effectiveTrackStock(storeId, input.trackStock)
         val sku = input.sku?.trim()?.takeIf { it.isNotBlank() }
         requireUniqueSku(storeId, sku)
-        val product = Product(
-            store = store,
-            name = input.name,
-            slug = uniqueSlug(storeId, input.name),
-            description = input.description,
-            category = category,
-            price = input.price,
-            compareAtPrice = input.compareAtPrice,
-            stockQuantity = input.stockQuantity,
-            trackStock = trackStock,
-            status = resolveStatus(input, trackStock),
-            sku = sku,
-        )
+        val product =
+            Product(
+                store = store,
+                name = input.name,
+                slug = uniqueSlug(storeId, input.name),
+                description = input.description,
+                category = category,
+                price = input.price,
+                compareAtPrice = input.compareAtPrice,
+                stockQuantity = input.stockQuantity,
+                trackStock = trackStock,
+                status = resolveStatus(input, trackStock),
+                sku = sku,
+            )
         storeImages(product, images)
         return productRepository.save(product).toResponse(fileStorageService)
     }
@@ -230,7 +245,11 @@ class ProductService(
      * rather than diffing individual images.
      */
     @Transactional
-    fun update(id: UUID, input: ProductFormInput, images: List<MultipartFile>): ProductResponse {
+    fun update(
+        id: UUID,
+        input: ProductFormInput,
+        images: List<MultipartFile>,
+    ): ProductResponse {
         val product = productRepository.findById(id).orElseThrow { NotFoundException("Product $id not found") }
         requireOwnership(product.store)
         val category = categoryRepository.requireCategory(input.category)
@@ -263,14 +282,18 @@ class ProductService(
      * order becomes sortOrder, so index 0 (the frontend's "primary" pick,
      * see ImageUploader) is always the first element on read-back too.
      */
-    private fun storeImages(product: Product, images: List<MultipartFile>) {
+    private fun storeImages(
+        product: Product,
+        images: List<MultipartFile>,
+    ) {
         images.forEachIndexed { index, file ->
-            val reference = fileStorageService.store(
-                "product-images",
-                file,
-                FileUploadPolicies.IMAGE_CONTENT_TYPES,
-                FileUploadPolicies.IMAGE_MAX_BYTES,
-            )
+            val reference =
+                fileStorageService.store(
+                    "product-images",
+                    file,
+                    FileUploadPolicies.IMAGE_CONTENT_TYPES,
+                    FileUploadPolicies.IMAGE_MAX_BYTES,
+                )
             product.images.add(ProductImage(product = product, url = reference, alt = product.name, sortOrder = index))
         }
     }
@@ -318,17 +341,28 @@ class ProductService(
 
     /** GET /api/me/wishlist — mirrors OrderService.listByCurrentBuyer's doc comment on why this needs an explicit (write) @Transactional. */
     @Transactional
-    fun listWishlist(page: Int, size: Int): PageResponse<ProductResponse> {
+    fun listWishlist(
+        page: Int,
+        size: Int,
+    ): PageResponse<ProductResponse> {
         val buyerId = requireNotNull(currentActor.requireBuyer().id)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse { it.product.toResponse(fileStorageService) }
+        return wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable).toPageResponse {
+            it.product.toResponse(fileStorageService)
+        }
     }
 
-    private fun resolveStatus(input: ProductFormInput, trackStock: Boolean): ProductStatus =
-        if (trackStock && input.stockQuantity == 0) ProductStatus.OUT_OF_STOCK else wireValueOf(input.status)
+    private fun resolveStatus(
+        input: ProductFormInput,
+        trackStock: Boolean,
+    ): ProductStatus = if (trackStock && input.stockQuantity == 0) ProductStatus.OUT_OF_STOCK else wireValueOf(input.status)
 
     /** No-op for a blank/null SKU — SKU is optional, and only products that actually set one need to be unique against each other. [excludingProductId] lets update() ignore the product's own current row. */
-    private fun requireUniqueSku(storeId: UUID, sku: String?, excludingProductId: UUID? = null) {
+    private fun requireUniqueSku(
+        storeId: UUID,
+        sku: String?,
+        excludingProductId: UUID? = null,
+    ) {
         if (sku == null) return
         val existing = productRepository.findByStoreIdAndSkuIgnoreCase(storeId, sku) ?: return
         if (existing.id != excludingProductId) {
@@ -337,7 +371,10 @@ class ProductService(
     }
 
     /** The store-wide switch always wins: stock tracking is off for every product once a seller disables it at the store level, regardless of what the product itself requests. */
-    private fun effectiveTrackStock(storeId: UUID, requestedTrackStock: Boolean): Boolean {
+    private fun effectiveTrackStock(
+        storeId: UUID,
+        requestedTrackStock: Boolean,
+    ): Boolean {
         val storeManagesStock = storeSettingsRepository.findById(storeId).orElse(null)?.stockManagementEnabled ?: true
         return requestedTrackStock && storeManagesStock
     }
@@ -350,7 +387,10 @@ class ProductService(
     }
 
     /** A product's category is locked to the store's own approved category — see task item 40's doc comment on Store.kt. */
-    private fun requireCategoryMatchesStore(store: Store, category: String) {
+    private fun requireCategoryMatchesStore(
+        store: Store,
+        category: String,
+    ) {
         if (category != store.category) {
             throw ConflictException("Products must be listed under this store's category (${store.category})")
         }
@@ -367,8 +407,16 @@ class ProductService(
         return isOwnedByCurrentSeller(store)
     }
 
-    private fun uniqueSlug(storeId: UUID, name: String): String {
-        val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "product" }
+    private fun uniqueSlug(
+        storeId: UUID,
+        name: String,
+    ): String {
+        val base =
+            name
+                .lowercase()
+                .replace(Regex("[^a-z0-9]+"), "-")
+                .trim('-')
+                .ifBlank { "product" }
         var candidate = base
         var suffix = 1
         while (productRepository.findByStoreIdAndSlug(storeId, candidate) != null) {

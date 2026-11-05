@@ -15,9 +15,16 @@ interface WeeklyAvailabilityRuleRepository : JpaRepository<WeeklyAvailabilityRul
 interface AvailabilityExceptionRepository : JpaRepository<AvailabilityException, UUID> {
     fun findByStoreIdOrderByDateAsc(storeId: UUID): List<AvailabilityException>
 
-    fun findByStoreIdAndDateBetween(storeId: UUID, from: LocalDate, to: LocalDate): List<AvailabilityException>
+    fun findByStoreIdAndDateBetween(
+        storeId: UUID,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<AvailabilityException>
 
-    fun findByStoreIdAndDate(storeId: UUID, date: LocalDate): AvailabilityException?
+    fun findByStoreIdAndDate(
+        storeId: UUID,
+        date: LocalDate,
+    ): AvailabilityException?
 }
 
 interface ServiceWeeklyAvailabilityRuleRepository : JpaRepository<ServiceWeeklyAvailabilityRule, UUID> {

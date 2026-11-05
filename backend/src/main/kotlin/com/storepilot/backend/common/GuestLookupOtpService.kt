@@ -48,10 +48,16 @@ class GuestLookupOtpService(
      * OrderNotifier.sendSafely's log-and-continue pattern.
      */
     @Transactional
-    fun requestCode(targetType: String, targetId: UUID, email: String, recipientName: String) {
+    fun requestCode(
+        targetType: String,
+        targetId: UUID,
+        email: String,
+        recipientName: String,
+    ) {
         val code = "%06d".format(secureRandom.nextInt(1_000_000))
-        val record = repository.findByTargetTypeAndTargetId(targetType, targetId)
-            ?: GuestLookupCode(targetType = targetType, targetId = targetId, codeHash = "", expiresAt = Instant.now())
+        val record =
+            repository.findByTargetTypeAndTargetId(targetType, targetId)
+                ?: GuestLookupCode(targetType = targetType, targetId = targetId, codeHash = "", expiresAt = Instant.now())
         record.codeHash = hash(code)
         record.expiresAt = Instant.now().plus(CODE_TTL_MINUTES, ChronoUnit.MINUTES)
         record.attempts = 0
@@ -62,24 +68,36 @@ class GuestLookupOtpService(
             emailService.send(
                 to = email,
                 subject = "Your $platformName lookup code",
-                body = buildString {
-                    appendLine("Hi $recipientName,")
-                    appendLine()
-                    appendLine("Your one-time code is: $code")
-                    appendLine()
-                    appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
-                },
+                body =
+                    buildString {
+                        appendLine("Hi $recipientName,")
+                        appendLine()
+                        appendLine("Your one-time code is: $code")
+                        appendLine()
+                        appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
+                    },
             )
         } catch (e: Exception) {
-            log.warn("Failed to send guest-lookup code email to {} (targetType={}, targetId={}) — not failing the request", email, targetType, targetId, e)
+            log.warn(
+                "Failed to send guest-lookup code email to {} (targetType={}, targetId={}) — not failing the request",
+                email,
+                targetType,
+                targetId,
+                e,
+            )
         }
     }
 
     /** Every failure path throws IllegalArgumentException — same "client-fixable, 400" convention as EmailVerificationService.verifyCode. */
     @Transactional
-    fun verifyCode(targetType: String, targetId: UUID, code: String) {
-        val record = repository.findByTargetTypeAndTargetId(targetType, targetId)
-            ?: throw IllegalArgumentException("No code was requested — request a new one")
+    fun verifyCode(
+        targetType: String,
+        targetId: UUID,
+        code: String,
+    ) {
+        val record =
+            repository.findByTargetTypeAndTargetId(targetType, targetId)
+                ?: throw IllegalArgumentException("No code was requested — request a new one")
         if (record.expiresAt.isBefore(Instant.now())) {
             throw IllegalArgumentException("Code expired — request a new one")
         }

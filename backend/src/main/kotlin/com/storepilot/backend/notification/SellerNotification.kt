@@ -22,7 +22,9 @@ import java.util.UUID
  * notification and a row read from this table, from the same (type, id)
  * pair.
  */
-enum class SellerNotificationType(override val wireValue: String) : WireValue {
+enum class SellerNotificationType(
+    override val wireValue: String,
+) : WireValue {
     ORDER("order"),
     BOOKING("booking"),
     PRODUCT("product"),
@@ -31,8 +33,7 @@ enum class SellerNotificationType(override val wireValue: String) : WireValue {
 }
 
 @Converter(autoApply = true)
-class SellerNotificationTypeConverter :
-    WireValueEnumConverter<SellerNotificationType>(SellerNotificationType.entries.toTypedArray())
+class SellerNotificationTypeConverter : WireValueEnumConverter<SellerNotificationType>(SellerNotificationType.entries.toTypedArray())
 
 /**
  * A seller-facing notification-center entry — mirrors AdminNotification's

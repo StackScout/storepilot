@@ -32,7 +32,8 @@ class MessagingServiceTest {
     private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>(relaxed = true)
     private val storeAccessService = StoreAccessService(currentActor, storeStaffMemberRepository)
 
-    private val service = MessagingService(conversationRepository, messageRepository, storeRepository, currentActor, messagingNotifier, storeAccessService)
+    private val service =
+        MessagingService(conversationRepository, messageRepository, storeRepository, currentActor, messagingNotifier, storeAccessService)
 
     private val storeId: UUID = UUID.randomUUID()
     private val sellerId: UUID = UUID.randomUUID()
@@ -59,10 +60,11 @@ class MessagingServiceTest {
         buyer = mockk()
         every { buyer.id } returns buyerId
         every { buyer.name } returns "Jane Buyer"
-        conversation = Conversation(store = store, buyer = buyer).apply {
-            id = UUID.randomUUID()
-            createdAt = Instant.now()
-        }
+        conversation =
+            Conversation(store = store, buyer = buyer).apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         conversationId = requireNotNull(conversation.id)
 
         every { messagingNotifier.sellerMessageReceived(any(), any()) } just Runs
@@ -87,7 +89,10 @@ class MessagingServiceTest {
         every { conversationRepository.findByStoreIdAndBuyerId(storeId, buyerId) } returns null
         val saved = slot<Conversation>()
         every { conversationRepository.save(capture(saved)) } answers {
-            saved.captured.apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+            saved.captured.apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         }
 
         val response = service.getOrCreateConversation(storeId)
@@ -102,7 +107,10 @@ class MessagingServiceTest {
         every { currentActor.sellerOrNull() } returns null
         every { conversationRepository.findById(conversationId) } returns Optional.of(conversation)
         every { messageRepository.save(any()) } answers {
-            firstArg<Message>().apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+            firstArg<Message>().apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         }
         every { conversationRepository.save(any()) } answers { firstArg() }
 
@@ -119,7 +127,10 @@ class MessagingServiceTest {
         every { currentActor.sellerOrNull() } returns seller
         every { conversationRepository.findById(conversationId) } returns Optional.of(conversation)
         every { messageRepository.save(any()) } answers {
-            firstArg<Message>().apply { id = UUID.randomUUID(); createdAt = Instant.now() }
+            firstArg<Message>().apply {
+                id = UUID.randomUUID()
+                createdAt = Instant.now()
+            }
         }
         every { conversationRepository.save(any()) } answers { firstArg() }
         every { messagingNotifier.buyerMessageReceived(any(), any()) } just Runs

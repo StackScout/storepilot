@@ -4,7 +4,9 @@ import com.storepilot.backend.common.WireValue
 import com.storepilot.backend.common.WireValueEnumConverter
 import jakarta.persistence.Converter
 
-enum class ReturnReasonCategory(override val wireValue: String) : WireValue {
+enum class ReturnReasonCategory(
+    override val wireValue: String,
+) : WireValue {
     DEFECTIVE("defective"),
     WRONG_ITEM("wrong-item"),
     NOT_AS_DESCRIBED("not-as-described"),
@@ -25,7 +27,9 @@ class ReturnReasonCategoryConverter : WireValueEnumConverter<ReturnReasonCategor
  * adminMarkRefunded). REJECTED is the only status a new request may be
  * submitted after — see ReturnRequestRepository.existsByOrder_IdAndStatusNot.
  */
-enum class ReturnRequestStatus(override val wireValue: String) : WireValue {
+enum class ReturnRequestStatus(
+    override val wireValue: String,
+) : WireValue {
     REQUESTED("requested"),
     APPROVED("approved"),
     REJECTED("rejected"),

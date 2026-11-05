@@ -12,13 +12,27 @@ class PlatformConfigServiceTest {
 
     private val service = PlatformConfigService(repository)
 
-    private fun settings() = PlatformSettings(
-        name = "StorePilot", tagline = "tagline", countryName = "Australia", countryCode = "AU",
-        currencyCode = "AUD", currencySymbol = "$", currencyLocale = "en-AU", platformFeePercent = BigDecimal("3.5"),
-        flatShippingFee = 1000, proMonthlyPriceCents = 2900, defaultCodEnabled = true, defaultOnlinePaymentEnabled = false,
-        defaultBankTransferEnabled = true, proPlanEnabled = true, supportEmail = "hello@storepilot.au", companyLocation = "Sydney, Australia",
-        timezone = "Australia/Sydney", returnWindowDays = 14,
-    )
+    private fun settings() =
+        PlatformSettings(
+            name = "StorePilot",
+            tagline = "tagline",
+            countryName = "Australia",
+            countryCode = "AU",
+            currencyCode = "AUD",
+            currencySymbol = "$",
+            currencyLocale = "en-AU",
+            platformFeePercent = BigDecimal("3.5"),
+            flatShippingFee = 1000,
+            proMonthlyPriceCents = 2900,
+            defaultCodEnabled = true,
+            defaultOnlinePaymentEnabled = false,
+            defaultBankTransferEnabled = true,
+            proPlanEnabled = true,
+            supportEmail = "hello@storepilot.au",
+            companyLocation = "Sydney, Australia",
+            timezone = "Australia/Sydney",
+            returnWindowDays = 14,
+        )
 
     @Test
     fun `current returns the single settings row`() {
@@ -41,7 +55,10 @@ class PlatformConfigServiceTest {
         every { repository.findAll() } returns listOf(row)
         every { repository.save(row) } returns row
 
-        val result = service.updatePaymentMethods(PlatformPaymentMethodsInput(codEnabled = false, onlinePaymentEnabled = true, bankTransferEnabled = false))
+        val result =
+            service.updatePaymentMethods(
+                PlatformPaymentMethodsInput(codEnabled = false, onlinePaymentEnabled = true, bankTransferEnabled = false),
+            )
 
         assertEquals(false, result.defaultCodEnabled)
         assertEquals(true, result.defaultOnlinePaymentEnabled)
@@ -53,7 +70,9 @@ class PlatformConfigServiceTest {
         every { repository.findAll() } returns listOf(settings())
 
         assertThrows(IllegalArgumentException::class.java) {
-            service.updatePaymentMethods(PlatformPaymentMethodsInput(codEnabled = false, onlinePaymentEnabled = false, bankTransferEnabled = false))
+            service.updatePaymentMethods(
+                PlatformPaymentMethodsInput(codEnabled = false, onlinePaymentEnabled = false, bankTransferEnabled = false),
+            )
         }
     }
 }

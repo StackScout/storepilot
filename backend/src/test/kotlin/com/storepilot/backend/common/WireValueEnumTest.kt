@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
-private enum class Widget(override val wireValue: String) : WireValue {
+private enum class Widget(
+    override val wireValue: String,
+) : WireValue {
     SMALL("small"),
     LARGE("large"),
 }

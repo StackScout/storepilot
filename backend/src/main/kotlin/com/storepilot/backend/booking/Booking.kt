@@ -123,7 +123,9 @@ class BookingTimelineEntry(
  * PENDING -> CONFIRMED | CANCELLED; CONFIRMED -> COMPLETED | CANCELLED |
  * NO_SHOW; COMPLETED/CANCELLED/NO_SHOW terminal.
  */
-enum class BookingStatus(override val wireValue: String) : WireValue {
+enum class BookingStatus(
+    override val wireValue: String,
+) : WireValue {
     PENDING("pending"),
     CONFIRMED("confirmed"),
     COMPLETED("completed"),

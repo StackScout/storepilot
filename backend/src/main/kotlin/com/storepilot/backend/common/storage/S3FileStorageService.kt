@@ -10,7 +10,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.time.Duration
-import java.util.*
+import java.util.UUID
 
 /**
  * S3-backed storage for the aws profile — see FileStorageService for the
@@ -34,7 +34,8 @@ class S3FileStorageService(
         validateUploadFile(file, allowedContentTypes, maxBytes)
         val key = "$subdir/${UUID.randomUUID()}${uploadFileExtension(file.contentType)}"
         s3Client.putObject(
-            PutObjectRequest.builder()
+            PutObjectRequest
+                .builder()
                 .bucket(properties.s3BucketName)
                 .key(key)
                 .contentType(file.contentType)
@@ -47,17 +48,28 @@ class S3FileStorageService(
     /** An already-absolute URL (e.g. picsum.photos seed-data placeholders, never stored via store()) is returned as-is rather than treated as an S3 key. */
     override fun resolveUrl(reference: String): String {
         if (reference.startsWith("http://") || reference.startsWith("https://")) return reference
-        val presignRequest = GetObjectPresignRequest.builder()
-            .signatureDuration(Duration.ofMinutes(15))
-            .getObjectRequest(
-                GetObjectRequest.builder().bucket(properties.s3BucketName).key(reference).build(),
-            )
-            .build()
+        val presignRequest =
+            GetObjectPresignRequest
+                .builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .getObjectRequest(
+                    GetObjectRequest
+                        .builder()
+                        .bucket(properties.s3BucketName)
+                        .key(reference)
+                        .build(),
+                ).build()
         return s3Presigner.presignGetObject(presignRequest).url().toString()
     }
 
     override fun delete(reference: String) {
         if (reference.startsWith("http://") || reference.startsWith("https://")) return
-        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(properties.s3BucketName).key(reference).build())
+        s3Client.deleteObject(
+            DeleteObjectRequest
+                .builder()
+                .bucket(properties.s3BucketName)
+                .key(reference)
+                .build(),
+        )
     }
 }

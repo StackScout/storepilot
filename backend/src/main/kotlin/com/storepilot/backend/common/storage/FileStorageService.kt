@@ -44,19 +44,24 @@ interface FileStorageService {
     fun delete(reference: String)
 }
 
-fun validateUploadFile(file: MultipartFile, allowedContentTypes: Set<String>, maxBytes: Long) {
+fun validateUploadFile(
+    file: MultipartFile,
+    allowedContentTypes: Set<String>,
+    maxBytes: Long,
+) {
     require(!file.isEmpty) { "File is empty" }
     require(file.size <= maxBytes) { "File must be ${maxBytes / (1024 * 1024)}MB or smaller" }
     require(file.contentType in allowedContentTypes) { "Unsupported file type: ${file.contentType}" }
 }
 
-fun uploadFileExtension(contentType: String?): String = when (contentType) {
-    "image/jpeg" -> ".jpg"
-    "image/png" -> ".png"
-    "image/webp" -> ".webp"
-    "application/pdf" -> ".pdf"
-    else -> ""
-}
+fun uploadFileExtension(contentType: String?): String =
+    when (contentType) {
+        "image/jpeg" -> ".jpg"
+        "image/png" -> ".png"
+        "image/webp" -> ".webp"
+        "application/pdf" -> ".pdf"
+        else -> ""
+    }
 
 /** Common validation presets, reused by every caller instead of restating magic numbers/sets inline. */
 object FileUploadPolicies {

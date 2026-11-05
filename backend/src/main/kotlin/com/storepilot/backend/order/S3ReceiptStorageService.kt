@@ -9,7 +9,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import java.time.Duration
-import java.util.*
+import java.util.UUID
 
 /**
  * S3-backed storage for the aws profile — see ReceiptStorageService for the
@@ -28,7 +28,8 @@ class S3ReceiptStorageService(
         validateReceiptFile(file)
         val key = "receipts/${UUID.randomUUID()}${receiptFileExtension(file.contentType)}"
         s3Client.putObject(
-            PutObjectRequest.builder()
+            PutObjectRequest
+                .builder()
                 .bucket(properties.s3BucketName)
                 .key(key)
                 .contentType(file.contentType)
@@ -39,12 +40,17 @@ class S3ReceiptStorageService(
     }
 
     override fun resolveUrl(reference: String): String {
-        val presignRequest = GetObjectPresignRequest.builder()
-            .signatureDuration(Duration.ofMinutes(15))
-            .getObjectRequest(
-                GetObjectRequest.builder().bucket(properties.s3BucketName).key(reference).build(),
-            )
-            .build()
+        val presignRequest =
+            GetObjectPresignRequest
+                .builder()
+                .signatureDuration(Duration.ofMinutes(15))
+                .getObjectRequest(
+                    GetObjectRequest
+                        .builder()
+                        .bucket(properties.s3BucketName)
+                        .key(reference)
+                        .build(),
+                ).build()
         return s3Presigner.presignGetObject(presignRequest).url().toString()
     }
 }

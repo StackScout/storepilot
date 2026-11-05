@@ -6,8 +6,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
@@ -20,7 +20,9 @@ class BookableServiceController(
     private val bookableServiceService: BookableServiceService,
 ) {
     @GetMapping("/api/bookable-services/{id}")
-    fun getById(@PathVariable id: UUID): BookableServiceResponse = bookableServiceService.getById(id)
+    fun getById(
+        @PathVariable id: UUID,
+    ): BookableServiceResponse = bookableServiceService.getById(id)
 
     @GetMapping("/api/stores/{storeId}/bookable-services")
     fun listByStore(
@@ -45,7 +47,9 @@ class BookableServiceController(
     ): BookableServiceResponse = bookableServiceService.update(id, input, images.orEmpty())
 
     @DeleteMapping("/api/bookable-services/{id}")
-    fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
+    fun delete(
+        @PathVariable id: UUID,
+    ): ResponseEntity<Void> {
         bookableServiceService.delete(id)
         return ResponseEntity.noContent().build()
     }

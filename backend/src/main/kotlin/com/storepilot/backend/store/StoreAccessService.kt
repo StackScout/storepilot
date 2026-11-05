@@ -22,7 +22,10 @@ class StoreAccessService(
     private val currentActor: CurrentActor,
     private val storeStaffMemberRepository: StoreStaffMemberRepository,
 ) {
-    fun isOperationalAccess(store: Store, seller: Seller): Boolean =
+    fun isOperationalAccess(
+        store: Store,
+        seller: Seller,
+    ): Boolean =
         store.seller.id == seller.id ||
             storeStaffMemberRepository.existsByStoreIdAndSellerId(requireNotNull(store.id), requireNotNull(seller.id))
 

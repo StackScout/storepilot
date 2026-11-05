@@ -2,8 +2,8 @@ package com.storepilot.backend.buyer
 
 import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
-import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookableService
+import com.storepilot.backend.booking.Booking
 import com.storepilot.backend.booking.BookingRepository
 import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.booking.ServiceStatus
@@ -57,20 +57,21 @@ class BuyerAccountServiceTest {
     private val cognitoClient = mockk<CognitoIdentityProviderClient>(relaxed = true)
     private val cognitoProperties = CognitoProperties(userPoolId = "pool-1")
 
-    private val service = BuyerAccountService(
-        currentActor,
-        buyerRepository,
-        addressRepository,
-        savedSearchRepository,
-        wishlistItemRepository,
-        followRepository,
-        storeRepository,
-        orderRepository,
-        bookingRepository,
-        auditLogService,
-        cognitoClient,
-        cognitoProperties,
-    )
+    private val service =
+        BuyerAccountService(
+            currentActor,
+            buyerRepository,
+            addressRepository,
+            savedSearchRepository,
+            wishlistItemRepository,
+            followRepository,
+            storeRepository,
+            orderRepository,
+            bookingRepository,
+            auditLogService,
+            cognitoClient,
+            cognitoProperties,
+        )
 
     private val buyer = Buyer(name = "Jane Buyer", email = "buyer@example.com", cognitoSub = "buyer-sub").apply { id = UUID.randomUUID() }
     private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller").apply { id = UUID.randomUUID() }
@@ -78,18 +79,19 @@ class BuyerAccountServiceTest {
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "store",
-            name = "Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.ACTIVE,
-            followerCount = 5,
-        ).apply { id = UUID.randomUUID() }
+        store =
+            Store(
+                seller = seller,
+                slug = "store",
+                name = "Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.ACTIVE,
+                followerCount = 5,
+            ).apply { id = UUID.randomUUID() }
 
         every { currentActor.requireBuyer() } returns buyer
         every { buyerRepository.save(any()) } answers { firstArg() }
@@ -101,13 +103,15 @@ class BuyerAccountServiceTest {
         every { wishlistItemRepository.findByBuyerIdOrderByCreatedAtDesc(buyer.id!!) } returns emptyList()
         every { followRepository.findByBuyerId(buyer.id!!) } returns emptyList()
 
-        val jwt = Jwt.withTokenValue("token")
-            .header("alg", "none")
-            .subject("buyer-sub")
-            .claim("username", "buyer-sub")
-            .issuedAt(Instant.now())
-            .expiresAt(Instant.now().plusSeconds(60))
-            .build()
+        val jwt =
+            Jwt
+                .withTokenValue("token")
+                .header("alg", "none")
+                .subject("buyer-sub")
+                .claim("username", "buyer-sub")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build()
         SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt, emptyList())
     }
 
@@ -116,45 +120,62 @@ class BuyerAccountServiceTest {
         SecurityContextHolder.clearContext()
     }
 
-    private fun order() = Order(
-        orderNumber = "AU-20260101-1234",
-        store = store,
-        subtotal = 1000,
-        shippingFee = 0,
-        platformFee = 50,
-        total = 1000,
-        status = OrderStatus.DELIVERED,
-        paymentMethod = PaymentMethod.COD,
-        paymentStatus = PaymentStatus.PAID,
-        shipping = ShippingDetails(fullName = "Jane Buyer", phone = "0400000000", addressLine1 = "1 Main St", city = "Sydney", state = "NSW", postalCode = "2000"),
-        buyerEmail = buyer.email,
-        buyer = buyer,
-        fulfillmentTimeHours = 48,
-        deliveryTimeHours = 120,
-    ).apply { id = UUID.randomUUID() }
+    private fun order() =
+        Order(
+            orderNumber = "AU-20260101-1234",
+            store = store,
+            subtotal = 1000,
+            shippingFee = 0,
+            platformFee = 50,
+            total = 1000,
+            status = OrderStatus.DELIVERED,
+            paymentMethod = PaymentMethod.COD,
+            paymentStatus = PaymentStatus.PAID,
+            shipping =
+                ShippingDetails(
+                    fullName = "Jane Buyer",
+                    phone = "0400000000",
+                    addressLine1 = "1 Main St",
+                    city = "Sydney",
+                    state = "NSW",
+                    postalCode = "2000",
+                ),
+            buyerEmail = buyer.email,
+            buyer = buyer,
+            fulfillmentTimeHours = 48,
+            deliveryTimeHours = 120,
+        ).apply { id = UUID.randomUUID() }
 
-    private fun booking() = Booking(
-        bookingNumber = "AU-20260101-5678",
-        store = store,
-        service = BookableService(
-            store = store, name = "Service", slug = "service", description = "description",
-            category = "handicrafts", price = 500, durationMinutes = 60, status = ServiceStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() },
-        serviceName = "Service",
-        servicePrice = 500,
-        serviceDurationMinutes = 60,
-        scheduledStart = Instant.now(),
-        scheduledEnd = Instant.now().plusSeconds(3600),
-        platformFee = 25,
-        total = 500,
-        status = BookingStatus.COMPLETED,
-        paymentMethod = PaymentMethod.COD,
-        paymentStatus = PaymentStatus.PAID,
-        buyerName = "Jane Buyer",
-        buyerPhone = "0400000000",
-        buyerEmail = buyer.email,
-        buyer = buyer,
-    ).apply { id = UUID.randomUUID() }
+    private fun booking() =
+        Booking(
+            bookingNumber = "AU-20260101-5678",
+            store = store,
+            service =
+                BookableService(
+                    store = store,
+                    name = "Service",
+                    slug = "service",
+                    description = "description",
+                    category = "handicrafts",
+                    price = 500,
+                    durationMinutes = 60,
+                    status = ServiceStatus.ACTIVE,
+                ).apply { id = UUID.randomUUID() },
+            serviceName = "Service",
+            servicePrice = 500,
+            serviceDurationMinutes = 60,
+            scheduledStart = Instant.now(),
+            scheduledEnd = Instant.now().plusSeconds(3600),
+            platformFee = 25,
+            total = 500,
+            status = BookingStatus.COMPLETED,
+            paymentMethod = PaymentMethod.COD,
+            paymentStatus = PaymentStatus.PAID,
+            buyerName = "Jane Buyer",
+            buyerPhone = "0400000000",
+            buyerEmail = buyer.email,
+            buyer = buyer,
+        ).apply { id = UUID.randomUUID() }
 
     @Test
     fun `deleteCurrentBuyer redacts order shipping and contact details without touching the order-buyer link`() {
@@ -186,10 +207,17 @@ class BuyerAccountServiceTest {
     fun `deleteCurrentBuyer deletes addresses, saved searches, and wishlist items entirely`() {
         val address = Address(buyer = buyer, shipping = ShippingDetails(fullName = "Jane", phone = "0400000000"))
         val savedSearch = SavedSearch(buyer = buyer, name = "Necklaces", queryString = "q=necklace")
-        val product = Product(
-            store = store, name = "Product", slug = "product", description = "description",
-            category = "handicrafts", price = 1000, stockQuantity = 5, status = ProductStatus.ACTIVE,
-        ).apply { id = UUID.randomUUID() }
+        val product =
+            Product(
+                store = store,
+                name = "Product",
+                slug = "product",
+                description = "description",
+                category = "handicrafts",
+                price = 1000,
+                stockQuantity = 5,
+                status = ProductStatus.ACTIVE,
+            ).apply { id = UUID.randomUUID() }
         val wishlistItem = WishlistItem(buyer = buyer, product = product)
         every { addressRepository.findByBuyerIdOrderByIsDefaultDescCreatedAtAsc(buyer.id!!) } returns listOf(address)
         every { savedSearchRepository.findByBuyerIdOrderByCreatedAtDesc(buyer.id!!) } returns listOf(savedSearch)

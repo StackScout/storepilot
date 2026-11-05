@@ -28,13 +28,17 @@ class SellerBillingWebhookService(
 ) {
     private val log = LoggerFactory.getLogger(SellerBillingWebhookService::class.java)
 
-    fun handleWebhookEvent(rawPayload: String, sigHeader: String) {
-        val event = try {
-            Webhook.constructEvent(rawPayload, sigHeader, stripeProperties.billingWebhookSecret)
-        } catch (e: SignatureVerificationException) {
-            log.warn("Stripe billing webhook: signature verification failed — ignoring (possible forged callback)", e)
-            return
-        }
+    fun handleWebhookEvent(
+        rawPayload: String,
+        sigHeader: String,
+    ) {
+        val event =
+            try {
+                Webhook.constructEvent(rawPayload, sigHeader, stripeProperties.billingWebhookSecret)
+            } catch (e: SignatureVerificationException) {
+                log.warn("Stripe billing webhook: signature verification failed — ignoring (possible forged callback)", e)
+                return
+            }
 
         when (event.type) {
             "checkout.session.completed" -> {

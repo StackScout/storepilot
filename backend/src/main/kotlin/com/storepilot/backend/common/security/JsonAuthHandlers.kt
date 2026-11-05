@@ -14,20 +14,33 @@ import org.springframework.security.web.access.AccessDeniedHandler
  * codes/messages here, so no need to drag in an ObjectMapper just to
  * serialize two short, non-user-controlled strings).
  */
-private fun writeApiError(response: HttpServletResponse, status: Int, code: String, message: String) {
+private fun writeApiError(
+    response: HttpServletResponse,
+    status: Int,
+    code: String,
+    message: String,
+) {
     response.status = status
     response.contentType = MediaType.APPLICATION_JSON_VALUE
     response.writer.write("""{"error":{"code":"$code","message":"$message"}}""")
 }
 
 class JsonAuthenticationEntryPoint : AuthenticationEntryPoint {
-    override fun commence(request: HttpServletRequest, response: HttpServletResponse, authException: AuthenticationException) {
+    override fun commence(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        authException: AuthenticationException,
+    ) {
         writeApiError(response, 401, "UNAUTHENTICATED", "Authentication required")
     }
 }
 
 class JsonAccessDeniedHandler : AccessDeniedHandler {
-    override fun handle(request: HttpServletRequest, response: HttpServletResponse, accessDeniedException: AccessDeniedException) {
+    override fun handle(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        accessDeniedException: AccessDeniedException,
+    ) {
         writeApiError(response, 403, "FORBIDDEN_ROLE", "You don't have permission to perform this action")
     }
 }

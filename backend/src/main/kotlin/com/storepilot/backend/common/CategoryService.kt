@@ -26,12 +26,16 @@ class CategoryService(
         if (categoryRepository.existsByWireValue(input.wireValue)) {
             throw ConflictException("A category with wire value \"${input.wireValue}\" already exists")
         }
-        val category = Category(name = input.name, wireValue = input.wireValue, icon = input.icon, sortOrder = input.sortOrder, active = input.active)
+        val category =
+            Category(name = input.name, wireValue = input.wireValue, icon = input.icon, sortOrder = input.sortOrder, active = input.active)
         return categoryRepository.save(category).toResponse()
     }
 
     @Transactional
-    fun update(id: UUID, input: CategoryFormInput): CategoryResponse {
+    fun update(
+        id: UUID,
+        input: CategoryFormInput,
+    ): CategoryResponse {
         val category = categoryRepository.findById(id).orElseThrow { NotFoundException("Category $id not found") }
         val existingWithSameWireValue = categoryRepository.findByWireValue(input.wireValue)
         if (existingWithSameWireValue != null && existingWithSameWireValue.id != id) {

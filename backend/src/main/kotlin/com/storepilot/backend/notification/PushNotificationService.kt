@@ -7,5 +7,10 @@ package com.storepilot.backend.notification
  * ExpoPushNotificationService for the one real implementation.
  */
 interface PushNotificationService {
-    fun send(tokens: List<String>, title: String, body: String, data: Map<String, String> = emptyMap())
+    fun send(
+        tokens: List<String>,
+        title: String,
+        body: String,
+        data: Map<String, String> = emptyMap(),
+    )
 }

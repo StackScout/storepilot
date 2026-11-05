@@ -10,7 +10,9 @@ import com.storepilot.backend.common.WireValue
  * no ABR_GUID is set (see AbrProperties) — expected in any environment
  * without a real GUID yet, not an error to surface loudly.
  */
-enum class AbnLookupStatus(override val wireValue: String) : WireValue {
+enum class AbnLookupStatus(
+    override val wireValue: String,
+) : WireValue {
     FOUND("found"),
     INVALID_FORMAT("invalid-format"),
     NOT_FOUND("not-found"),

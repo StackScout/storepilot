@@ -3,6 +3,8 @@ package com.storepilot.backend.store
 import com.storepilot.backend.admin.AdminNotificationService
 import com.storepilot.backend.admin.AuditAction
 import com.storepilot.backend.admin.AuditLogService
+import com.storepilot.backend.booking.BookingRepository
+import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.common.CategoryRepository
 import com.storepilot.backend.common.ConflictException
 import com.storepilot.backend.common.ForbiddenException
@@ -10,14 +12,12 @@ import com.storepilot.backend.common.NotFoundException
 import com.storepilot.backend.common.PageResponse
 import com.storepilot.backend.common.PlatformConfigService
 import com.storepilot.backend.common.requireCategory
-import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.security.CognitoProperties
+import com.storepilot.backend.common.security.CurrentActor
 import com.storepilot.backend.common.storage.FileStorageService
 import com.storepilot.backend.common.storage.FileUploadPolicies
 import com.storepilot.backend.common.toPageResponse
 import com.storepilot.backend.common.wireValueOf
-import com.storepilot.backend.booking.BookingRepository
-import com.storepilot.backend.booking.BookingStatus
 import com.storepilot.backend.order.OrderRepository
 import com.storepilot.backend.order.OrderStatus
 import com.storepilot.backend.payout.FeeCollectionRepository
@@ -27,17 +27,16 @@ import com.storepilot.backend.payout.PayoutStatus
 import com.storepilot.backend.seller.Seller
 import com.storepilot.backend.seller.SellerPlan
 import com.storepilot.backend.seller.SellerRepository
-import org.springframework.web.multipart.MultipartFile
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.CognitoIdentityProviderException
-import java.math.BigDecimal
 import java.util.UUID
 
 /** Hard cap regardless of what a caller requests via `size` — see docs/gaps-and-assumptions.md's search-scalability note. */
@@ -71,25 +70,33 @@ class StoreService(
      * Filtering and sorting both happen in the SQL query (Specification +
      * Pageable) — the DB is only ever asked for one page's worth of rows.
      */
-    fun search(category: String?, query: String?, page: Int, size: Int): PageResponse<StoreResponse> {
+    fun search(
+        category: String?,
+        query: String?,
+        page: Int,
+        size: Int,
+    ): PageResponse<StoreResponse> {
         val validatedCategory = category?.let { categoryRepository.requireCategory(it) }
 
-        val activeOnly = Specification<Store> { root, _, cb ->
-            cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), StoreVerificationStatus.ACTIVE)
-        }
-        val categorySpec: Specification<Store>? = validatedCategory?.let { cat ->
-            Specification { root, _, cb -> cb.equal(root.get<String>("category"), cat) }
-        }
-        val querySpec: Specification<Store>? = query?.trim()?.takeIf { it.isNotBlank() }?.let { q ->
-            val pattern = "%${q.lowercase()}%"
-            Specification { root, _, cb ->
-                cb.or(
-                    cb.like(cb.lower(root.get("name")), pattern),
-                    cb.like(cb.lower(root.get("tagline")), pattern),
-                    cb.like(cb.lower(root.get<StoreAddress>("address").get<String>("city")), pattern),
-                )
+        val activeOnly =
+            Specification<Store> { root, _, cb ->
+                cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), StoreVerificationStatus.ACTIVE)
             }
-        }
+        val categorySpec: Specification<Store>? =
+            validatedCategory?.let { cat ->
+                Specification { root, _, cb -> cb.equal(root.get<String>("category"), cat) }
+            }
+        val querySpec: Specification<Store>? =
+            query?.trim()?.takeIf { it.isNotBlank() }?.let { q ->
+                val pattern = "%${q.lowercase()}%"
+                Specification { root, _, cb ->
+                    cb.or(
+                        cb.like(cb.lower(root.get("name")), pattern),
+                        cb.like(cb.lower(root.get("tagline")), pattern),
+                        cb.like(cb.lower(root.get<StoreAddress>("address").get<String>("city")), pattern),
+                    )
+                }
+            }
 
         var spec = activeOnly
         if (categorySpec != null) spec = spec.and(categorySpec)
@@ -102,8 +109,9 @@ class StoreService(
 
     /** GET /api/stores/{slug} — public storefront: active stores only. */
     fun getBySlug(slug: String): StoreResponse {
-        val store = storeRepository.findBySlug(slug)?.takeIf { it.verificationStatus == StoreVerificationStatus.ACTIVE }
-            ?: throw NotFoundException("Store $slug not found")
+        val store =
+            storeRepository.findBySlug(slug)?.takeIf { it.verificationStatus == StoreVerificationStatus.ACTIVE }
+                ?: throw NotFoundException("Store $slug not found")
         return store.toResponse(fileStorageService)
     }
 
@@ -139,14 +147,18 @@ class StoreService(
         val currentFrom = now.minus(7, java.time.temporal.ChronoUnit.DAYS)
         val previousFrom = now.minus(14, java.time.temporal.ChronoUnit.DAYS)
         return StoreStatsResponse(
-            revenueCurrentPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, currentFrom, now) +
-                bookingRepository.sumServicePriceForPaidBookings(storeId, currentFrom, now),
-            revenuePreviousPeriod = orderRepository.sumSubtotalForPaidOrders(storeId, previousFrom, currentFrom) +
-                bookingRepository.sumServicePriceForPaidBookings(storeId, previousFrom, currentFrom),
-            platformFeeCurrentPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, currentFrom, now) +
-                bookingRepository.sumPlatformFeeForPaidBookings(storeId, currentFrom, now),
-            platformFeePreviousPeriod = orderRepository.sumPlatformFeeForPaidOrders(storeId, previousFrom, currentFrom) +
-                bookingRepository.sumPlatformFeeForPaidBookings(storeId, previousFrom, currentFrom),
+            revenueCurrentPeriod =
+                orderRepository.sumSubtotalForPaidOrders(storeId, currentFrom, now) +
+                    bookingRepository.sumServicePriceForPaidBookings(storeId, currentFrom, now),
+            revenuePreviousPeriod =
+                orderRepository.sumSubtotalForPaidOrders(storeId, previousFrom, currentFrom) +
+                    bookingRepository.sumServicePriceForPaidBookings(storeId, previousFrom, currentFrom),
+            platformFeeCurrentPeriod =
+                orderRepository.sumPlatformFeeForPaidOrders(storeId, currentFrom, now) +
+                    bookingRepository.sumPlatformFeeForPaidBookings(storeId, currentFrom, now),
+            platformFeePreviousPeriod =
+                orderRepository.sumPlatformFeeForPaidOrders(storeId, previousFrom, currentFrom) +
+                    bookingRepository.sumPlatformFeeForPaidBookings(storeId, previousFrom, currentFrom),
             pendingOrderCount = orderRepository.countByStoreIdAndStatus(storeId, OrderStatus.PENDING).toInt(),
         )
     }
@@ -239,11 +251,12 @@ class StoreService(
         // needs a non-JWT signal (e.g. an explicit adminListGroupsForUser check) —
         // out of scope for this pass, same as removeStaff's own "no recovery path"
         // tradeoff.
-        val seller = sellerRepository.findByCognitoSub(identity.sub) ?: run {
-            val created = sellerRepository.save(Seller(cognitoSub = identity.sub, email = identity.email, name = identity.name))
-            grantSellerGroup(identity.username)
-            created
-        }
+        val seller =
+            sellerRepository.findByCognitoSub(identity.sub) ?: run {
+                val created = sellerRepository.save(Seller(cognitoSub = identity.sub, email = identity.email, name = identity.name))
+                grantSellerGroup(identity.username)
+                created
+            }
 
         // Idempotent retry, not a second store: the onboarding page's
         // mutationFn calls this endpoint, then PATCHes /settings, then
@@ -277,23 +290,25 @@ class StoreService(
         }
 
         val slug = uniqueSlug(input.name)
-        val store = Store(
-            seller = seller,
-            slug = slug,
-            name = input.name,
-            tagline = input.tagline,
-            description = input.description,
-            // logoUrl/bannerUrl start null — the frontend renders a
-            // generated initials avatar / color block until the seller
-            // uploads real images via uploadLogo/uploadBanner below.
-            category = categoryRepository.requireCategory(input.category),
-            address = StoreAddress(
-                city = input.city,
-                state = input.state,
-            ),
-            whatsappNumber = input.whatsappNumber,
-            verificationStatus = StoreVerificationStatus.PENDING,
-        )
+        val store =
+            Store(
+                seller = seller,
+                slug = slug,
+                name = input.name,
+                tagline = input.tagline,
+                description = input.description,
+                // logoUrl/bannerUrl start null — the frontend renders a
+                // generated initials avatar / color block until the seller
+                // uploads real images via uploadLogo/uploadBanner below.
+                category = categoryRepository.requireCategory(input.category),
+                address =
+                    StoreAddress(
+                        city = input.city,
+                        state = input.state,
+                    ),
+                whatsappNumber = input.whatsappNumber,
+                verificationStatus = StoreVerificationStatus.PENDING,
+            )
         return storeRepository.save(store).toResponse(fileStorageService)
     }
 
@@ -302,7 +317,8 @@ class StoreService(
         repeat(2) { attempt ->
             try {
                 cognitoClient.adminAddUserToGroup(
-                    AdminAddUserToGroupRequest.builder()
+                    AdminAddUserToGroupRequest
+                        .builder()
                         .userPoolId(cognitoProperties.userPoolId)
                         .username(username)
                         .groupName("seller")
@@ -320,14 +336,20 @@ class StoreService(
 
     /** PATCH /api/stores/{storeId}/settings — verifies the caller owns this store before delegating to the shared upsert logic below (also used internally by the admin rejection path in setVerificationStatus, which is already gated by SecurityConfig's hasRole("ADMIN") on the admin path prefix, not this check). */
     @Transactional
-    fun updateSettingsAsSeller(storeId: UUID, input: StoreSettingsInput): StoreSettingsResponse {
+    fun updateSettingsAsSeller(
+        storeId: UUID,
+        input: StoreSettingsInput,
+    ): StoreSettingsResponse {
         val store = requireOwnedStore(storeId)
         return upsertSettings(storeId, input)
     }
 
     /** PATCH /api/stores/{storeId}/profile — public-facing social links, separate from settings since those are private payout/verification data. */
     @Transactional
-    fun updateProfileAsSeller(storeId: UUID, input: StoreProfileInput): StoreResponse {
+    fun updateProfileAsSeller(
+        storeId: UUID,
+        input: StoreProfileInput,
+    ): StoreResponse {
         val store = requireOwnedStore(storeId)
         if (input.facebookUrl != null) store.facebookUrl = input.facebookUrl.trim().takeIf { it.isNotBlank() }
         if (input.instagramUrl != null) store.instagramUrl = input.instagramUrl.trim().takeIf { it.isNotBlank() }
@@ -342,7 +364,10 @@ class StoreService(
         return store
     }
 
-    private fun upsertSettings(storeId: UUID, input: StoreSettingsInput): StoreSettingsResponse {
+    private fun upsertSettings(
+        storeId: UUID,
+        input: StoreSettingsInput,
+    ): StoreSettingsResponse {
         val proPlanEnabled = platformConfigService.current().proPlanEnabled
         val existing = storeSettingsRepository.findById(storeId).orElse(null)
         if (existing != null) {
@@ -440,36 +465,40 @@ class StoreService(
         val onlinePaymentEnabled = input.onlinePaymentEnabled ?: platformConfig.defaultOnlinePaymentEnabled
         val bankTransferEnabled = (input.bankTransferEnabled ?: platformConfig.defaultBankTransferEnabled) && sellerIsPro
         requireAtLeastOnePaymentMethod(codEnabled, onlinePaymentEnabled, bankTransferEnabled)
-        val created = StoreSettings(
-            store = store,
-            contactEmail = input.contactEmail ?: "",
-            contactPhone = input.contactPhone ?: "",
-            bankAccountName = input.bankAccountName ?: "",
-            bankAccountNumber = input.bankAccountNumber ?: "",
-            bankName = input.bankName ?: "",
-            transactionFeePercent = input.transactionFeePercent ?: platformConfig.platformFeePercent,
-            codEnabled = codEnabled,
-            onlinePaymentEnabled = onlinePaymentEnabled,
-            bankTransferEnabled = bankTransferEnabled,
-            sellerType = input.sellerType?.let { wireValueOf<SellerType>(it) } ?: SellerType.INDIVIDUAL,
-            driverLicenceNumber = input.driverLicenceNumber,
-            abn = input.abn,
-            nicNumber = input.nicNumber,
-            businessRegistrationNumber = input.businessRegistrationNumber,
-            rejectionReason = input.rejectionReason,
-            stockManagementEnabled = input.stockManagementEnabled ?: true,
-            pickupEnabled = input.pickupEnabled ?: false,
-            gstRegistered = input.gstRegistered ?: false,
-            bookingsEnabled = input.bookingsEnabled ?: false,
-            stripeEnabled = input.stripeEnabled ?: false,
-        )
+        val created =
+            StoreSettings(
+                store = store,
+                contactEmail = input.contactEmail ?: "",
+                contactPhone = input.contactPhone ?: "",
+                bankAccountName = input.bankAccountName ?: "",
+                bankAccountNumber = input.bankAccountNumber ?: "",
+                bankName = input.bankName ?: "",
+                transactionFeePercent = input.transactionFeePercent ?: platformConfig.platformFeePercent,
+                codEnabled = codEnabled,
+                onlinePaymentEnabled = onlinePaymentEnabled,
+                bankTransferEnabled = bankTransferEnabled,
+                sellerType = input.sellerType?.let { wireValueOf<SellerType>(it) } ?: SellerType.INDIVIDUAL,
+                driverLicenceNumber = input.driverLicenceNumber,
+                abn = input.abn,
+                nicNumber = input.nicNumber,
+                businessRegistrationNumber = input.businessRegistrationNumber,
+                rejectionReason = input.rejectionReason,
+                stockManagementEnabled = input.stockManagementEnabled ?: true,
+                pickupEnabled = input.pickupEnabled ?: false,
+                gstRegistered = input.gstRegistered ?: false,
+                bookingsEnabled = input.bookingsEnabled ?: false,
+                stripeEnabled = input.stripeEnabled ?: false,
+            )
         requireCountryVerificationFields(created)
         return storeSettingsRepository.save(created).toResponse(fileStorageService)
     }
 
     private fun hasVerificationFieldEdits(input: StoreSettingsInput): Boolean =
-        input.sellerType != null || input.driverLicenceNumber != null || input.abn != null ||
-            input.nicNumber != null || input.businessRegistrationNumber != null
+        input.sellerType != null ||
+            input.driverLicenceNumber != null ||
+            input.abn != null ||
+            input.nicNumber != null ||
+            input.businessRegistrationNumber != null
 
     /** Shared by upsertSettings and the 4 document-upload methods below — see upsertSettings' doc comment for why. */
     private fun requireNotActiveForDirectVerificationEdit(store: Store) {
@@ -495,100 +524,132 @@ class StoreService(
 
     /** POST /api/stores/{storeId}/driver-licence-document — seller uploads/replaces their driver's licence proof. */
     @Transactional
-    fun uploadDriverLicenceDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
+    fun uploadDriverLicenceDocument(
+        storeId: UUID,
+        file: MultipartFile,
+    ): StoreSettingsResponse {
         requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
-        val reference = fileStorageService.store(
-            "seller-documents",
-            file,
-            FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
-            FileUploadPolicies.DOCUMENT_MAX_BYTES,
-        )
-        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val reference =
+            fileStorageService.store(
+                "seller-documents",
+                file,
+                FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+                FileUploadPolicies.DOCUMENT_MAX_BYTES,
+            )
+        val settings =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
         settings.driverLicenceDocumentUrl = reference
         return storeSettingsRepository.save(settings).toResponse(fileStorageService)
     }
 
     /** POST /api/stores/{storeId}/abn-document — seller uploads/replaces their ABN registration proof. */
     @Transactional
-    fun uploadAbnDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
+    fun uploadAbnDocument(
+        storeId: UUID,
+        file: MultipartFile,
+    ): StoreSettingsResponse {
         requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
-        val reference = fileStorageService.store(
-            "seller-documents",
-            file,
-            FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
-            FileUploadPolicies.DOCUMENT_MAX_BYTES,
-        )
-        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val reference =
+            fileStorageService.store(
+                "seller-documents",
+                file,
+                FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+                FileUploadPolicies.DOCUMENT_MAX_BYTES,
+            )
+        val settings =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
         settings.abnDocumentUrl = reference
         return storeSettingsRepository.save(settings).toResponse(fileStorageService)
     }
 
     /** POST /api/stores/{storeId}/nic-document — seller uploads/replaces their NIC proof (Sri Lanka deployments only). */
     @Transactional
-    fun uploadNicDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
+    fun uploadNicDocument(
+        storeId: UUID,
+        file: MultipartFile,
+    ): StoreSettingsResponse {
         requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
-        val reference = fileStorageService.store(
-            "seller-documents",
-            file,
-            FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
-            FileUploadPolicies.DOCUMENT_MAX_BYTES,
-        )
-        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val reference =
+            fileStorageService.store(
+                "seller-documents",
+                file,
+                FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+                FileUploadPolicies.DOCUMENT_MAX_BYTES,
+            )
+        val settings =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
         settings.nicDocumentUrl = reference
         return storeSettingsRepository.save(settings).toResponse(fileStorageService)
     }
 
     /** POST /api/stores/{storeId}/business-reg-document — seller uploads/replaces their business registration proof (Sri Lanka deployments only). */
     @Transactional
-    fun uploadBusinessRegDocument(storeId: UUID, file: MultipartFile): StoreSettingsResponse {
+    fun uploadBusinessRegDocument(
+        storeId: UUID,
+        file: MultipartFile,
+    ): StoreSettingsResponse {
         requireNotActiveForDirectVerificationEdit(requireOwnedStore(storeId))
-        val reference = fileStorageService.store(
-            "seller-documents",
-            file,
-            FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
-            FileUploadPolicies.DOCUMENT_MAX_BYTES,
-        )
-        val settings = storeSettingsRepository.findById(storeId).orElseThrow {
-            NotFoundException("No settings for store $storeId yet")
-        }
+        val reference =
+            fileStorageService.store(
+                "seller-documents",
+                file,
+                FileUploadPolicies.DOCUMENT_CONTENT_TYPES,
+                FileUploadPolicies.DOCUMENT_MAX_BYTES,
+            )
+        val settings =
+            storeSettingsRepository.findById(storeId).orElseThrow {
+                NotFoundException("No settings for store $storeId yet")
+            }
         settings.businessRegDocumentUrl = reference
         return storeSettingsRepository.save(settings).toResponse(fileStorageService)
     }
 
     /** POST /api/stores/{storeId}/logo — seller uploads/replaces their store logo. */
     @Transactional
-    fun uploadLogo(storeId: UUID, file: MultipartFile): StoreResponse {
+    fun uploadLogo(
+        storeId: UUID,
+        file: MultipartFile,
+    ): StoreResponse {
         val store = requireOwnedStore(storeId)
-        store.logoUrl = fileStorageService.store(
-            "store-images",
-            file,
-            FileUploadPolicies.IMAGE_CONTENT_TYPES,
-            FileUploadPolicies.IMAGE_MAX_BYTES,
-        )
+        store.logoUrl =
+            fileStorageService.store(
+                "store-images",
+                file,
+                FileUploadPolicies.IMAGE_CONTENT_TYPES,
+                FileUploadPolicies.IMAGE_MAX_BYTES,
+            )
         return storeRepository.save(store).toResponse(fileStorageService)
     }
 
     /** POST /api/stores/{storeId}/banner — seller uploads/replaces their store banner. */
     @Transactional
-    fun uploadBanner(storeId: UUID, file: MultipartFile): StoreResponse {
+    fun uploadBanner(
+        storeId: UUID,
+        file: MultipartFile,
+    ): StoreResponse {
         val store = requireOwnedStore(storeId)
-        store.bannerUrl = fileStorageService.store(
-            "store-images",
-            file,
-            FileUploadPolicies.IMAGE_CONTENT_TYPES,
-            FileUploadPolicies.IMAGE_MAX_BYTES,
-        )
+        store.bannerUrl =
+            fileStorageService.store(
+                "store-images",
+                file,
+                FileUploadPolicies.IMAGE_CONTENT_TYPES,
+                FileUploadPolicies.IMAGE_MAX_BYTES,
+            )
         return storeRepository.save(store).toResponse(fileStorageService)
     }
 
     /** A store must always accept at least one payment method — otherwise checkout has nothing to offer buyers. */
-    private fun requireAtLeastOnePaymentMethod(codEnabled: Boolean, onlinePaymentEnabled: Boolean, bankTransferEnabled: Boolean) {
+    private fun requireAtLeastOnePaymentMethod(
+        codEnabled: Boolean,
+        onlinePaymentEnabled: Boolean,
+        bankTransferEnabled: Boolean,
+    ) {
         if (!codEnabled && !onlinePaymentEnabled && !bankTransferEnabled) {
             throw ConflictException("At least one payment method (Cash on Delivery, Online payment, or Bank transfer) must stay enabled")
         }
@@ -596,9 +657,16 @@ class StoreService(
 
     // --- Admin — gated by SecurityConfig's hasRole("ADMIN") on /api/admin/** ---
 
-    fun adminList(status: String?, page: Int, size: Int): PageResponse<StoreResponse> {
+    fun adminList(
+        status: String?,
+        page: Int,
+        size: Int,
+    ): PageResponse<StoreResponse> {
         val statusEnum = status?.let { wireValueOf<StoreVerificationStatus>(it) }
-        val spec = statusEnum?.let { s -> Specification<Store> { root, _, cb -> cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), s) } }
+        val spec =
+            statusEnum?.let { s ->
+                Specification<Store> { root, _, cb -> cb.equal(root.get<StoreVerificationStatus>("verificationStatus"), s) }
+            }
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE), Sort.by("createdAt").descending())
         val results = if (spec != null) storeRepository.findAll(spec, pageable) else storeRepository.findAll(pageable)
         return results.toPageResponse { it.toResponse(fileStorageService) }
@@ -616,7 +684,10 @@ class StoreService(
         storeSettingsRepository.findById(storeId).orElse(null)?.toResponse(fileStorageService)
 
     @Transactional
-    fun setVerificationStatus(storeId: UUID, input: VerificationDecisionInput): StoreResponse {
+    fun setVerificationStatus(
+        storeId: UUID,
+        input: VerificationDecisionInput,
+    ): StoreResponse {
         val store = storeRepository.findById(storeId).orElseThrow { NotFoundException("Store $storeId not found") }
         val status = wireValueOf<StoreVerificationStatus>(input.status)
         store.verificationStatus = status
@@ -696,7 +767,12 @@ class StoreService(
     }
 
     private fun uniqueSlug(name: String): String {
-        val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "store" }
+        val base =
+            name
+                .lowercase()
+                .replace(Regex("[^a-z0-9]+"), "-")
+                .trim('-')
+                .ifBlank { "store" }
         var candidate = base
         var suffix = 1
         while (storeRepository.findBySlug(candidate) != null) {

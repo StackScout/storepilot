@@ -34,11 +34,15 @@ class SellerBillingWebhookServiceTest {
         unmockkAll()
     }
 
-    private fun eventOf(eventType: String, payload: StripeObject?): Event {
-        val deserializer = mockk<EventDataObjectDeserializer> {
-            every { getObject() } returns Optional.ofNullable(payload)
-            every { deserializeUnsafe() } returns payload
-        }
+    private fun eventOf(
+        eventType: String,
+        payload: StripeObject?,
+    ): Event {
+        val deserializer =
+            mockk<EventDataObjectDeserializer> {
+                every { getObject() } returns Optional.ofNullable(payload)
+                every { deserializeUnsafe() } returns payload
+            }
         return mockk<Event> {
             every { type } returns eventType
             every { id } returns "evt_billing_1"

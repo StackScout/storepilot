@@ -67,7 +67,10 @@ class ReturnRequestService(
      * shrunk.
      */
     @Transactional
-    fun create(orderId: UUID, input: ReturnRequestCreateInput): ReturnRequestResponse {
+    fun create(
+        orderId: UUID,
+        input: ReturnRequestCreateInput,
+    ): ReturnRequestResponse {
         val order = orderRepository.findById(orderId).orElseThrow { NotFoundException("Order $orderId not found") }
         if (order.status != OrderStatus.DELIVERED || order.paymentStatus != PaymentStatus.PAID) {
             throw ConflictException("Order $orderId isn't eligible for a return")
@@ -79,26 +82,34 @@ class ReturnRequestService(
         if (returnRequestRepository.existsByOrder_IdAndStatusNot(orderId, ReturnRequestStatus.REJECTED)) {
             throw ConflictException("A return is already in progress for order $orderId")
         }
-        val deliveredAt = order.timeline
-            .filter { it.status == OrderStatus.DELIVERED }
-            .minByOrNull { it.timestamp }
-            ?.timestamp
-            ?: order.createdAt
-            ?: throw ConflictException("Order $orderId has no delivery record")
+        val deliveredAt =
+            order.timeline
+                .filter { it.status == OrderStatus.DELIVERED }
+                .minByOrNull { it.timestamp }
+                ?.timestamp
+                ?: order.createdAt
+                ?: throw ConflictException("Order $orderId has no delivery record")
         val windowDays = platformConfigService.current().returnWindowDays.toLong()
         if (deliveredAt.plus(windowDays, ChronoUnit.DAYS).isBefore(Instant.now())) {
             throw ConflictException("The return window for order $orderId has closed")
         }
 
-        val request = returnRequestRepository.save(
-            ReturnRequest(
-                order = order,
-                reasonCategory = wireValueOf<ReturnReasonCategory>(input.reasonCategory),
-                reasonNote = input.reasonNote,
-            ),
-        )
+        val request =
+            returnRequestRepository.save(
+                ReturnRequest(
+                    order = order,
+                    reasonCategory = wireValueOf<ReturnReasonCategory>(input.reasonCategory),
+                    reasonNote = input.reasonNote,
+                ),
+            )
         order.timeline.add(
-            OrderTimelineEntry(order = order, status = order.status, label = "Return requested", timestamp = Instant.now(), note = input.reasonNote),
+            OrderTimelineEntry(
+                order = order,
+                status = order.status,
+                label = "Return requested",
+                timestamp = Instant.now(),
+                note = input.reasonNote,
+            ),
         )
         orderRepository.save(order)
         orderNotifier.returnRequested(order, request)
@@ -110,7 +121,11 @@ class ReturnRequestService(
         returnRequestRepository.findByOrder_IdOrderByCreatedAtDesc(orderId).map { it.toResponse() }
 
     /** GET /api/stores/{storeId}/returns — seller's own store. */
-    fun listForStore(storeId: UUID, page: Int, size: Int): PageResponse<ReturnRequestResponse> {
+    fun listForStore(
+        storeId: UUID,
+        page: Int,
+        size: Int,
+    ): PageResponse<ReturnRequestResponse> {
         requireSellerOwnsStore(storeId)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return returnRequestRepository.findByOrder_Store_IdOrderByCreatedAtDesc(storeId, pageable).toPageResponse { it.toResponse() }
@@ -126,7 +141,11 @@ class ReturnRequestService(
      * confirm later (see markRefundedBySeller/adminMarkRefunded).
      */
     @Transactional
-    fun decide(orderId: UUID, returnId: UUID, input: ReturnRequestDecisionInput): ReturnRequestResponse {
+    fun decide(
+        orderId: UUID,
+        returnId: UUID,
+        input: ReturnRequestDecisionInput,
+    ): ReturnRequestResponse {
         val request = requireReturnOnOrder(orderId, returnId)
         if (request.status != ReturnRequestStatus.REQUESTED) {
             throw ConflictException("Return request $returnId has already been decided")
@@ -141,7 +160,13 @@ class ReturnRequestService(
             request.status = ReturnRequestStatus.REJECTED
             val saved = returnRequestRepository.save(request)
             order.timeline.add(
-                OrderTimelineEntry(order = order, status = order.status, label = "Return rejected", timestamp = Instant.now(), note = input.note),
+                OrderTimelineEntry(
+                    order = order,
+                    status = order.status,
+                    label = "Return rejected",
+                    timestamp = Instant.now(),
+                    note = input.note,
+                ),
             )
             orderRepository.save(order)
             orderNotifier.returnDecided(order, false, input.note)
@@ -197,7 +222,11 @@ class ReturnRequestService(
      * — see adminMarkRefunded).
      */
     @Transactional
-    fun markRefundedBySeller(orderId: UUID, returnId: UUID, input: ReturnRequestMarkRefundedInput): ReturnRequestResponse {
+    fun markRefundedBySeller(
+        orderId: UUID,
+        returnId: UUID,
+        input: ReturnRequestMarkRefundedInput,
+    ): ReturnRequestResponse {
         val request = requireReturnOnOrder(orderId, returnId)
         val order = request.order
         requireSellerOwnsOrder(order)
@@ -228,7 +257,10 @@ class ReturnRequestService(
      * /api/admin path, no extra check needed here.
      */
     @Transactional
-    fun adminMarkRefunded(returnId: UUID, input: ReturnRequestMarkRefundedInput): ReturnRequestResponse {
+    fun adminMarkRefunded(
+        returnId: UUID,
+        input: ReturnRequestMarkRefundedInput,
+    ): ReturnRequestResponse {
         val request = returnRequestRepository.findById(returnId).orElseThrow { NotFoundException("Return request $returnId not found") }
         val order = request.order
         if (order.paymentMethod != PaymentMethod.PAYHERE) {
@@ -248,18 +280,27 @@ class ReturnRequestService(
     }
 
     /** GET /api/admin/returns — gated by SecurityConfig's blanket admin-role rule on every /api/admin path. */
-    fun adminList(status: String?, page: Int, size: Int): PageResponse<ReturnRequestResponse> {
+    fun adminList(
+        status: String?,
+        page: Int,
+        size: Int,
+    ): PageResponse<ReturnRequestResponse> {
         val statusEnum = status?.let { wireValueOf<ReturnRequestStatus>(it) }
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
-        val requests = if (statusEnum != null) {
-            returnRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum, pageable)
-        } else {
-            returnRequestRepository.findAllByOrderByCreatedAtDesc(pageable)
-        }
+        val requests =
+            if (statusEnum != null) {
+                returnRequestRepository.findByStatusOrderByCreatedAtDesc(statusEnum, pageable)
+            } else {
+                returnRequestRepository.findAllByOrderByCreatedAtDesc(pageable)
+            }
         return requests.toPageResponse { it.toResponse() }
     }
 
-    private fun completeRefund(request: ReturnRequest, order: Order, refundReference: String?): ReturnRequestResponse {
+    private fun completeRefund(
+        request: ReturnRequest,
+        order: Order,
+        refundReference: String?,
+    ): ReturnRequestResponse {
         request.status = ReturnRequestStatus.REFUNDED
         request.refundReference = refundReference
         request.refundedAt = Instant.now()
@@ -297,9 +338,11 @@ class ReturnRequestService(
         val orderId = requireNotNull(order.id)
         when (order.paymentMethod) {
             PaymentMethod.PAYHERE -> {
-                val payout = payoutRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-                    .firstOrNull { payout -> payout.sourceRefs.any { it.orderId == orderId } }
-                    ?: return null
+                val payout =
+                    payoutRepository
+                        .findByStoreIdOrderByCreatedAtDesc(storeId)
+                        .firstOrNull { payout -> payout.sourceRefs.any { it.orderId == orderId } }
+                        ?: return null
                 return if (payout.status == PayoutStatus.PAID) {
                     "Already paid out to the seller in a completed payout — reconcile this refund manually (e.g. deduct from the seller's next payout)."
                 } else {
@@ -307,9 +350,11 @@ class ReturnRequestService(
                 }
             }
             PaymentMethod.COD, PaymentMethod.BANK_TRANSFER -> {
-                val feeCollection = feeCollectionRepository.findByStoreIdOrderByCreatedAtDesc(storeId)
-                    .firstOrNull { feeCollection -> feeCollection.sourceRefs.any { it.orderId == orderId } }
-                    ?: return null
+                val feeCollection =
+                    feeCollectionRepository
+                        .findByStoreIdOrderByCreatedAtDesc(storeId)
+                        .firstOrNull { feeCollection -> feeCollection.sourceRefs.any { it.orderId == orderId } }
+                        ?: return null
                 return if (feeCollection.status == FeeCollectionStatus.COLLECTED) {
                     "The platform's fee for this order was already collected — reconcile this refund's fee portion manually."
                 } else {
@@ -320,7 +365,10 @@ class ReturnRequestService(
         }
     }
 
-    private fun requireReturnOnOrder(orderId: UUID, returnId: UUID): ReturnRequest {
+    private fun requireReturnOnOrder(
+        orderId: UUID,
+        returnId: UUID,
+    ): ReturnRequest {
         val request = returnRequestRepository.findById(returnId).orElseThrow { NotFoundException("Return request $returnId not found") }
         if (requireNotNull(request.order.id) != orderId) {
             throw NotFoundException("Return request $returnId not found for order $orderId")

@@ -25,11 +25,12 @@ data class CategoryFormInput(
     val active: Boolean = true,
 )
 
-fun Category.toResponse() = CategoryResponse(
-    id = requireNotNull(id),
-    name = name,
-    wireValue = wireValue,
-    icon = icon,
-    sortOrder = sortOrder,
-    active = active,
-)
+fun Category.toResponse() =
+    CategoryResponse(
+        id = requireNotNull(id),
+        name = name,
+        wireValue = wireValue,
+        icon = icon,
+        sortOrder = sortOrder,
+        active = active,
+    )

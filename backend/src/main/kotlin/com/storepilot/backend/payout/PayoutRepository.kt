@@ -9,10 +9,16 @@ interface PayoutRepository : JpaRepository<Payout, UUID> {
     /** Unpaged — internal cross-service use (eligibility scans need every payout for the store to compute "already included"; SellerExportService's full data-export bundle). GET /api/stores/{storeId}/payouts uses the paged overload below. */
     fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID): List<Payout>
 
-    fun findByStoreIdOrderByCreatedAtDesc(storeId: UUID, pageable: Pageable): Page<Payout>
+    fun findByStoreIdOrderByCreatedAtDesc(
+        storeId: UUID,
+        pageable: Pageable,
+    ): Page<Payout>
 
     fun findAllByOrderByCreatedAtDesc(pageable: Pageable): Page<Payout>
 
     /** Close-store precondition check — see StoreService.closeStore. */
-    fun existsByStoreIdAndStatus(storeId: UUID, status: PayoutStatus): Boolean
+    fun existsByStoreIdAndStatus(
+        storeId: UUID,
+        status: PayoutStatus,
+    ): Boolean
 }

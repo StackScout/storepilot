@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# 1. Run lint-staged for Next.js (app) and React Native (mobile)
+npx lint-staged
+
+# 2. Run KtLint format/check for staged Kotlin files in the backend
+# This checks if git has any staged kotlin files in the backend directory
+if git diff --cached --name-only | grep -q '^backend/.*\.kt$'; then
+  echo "Running KtLint for backend..."
+  # You can choose to auto-format staged kt files or just run a check:
+  cd backend && ./gradlew ktlintFormat
+  git add .
+fi

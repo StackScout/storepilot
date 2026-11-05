@@ -9,5 +9,8 @@ interface MessageRepository : JpaRepository<Message, UUID> {
     /** Unpaged — internal cross-service use (BuyerExportService's full data-export bundle). GET /api/conversations/{id}/messages uses the paged overload below. */
     fun findByConversationIdOrderByCreatedAtAsc(conversationId: UUID): List<Message>
 
-    fun findByConversationIdOrderByCreatedAtAsc(conversationId: UUID, pageable: Pageable): Page<Message>
+    fun findByConversationIdOrderByCreatedAtAsc(
+        conversationId: UUID,
+        pageable: Pageable,
+    ): Page<Message>
 }

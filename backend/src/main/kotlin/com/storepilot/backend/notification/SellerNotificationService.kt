@@ -40,7 +40,10 @@ class SellerNotificationService(
 ) {
     private val log = LoggerFactory.getLogger(SellerNotificationService::class.java)
 
-    fun list(page: Int, size: Int): PageResponse<SellerNotificationResponse> {
+    fun list(
+        page: Int,
+        size: Int,
+    ): PageResponse<SellerNotificationResponse> {
         val sellerId = requireNotNull(currentActor.requireSeller().id)
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, MAX_PAGE_SIZE))
         return repository.findAllBySellerIdOrderByCreatedAtDesc(sellerId, pageable).toPageResponse { it.toResponse() }
@@ -63,7 +66,8 @@ class SellerNotificationService(
     @Transactional
     fun markAllRead() {
         val sellerId = requireNotNull(currentActor.requireSeller().id)
-        repository.findAllBySellerIdOrderByCreatedAtDesc(sellerId)
+        repository
+            .findAllBySellerIdOrderByCreatedAtDesc(sellerId)
             .filter { !it.read }
             .forEach { it.read = true }
     }
@@ -76,11 +80,23 @@ class SellerNotificationService(
      * order/booking/product/message/payout operation that triggered it.
      */
     @Transactional
-    fun notify(seller: Seller, type: SellerNotificationType, title: String, body: String, entityId: UUID?) {
+    fun notify(
+        seller: Seller,
+        type: SellerNotificationType,
+        title: String,
+        body: String,
+        entityId: UUID?,
+    ) {
         try {
             repository.save(SellerNotification(seller = seller, type = type, title = title, body = body, entityId = entityId))
         } catch (e: Exception) {
-            log.warn("Failed to save seller notification for seller {} (type={}, title=\"{}\") — not failing the triggering operation", seller.id, type, title, e)
+            log.warn(
+                "Failed to save seller notification for seller {} (type={}, title=\"{}\") — not failing the triggering operation",
+                seller.id,
+                type,
+                title,
+                e,
+            )
         }
     }
 }

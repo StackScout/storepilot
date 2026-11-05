@@ -31,10 +31,14 @@ class EmailVerificationService(
     private val secureRandom = SecureRandom()
 
     @Transactional
-    fun sendCode(email: String, name: String) {
+    fun sendCode(
+        email: String,
+        name: String,
+    ) {
         val code = "%06d".format(secureRandom.nextInt(1_000_000))
-        val record = repository.findByEmail(email)
-            ?: EmailVerificationCode(email = email, codeHash = "", expiresAt = Instant.now())
+        val record =
+            repository.findByEmail(email)
+                ?: EmailVerificationCode(email = email, codeHash = "", expiresAt = Instant.now())
         record.codeHash = hash(code)
         record.expiresAt = Instant.now().plus(CODE_TTL_MINUTES, ChronoUnit.MINUTES)
         record.attempts = 0
@@ -45,13 +49,14 @@ class EmailVerificationService(
             emailService.send(
                 to = email,
                 subject = "Verify your $platformName email address",
-                body = buildString {
-                    appendLine("Hi $name,")
-                    appendLine()
-                    appendLine("Your verification code is: $code")
-                    appendLine()
-                    appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
-                },
+                body =
+                    buildString {
+                        appendLine("Hi $name,")
+                        appendLine()
+                        appendLine("Your verification code is: $code")
+                        appendLine()
+                        appendLine("This code expires in $CODE_TTL_MINUTES minutes. If you didn't request this, you can ignore this email.")
+                    },
             )
         } catch (e: Exception) {
             throw EmailDeliveryException("Failed to send verification code email to $email", e)
@@ -64,9 +69,13 @@ class EmailVerificationService(
      * 400" convention as password validation in AuthController.register().
      */
     @Transactional
-    fun verifyCode(email: String, code: String) {
-        val record = repository.findByEmail(email)
-            ?: throw IllegalArgumentException("No verification code was requested for this email — request a new one")
+    fun verifyCode(
+        email: String,
+        code: String,
+    ) {
+        val record =
+            repository.findByEmail(email)
+                ?: throw IllegalArgumentException("No verification code was requested for this email — request a new one")
         if (record.expiresAt.isBefore(Instant.now())) {
             throw IllegalArgumentException("Verification code expired — request a new one")
         }

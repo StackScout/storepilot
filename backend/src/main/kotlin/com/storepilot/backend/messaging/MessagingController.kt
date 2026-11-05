@@ -17,7 +17,9 @@ class MessagingController(
     private val messagingService: MessagingService,
 ) {
     @PostMapping("/api/stores/{storeId}/conversations")
-    fun getOrCreateConversation(@PathVariable storeId: UUID): ResponseEntity<ConversationResponse> =
+    fun getOrCreateConversation(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<ConversationResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(messagingService.getOrCreateConversation(storeId))
 
     @GetMapping("/api/me/conversations")
@@ -34,7 +36,9 @@ class MessagingController(
     ): PageResponse<ConversationResponse> = messagingService.listStoreConversations(storeId, page, size)
 
     @GetMapping("/api/conversations/{id}")
-    fun getById(@PathVariable id: UUID): ConversationResponse = messagingService.getById(id)
+    fun getById(
+        @PathVariable id: UUID,
+    ): ConversationResponse = messagingService.getById(id)
 
     @GetMapping("/api/conversations/{id}/messages")
     fun listMessages(
@@ -44,6 +48,8 @@ class MessagingController(
     ): PageResponse<MessageResponse> = messagingService.listMessages(id, page, size)
 
     @PostMapping("/api/conversations/{id}/messages")
-    fun sendMessage(@PathVariable id: UUID, @Valid @RequestBody input: SendMessageInput): ResponseEntity<MessageResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(messagingService.sendMessage(id, input))
+    fun sendMessage(
+        @PathVariable id: UUID,
+        @Valid @RequestBody input: SendMessageInput,
+    ): ResponseEntity<MessageResponse> = ResponseEntity.status(HttpStatus.CREATED).body(messagingService.sendMessage(id, input))
 }

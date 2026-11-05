@@ -26,15 +26,20 @@ class CategoryController(
     fun listAll(): List<CategoryResponse> = categoryService.listAll()
 
     @PostMapping("/api/admin/categories")
-    fun create(@Valid @RequestBody input: CategoryFormInput): ResponseEntity<CategoryResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(categoryService.create(input))
+    fun create(
+        @Valid @RequestBody input: CategoryFormInput,
+    ): ResponseEntity<CategoryResponse> = ResponseEntity.status(HttpStatus.CREATED).body(categoryService.create(input))
 
     @PatchMapping("/api/admin/categories/{id}")
-    fun update(@PathVariable id: UUID, @Valid @RequestBody input: CategoryFormInput): CategoryResponse =
-        categoryService.update(id, input)
+    fun update(
+        @PathVariable id: UUID,
+        @Valid @RequestBody input: CategoryFormInput,
+    ): CategoryResponse = categoryService.update(id, input)
 
     @DeleteMapping("/api/admin/categories/{id}")
-    fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
+    fun delete(
+        @PathVariable id: UUID,
+    ): ResponseEntity<Void> {
         categoryService.delete(id)
         return ResponseEntity.noContent().build()
     }

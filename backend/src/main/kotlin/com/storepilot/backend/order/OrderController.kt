@@ -7,8 +7,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
@@ -53,29 +53,37 @@ class OrderController(
 
     /** First step of guest lookup — see OrderService.requestLookupCode's doc comment. Always 204, regardless of whether orderNumber/phone matched anything. */
     @PostMapping("/api/orders/lookup/request-code")
-    fun requestLookupCode(@Valid @RequestBody input: GuestLookupRequestInput): ResponseEntity<Void> {
+    fun requestLookupCode(
+        @Valid @RequestBody input: GuestLookupRequestInput,
+    ): ResponseEntity<Void> {
         orderService.requestLookupCode(input.orderNumber, input.phone)
         return ResponseEntity.noContent().build()
     }
 
     /** Second step of guest lookup — replaces the old GET /api/orders/lookup?orderNumber=&phone= (phone alone was too weak, see docs/roadmap.md). */
     @PostMapping("/api/orders/lookup/verify")
-    fun verifyLookupCode(@Valid @RequestBody input: GuestLookupVerifyInput): OrderResponse =
-        orderService.verifyLookupCode(input.orderNumber, input.phone, input.code)
+    fun verifyLookupCode(
+        @Valid @RequestBody input: GuestLookupVerifyInput,
+    ): OrderResponse = orderService.verifyLookupCode(input.orderNumber, input.phone, input.code)
 
     @GetMapping("/api/orders/{id}")
-    fun getById(@PathVariable id: UUID): OrderResponse = orderService.getById(id)
+    fun getById(
+        @PathVariable id: UUID,
+    ): OrderResponse = orderService.getById(id)
 
     /** Live order-status push — same "order ID is proof enough" auth model as the GET above. Emits a "status" event with the fresh OrderResponse body each time OrderService writes a change; see OrderService's sseHub.publish call sites. */
     @GetMapping("/api/orders/{id}/events", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
-    fun subscribeToEvents(@PathVariable id: UUID): SseEmitter {
+    fun subscribeToEvents(
+        @PathVariable id: UUID,
+    ): SseEmitter {
         orderService.getById(id) // 404s if the order doesn't exist, same as the GET above
         return sseHub.subscribe("order:$id")
     }
 
     @PostMapping("/api/orders")
-    fun create(@Valid @RequestBody input: CheckoutInput): ResponseEntity<OrderResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(orderService.createOrder(input))
+    fun create(
+        @Valid @RequestBody input: CheckoutInput,
+    ): ResponseEntity<OrderResponse> = ResponseEntity.status(HttpStatus.CREATED).body(orderService.createOrder(input))
 
     @PatchMapping("/api/orders/{id}/status", consumes = ["multipart/form-data"])
     fun updateStatus(
@@ -97,5 +105,7 @@ class OrderController(
     ): OrderResponse = orderService.verifyBankTransfer(id, input)
 
     @PostMapping("/api/orders/{id}/cancel")
-    fun cancel(@PathVariable id: UUID): OrderResponse = orderService.cancelBankTransferOrder(id)
+    fun cancel(
+        @PathVariable id: UUID,
+    ): OrderResponse = orderService.cancelBankTransferOrder(id)
 }

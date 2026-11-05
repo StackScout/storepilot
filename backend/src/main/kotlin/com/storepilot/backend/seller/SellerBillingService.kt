@@ -51,49 +51,55 @@ class SellerBillingService(
         val seller = storeAccessService.requireOwnerSeller()
         if (seller.plan == SellerPlan.PRO) throw ConflictException("Already on the Pro plan")
 
-        val customerId = seller.stripeCustomerId ?: run {
-            val customer = Customer.create(
-                CustomerCreateParams.builder()
-                    .setEmail(seller.email)
-                    .setName(seller.name)
-                    .build(),
-            )
-            seller.stripeCustomerId = customer.id
-            sellerRepository.save(seller)
-            customer.id
-        }
-
-        val config = platformConfigService.current()
-        val params = SessionCreateParams.builder()
-            .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-            .setCustomer(customerId)
-            .addLineItem(
-                SessionCreateParams.LineItem.builder()
-                    .setQuantity(1L)
-                    .setPriceData(
-                        SessionCreateParams.LineItem.PriceData.builder()
-                            .setCurrency(config.currencyCode.lowercase())
-                            .setUnitAmount(config.proMonthlyPriceCents.toLong())
-                            .setRecurring(
-                                SessionCreateParams.LineItem.PriceData.Recurring.builder()
-                                    .setInterval(SessionCreateParams.LineItem.PriceData.Recurring.Interval.MONTH)
-                                    .build(),
-                            )
-                            .setProductData(
-                                SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                    .setName("${config.name} Pro")
-                                    .setDescription("Unlocks Cash on Delivery and Bank transfer as payment options for your store.")
-                                    .build(),
-                            )
+        val customerId =
+            seller.stripeCustomerId ?: run {
+                val customer =
+                    Customer.create(
+                        CustomerCreateParams
+                            .builder()
+                            .setEmail(seller.email)
+                            .setName(seller.name)
                             .build(),
                     )
-                    .build(),
-            )
-            // Read by handleCheckoutCompleted below to know which seller this session belongs to.
-            .setClientReferenceId(requireNotNull(seller.id).toString())
-            .setSuccessUrl("${stripeProperties.billingSuccessUrlBase}?upgraded=true")
-            .setCancelUrl(stripeProperties.billingCancelUrlBase)
-            .build()
+                seller.stripeCustomerId = customer.id
+                sellerRepository.save(seller)
+                customer.id
+            }
+
+        val config = platformConfigService.current()
+        val params =
+            SessionCreateParams
+                .builder()
+                .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
+                .setCustomer(customerId)
+                .addLineItem(
+                    SessionCreateParams.LineItem
+                        .builder()
+                        .setQuantity(1L)
+                        .setPriceData(
+                            SessionCreateParams.LineItem.PriceData
+                                .builder()
+                                .setCurrency(config.currencyCode.lowercase())
+                                .setUnitAmount(config.proMonthlyPriceCents.toLong())
+                                .setRecurring(
+                                    SessionCreateParams.LineItem.PriceData.Recurring
+                                        .builder()
+                                        .setInterval(SessionCreateParams.LineItem.PriceData.Recurring.Interval.MONTH)
+                                        .build(),
+                                ).setProductData(
+                                    SessionCreateParams.LineItem.PriceData.ProductData
+                                        .builder()
+                                        .setName("${config.name} Pro")
+                                        .setDescription("Unlocks Cash on Delivery and Bank transfer as payment options for your store.")
+                                        .build(),
+                                ).build(),
+                        ).build(),
+                )
+                // Read by handleCheckoutCompleted below to know which seller this session belongs to.
+                .setClientReferenceId(requireNotNull(seller.id).toString())
+                .setSuccessUrl("${stripeProperties.billingSuccessUrlBase}?upgraded=true")
+                .setCancelUrl(stripeProperties.billingCancelUrlBase)
+                .build()
 
         val session = Session.create(params)
         return CheckoutUrlResponse(checkoutUrl = session.url)
@@ -103,8 +109,9 @@ class SellerBillingService(
     @Transactional
     fun cancelAtPeriodEnd(): SellerPlanResponse {
         val seller = storeAccessService.requireOwnerSeller()
-        val subscriptionId = seller.stripeSubscriptionId
-            ?: throw ConflictException("No active Pro subscription to cancel")
+        val subscriptionId =
+            seller.stripeSubscriptionId
+                ?: throw ConflictException("No active Pro subscription to cancel")
         val subscription = Subscription.retrieve(subscriptionId).update(mapOf("cancel_at_period_end" to true))
         syncFromSubscription(seller, subscription)
         val config = platformConfigService.current()
@@ -125,11 +132,19 @@ class SellerBillingService(
     @Transactional
     fun refreshFromStripe(): SellerPlanResponse {
         val seller = storeAccessService.requireOwnerSeller()
-        val subscription = seller.stripeSubscriptionId?.let { Subscription.retrieve(it) }
-            ?: seller.stripeCustomerId?.let { customerId ->
-                Subscription.list(SubscriptionListParams.builder().setCustomer(customerId).setLimit(1L).build())
-                    .data.firstOrNull()
-            }
+        val subscription =
+            seller.stripeSubscriptionId?.let { Subscription.retrieve(it) }
+                ?: seller.stripeCustomerId?.let { customerId ->
+                    Subscription
+                        .list(
+                            SubscriptionListParams
+                                .builder()
+                                .setCustomer(customerId)
+                                .setLimit(1L)
+                                .build(),
+                        ).data
+                        .firstOrNull()
+                }
         subscription?.let { syncFromSubscription(seller, it) }
         val config = platformConfigService.current()
         return seller.toPlanResponse(config.proMonthlyPriceCents, config.currencyCode)
@@ -142,7 +157,10 @@ class SellerBillingService(
         val sellerId = session.clientReferenceId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         val seller = sellerId?.let { sellerRepository.findById(it).orElse(null) }
         if (seller == null) {
-            log.warn("Stripe billing webhook: checkout.session.completed with no matching seller (clientReferenceId={})", session.clientReferenceId)
+            log.warn(
+                "Stripe billing webhook: checkout.session.completed with no matching seller (clientReferenceId={})",
+                session.clientReferenceId,
+            )
             return
         }
         seller.stripeCustomerId = session.customer
@@ -183,7 +201,10 @@ class SellerBillingService(
         seller.stripeCustomerId?.let { Customer.retrieve(it).delete() }
     }
 
-    private fun syncFromSubscription(seller: Seller, subscription: Subscription) {
+    private fun syncFromSubscription(
+        seller: Seller,
+        subscription: Subscription,
+    ) {
         seller.stripeSubscriptionId = subscription.id
         seller.plan = if (subscription.status in ACTIVE_SUBSCRIPTION_STATUSES) SellerPlan.PRO else SellerPlan.FREE
         seller.planCancelAtPeriodEnd = subscription.cancelAtPeriodEnd ?: false
@@ -191,8 +212,12 @@ class SellerBillingService(
         // SubscriptionItem in this API version — see StripeEventDeserializer's
         // doc comment for the general shape of this "SDK/API version drift"
         // problem this app has already hit once with Connect events.
-        seller.planCurrentPeriodEnd = subscription.items?.data?.firstOrNull()?.currentPeriodEnd
-            ?.let { Instant.ofEpochSecond(it) }
+        seller.planCurrentPeriodEnd =
+            subscription.items
+                ?.data
+                ?.firstOrNull()
+                ?.currentPeriodEnd
+                ?.let { Instant.ofEpochSecond(it) }
         sellerRepository.save(seller)
     }
 }

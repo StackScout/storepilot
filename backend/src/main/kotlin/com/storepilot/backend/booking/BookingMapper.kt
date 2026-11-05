@@ -29,14 +29,15 @@ fun Booking.toResponse(receiptStorageService: ReceiptStorageService): BookingRes
         buyerEmail = buyerEmail,
         buyerId = buyer?.id,
         cancellationReason = cancellationReason,
-        timeline = timeline.map {
-            BookingTimelineEntryResponse(
-                status = it.status.wireValue,
-                label = it.label,
-                timestamp = it.timestamp,
-                note = it.note,
-            )
-        },
+        timeline =
+            timeline.map {
+                BookingTimelineEntryResponse(
+                    status = it.status.wireValue,
+                    label = it.label,
+                    timestamp = it.timestamp,
+                    note = it.note,
+                )
+            },
         createdAt = requireNotNull(createdAt),
         recurrenceGroupId = recurrenceGroupId,
     )

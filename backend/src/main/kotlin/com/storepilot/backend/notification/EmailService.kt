@@ -14,5 +14,10 @@ data class EmailAttachment(
  * callers) needs to change. See LoggingEmailService for the current mock.
  */
 interface EmailService {
-    fun send(to: String, subject: String, body: String, attachment: EmailAttachment? = null)
+    fun send(
+        to: String,
+        subject: String,
+        body: String,
+        attachment: EmailAttachment? = null,
+    )
 }

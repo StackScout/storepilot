@@ -17,51 +17,61 @@ class GlobalExceptionHandler {
     /** E.g. a non-UUID string in a {id} path segment — a client bug, not a server error. */
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
     fun handleTypeMismatch(ex: MethodArgumentTypeMismatchException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
             .body(ApiError.of("VALIDATION_ERROR", "Invalid value for parameter '${ex.name}'"))
 
     @ExceptionHandler(NotFoundException::class)
     fun handleNotFound(ex: NotFoundException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.NOT_FOUND)
+        ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
             .body(ApiError.of("NOT_FOUND", ex.message ?: "Not found"))
 
     @ExceptionHandler(ConflictException::class)
     fun handleConflict(ex: ConflictException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.CONFLICT)
+        ResponseEntity
+            .status(HttpStatus.CONFLICT)
             .body(ApiError.of("CONFLICT", ex.message ?: "Conflict"))
 
     @ExceptionHandler(ForbiddenException::class)
     fun handleForbidden(ex: ForbiddenException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.FORBIDDEN)
+        ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
             .body(ApiError.of("FORBIDDEN_OWNERSHIP", ex.message ?: "Forbidden"))
 
     @ExceptionHandler(UnauthenticatedException::class)
     fun handleUnauthenticated(ex: UnauthenticatedException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
             .body(ApiError.of("UNAUTHENTICATED", ex.message ?: "Invalid credentials"))
 
     @ExceptionHandler(EmailNotVerifiedException::class)
     fun handleEmailNotVerified(ex: EmailNotVerifiedException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.FORBIDDEN)
+        ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
             .body(ApiError.of("EMAIL_NOT_VERIFIED", ex.message ?: "Please verify your email before signing in"))
 
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgument(ex: IllegalArgumentException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
             .body(ApiError.of("VALIDATION_ERROR", ex.message ?: "Invalid request"))
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(ex: MethodArgumentNotValidException): ResponseEntity<ApiError> {
-        val fields = ex.bindingResult.fieldErrors
-            .associate { it.field to (it.defaultMessage ?: "Invalid value") }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        val fields =
+            ex.bindingResult.fieldErrors
+                .associate { it.field to (it.defaultMessage ?: "Invalid value") }
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
             .body(ApiError.of("VALIDATION_ERROR", "Validation failed", fields))
     }
 
     /** Malformed/incomplete JSON body (missing required field, wrong type, unparseable) — a client bug, not a server error. Previously fell through to handleUnexpected below as an opaque 500. */
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleUnreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiError> =
-        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
             .body(ApiError.of("VALIDATION_ERROR", "The request body is missing a required field or is malformed"))
 
     /**
@@ -79,7 +89,8 @@ class GlobalExceptionHandler {
     @ExceptionHandler(StripeException::class)
     fun handleStripeException(ex: StripeException): ResponseEntity<ApiError> {
         log.error("Stripe API call failed (code={}, requestId={})", ex.code, ex.requestId, ex)
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+        return ResponseEntity
+            .status(HttpStatus.BAD_GATEWAY)
             .body(ApiError.of("PAYMENT_PROVIDER_ERROR", "The payment provider couldn't complete this request. Please try again shortly."))
     }
 
@@ -87,14 +98,16 @@ class GlobalExceptionHandler {
     @ExceptionHandler(EmailDeliveryException::class)
     fun handleEmailDelivery(ex: EmailDeliveryException): ResponseEntity<ApiError> {
         log.error(ex.message, ex.cause)
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+        return ResponseEntity
+            .status(HttpStatus.BAD_GATEWAY)
             .body(ApiError.of("EMAIL_DELIVERY_ERROR", "We couldn't send that email right now. Please try again shortly."))
     }
 
     @ExceptionHandler(Exception::class)
     fun handleUnexpected(ex: Exception): ResponseEntity<ApiError> {
         log.error("Unhandled exception", ex)
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ApiError.of("INTERNAL_ERROR", "Something went wrong"))
     }
 }

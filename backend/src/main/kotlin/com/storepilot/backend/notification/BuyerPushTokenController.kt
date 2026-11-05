@@ -14,13 +14,17 @@ class BuyerPushTokenController(
     private val buyerPushTokenService: BuyerPushTokenService,
 ) {
     @PostMapping("/api/me/buyer/push-tokens")
-    fun register(@Valid @RequestBody input: RegisterPushTokenInput): ResponseEntity<Void> {
+    fun register(
+        @Valid @RequestBody input: RegisterPushTokenInput,
+    ): ResponseEntity<Void> {
         buyerPushTokenService.register(input)
         return ResponseEntity.status(HttpStatus.CREATED).build()
     }
 
     @DeleteMapping("/api/me/buyer/push-tokens")
-    fun unregister(@Valid @RequestBody input: UnregisterPushTokenInput): ResponseEntity<Void> {
+    fun unregister(
+        @Valid @RequestBody input: UnregisterPushTokenInput,
+    ): ResponseEntity<Void> {
         buyerPushTokenService.unregister(input)
         return ResponseEntity.noContent().build()
     }

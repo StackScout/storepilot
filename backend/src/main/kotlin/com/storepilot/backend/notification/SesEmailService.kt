@@ -3,8 +3,15 @@ package com.storepilot.backend.notification
 import org.springframework.stereotype.Service
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.ses.SesClient
-import software.amazon.awssdk.services.ses.model.*
-import java.util.*
+import software.amazon.awssdk.services.ses.model.Body
+import software.amazon.awssdk.services.ses.model.Content
+import software.amazon.awssdk.services.ses.model.Destination
+import software.amazon.awssdk.services.ses.model.Message
+import software.amazon.awssdk.services.ses.model.RawMessage
+import software.amazon.awssdk.services.ses.model.SendEmailRequest
+import software.amazon.awssdk.services.ses.model.SendRawEmailRequest
+import java.util.Base64
+import java.util.UUID
 
 /**
  * Real EmailService implementation for the aws profile — see
@@ -19,7 +26,12 @@ class SesEmailService(
     private val sesClient: SesClient,
     private val notificationProperties: NotificationProperties,
 ) : EmailService {
-    override fun send(to: String, subject: String, body: String, attachment: EmailAttachment?) {
+    override fun send(
+        to: String,
+        subject: String,
+        body: String,
+        attachment: EmailAttachment?,
+    ) {
         if (attachment == null) {
             sendSimple(to, subject, body)
         } else {
@@ -27,17 +39,23 @@ class SesEmailService(
         }
     }
 
-    private fun sendSimple(to: String, subject: String, body: String) {
-        val request = SendEmailRequest.builder()
-            .source(notificationProperties.sesSenderEmail)
-            .destination(Destination.builder().toAddresses(to).build())
-            .message(
-                Message.builder()
-                    .subject(Content.builder().data(subject).build())
-                    .body(Body.builder().text(Content.builder().data(body).build()).build())
-                    .build(),
-            )
-            .build()
+    private fun sendSimple(
+        to: String,
+        subject: String,
+        body: String,
+    ) {
+        val request =
+            SendEmailRequest
+                .builder()
+                .source(notificationProperties.sesSenderEmail)
+                .destination(Destination.builder().toAddresses(to).build())
+                .message(
+                    Message
+                        .builder()
+                        .subject(Content.builder().data(subject).build())
+                        .body(Body.builder().text(Content.builder().data(body).build()).build())
+                        .build(),
+                ).build()
         sesClient.sendEmail(request)
     }
 
@@ -49,34 +67,42 @@ class SesEmailService(
      * library dependency added for this — the format is simple enough to
      * hand-build for the one-attachment case this app needs.
      */
-    private fun sendRawWithAttachment(to: String, subject: String, body: String, attachment: EmailAttachment) {
+    private fun sendRawWithAttachment(
+        to: String,
+        subject: String,
+        body: String,
+        attachment: EmailAttachment,
+    ) {
         val boundary = "----storepilot-${UUID.randomUUID()}"
         val encodedAttachment = Base64.getMimeEncoder(76, "\r\n".toByteArray()).encodeToString(attachment.bytes)
-        val raw = buildString {
-            append("From: ${notificationProperties.sesSenderEmail}\r\n")
-            append("To: $to\r\n")
-            append("Subject: $subject\r\n")
-            append("MIME-Version: 1.0\r\n")
-            append("Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n")
-            append("\r\n")
-            append("--$boundary\r\n")
-            append("Content-Type: text/plain; charset=UTF-8\r\n")
-            append("Content-Transfer-Encoding: 7bit\r\n")
-            append("\r\n")
-            append(body)
-            append("\r\n")
-            append("--$boundary\r\n")
-            append("Content-Type: ${attachment.contentType}; name=\"${attachment.filename}\"\r\n")
-            append("Content-Disposition: attachment; filename=\"${attachment.filename}\"\r\n")
-            append("Content-Transfer-Encoding: base64\r\n")
-            append("\r\n")
-            append(encodedAttachment)
-            append("\r\n")
-            append("--$boundary--\r\n")
-        }
-        val request = SendRawEmailRequest.builder()
-            .rawMessage(RawMessage.builder().data(SdkBytes.fromUtf8String(raw)).build())
-            .build()
+        val raw =
+            buildString {
+                append("From: ${notificationProperties.sesSenderEmail}\r\n")
+                append("To: $to\r\n")
+                append("Subject: $subject\r\n")
+                append("MIME-Version: 1.0\r\n")
+                append("Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n")
+                append("\r\n")
+                append("--$boundary\r\n")
+                append("Content-Type: text/plain; charset=UTF-8\r\n")
+                append("Content-Transfer-Encoding: 7bit\r\n")
+                append("\r\n")
+                append(body)
+                append("\r\n")
+                append("--$boundary\r\n")
+                append("Content-Type: ${attachment.contentType}; name=\"${attachment.filename}\"\r\n")
+                append("Content-Disposition: attachment; filename=\"${attachment.filename}\"\r\n")
+                append("Content-Transfer-Encoding: base64\r\n")
+                append("\r\n")
+                append(encodedAttachment)
+                append("\r\n")
+                append("--$boundary--\r\n")
+            }
+        val request =
+            SendRawEmailRequest
+                .builder()
+                .rawMessage(RawMessage.builder().data(SdkBytes.fromUtf8String(raw)).build())
+                .build()
         sesClient.sendRawEmail(request)
     }
 }

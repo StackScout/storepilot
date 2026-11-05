@@ -15,16 +15,16 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseCookie
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.util.LinkedMultiValueMap
-import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.client.RestClient
-import org.springframework.security.core.context.SecurityContextHolder
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminCreateUserRequest
@@ -77,15 +77,19 @@ internal data class GoogleSignInOutcome(
  * button) is rejected outright rather than silently signed in and then
  * bounced by a later route gate with no explanation.
  */
-internal fun resolveGoogleSignInOutcome(intent: String, existingRole: String?): GoogleSignInOutcome =
+internal fun resolveGoogleSignInOutcome(
+    intent: String,
+    existingRole: String?,
+): GoogleSignInOutcome =
     when {
         existingRole == null && intent == "buyer" -> GoogleSignInOutcome(groupToAssign = "buyer", redirectPath = "/account")
         existingRole == null && intent == "seller" -> GoogleSignInOutcome(redirectPath = "/onboarding")
         existingRole == intent -> GoogleSignInOutcome(redirectPath = if (intent == "buyer") "/account" else "/dashboard")
-        else -> GoogleSignInOutcome(
-            redirectPath = "${loginPathFor(intent)}?error=google_wrong_account_type&existingRole=$existingRole",
-            rejected = true,
-        )
+        else ->
+            GoogleSignInOutcome(
+                redirectPath = "${loginPathFor(intent)}?error=google_wrong_account_type&existingRole=$existingRole",
+                rejected = true,
+            )
     }
 
 /** Seller-intent Google sign-in errors go back to the seller login page, buyer-intent ones to the buyer login page — mirrors register()'s per-account-type pages. */
@@ -161,21 +165,35 @@ class AuthController(
      * touch the password a second time.
      */
     @PostMapping("/api/auth/register")
-    fun register(@Valid @RequestBody input: RegisterInput): RegisterResponse {
+    fun register(
+        @Valid @RequestBody input: RegisterInput,
+    ): RegisterResponse {
         require(input.accountType == "buyer" || input.accountType == "seller") {
             "accountType must be \"buyer\" or \"seller\""
         }
         try {
             cognitoClient.adminCreateUser(
-                AdminCreateUserRequest.builder()
+                AdminCreateUserRequest
+                    .builder()
                     .userPoolId(cognitoProperties.userPoolId)
                     .username(input.email)
                     .userAttributes(
-                        AttributeType.builder().name("email").value(input.email).build(),
-                        AttributeType.builder().name("email_verified").value("true").build(),
-                        AttributeType.builder().name("name").value(input.name).build(),
-                    )
-                    .messageAction(MessageActionType.SUPPRESS)
+                        AttributeType
+                            .builder()
+                            .name("email")
+                            .value(input.email)
+                            .build(),
+                        AttributeType
+                            .builder()
+                            .name("email_verified")
+                            .value("true")
+                            .build(),
+                        AttributeType
+                            .builder()
+                            .name("name")
+                            .value(input.name)
+                            .build(),
+                    ).messageAction(MessageActionType.SUPPRESS)
                     .build(),
             )
         } catch (e: UsernameExistsException) {
@@ -185,7 +203,8 @@ class AuthController(
         }
 
         cognitoClient.adminSetUserPassword(
-            AdminSetUserPasswordRequest.builder()
+            AdminSetUserPasswordRequest
+                .builder()
                 .userPoolId(cognitoProperties.userPoolId)
                 .username(input.email)
                 .password(input.password)
@@ -224,28 +243,46 @@ class AuthController(
 
     /** Confirms a code sent by register()/resendVerificationCode() and flips the Cognito user to email_verified=true. Doesn't sign the caller in — see register()'s doc comment. */
     @PostMapping("/api/auth/verify-email")
-    fun verifyEmail(@Valid @RequestBody input: VerifyEmailInput): ResponseEntity<Void> {
+    fun verifyEmail(
+        @Valid @RequestBody input: VerifyEmailInput,
+    ): ResponseEntity<Void> {
         emailVerificationService.verifyCode(input.email, input.code)
         cognitoClient.adminUpdateUserAttributes(
-            AdminUpdateUserAttributesRequest.builder()
+            AdminUpdateUserAttributesRequest
+                .builder()
                 .userPoolId(cognitoProperties.userPoolId)
                 .username(input.email)
-                .userAttributes(AttributeType.builder().name("email_verified").value("true").build())
-                .build(),
+                .userAttributes(
+                    AttributeType
+                        .builder()
+                        .name("email_verified")
+                        .value("true")
+                        .build(),
+                ).build(),
         )
         return ResponseEntity.noContent().build()
     }
 
     /** Doesn't reveal whether the email has an account at all — pretends success either way, same "don't leak account existence" principle as UnauthenticatedException. */
     @PostMapping("/api/auth/resend-verification-code")
-    fun resendVerificationCode(@Valid @RequestBody input: ResendVerificationInput): ResponseEntity<Void> {
-        val name = try {
-            cognitoClient.adminGetUser(
-                AdminGetUserRequest.builder().userPoolId(cognitoProperties.userPoolId).username(input.email).build(),
-            ).userAttributes().firstOrNull { it.name() == "name" }?.value() ?: input.email
-        } catch (e: UserNotFoundException) {
-            return ResponseEntity.noContent().build()
-        }
+    fun resendVerificationCode(
+        @Valid @RequestBody input: ResendVerificationInput,
+    ): ResponseEntity<Void> {
+        val name =
+            try {
+                cognitoClient
+                    .adminGetUser(
+                        AdminGetUserRequest
+                            .builder()
+                            .userPoolId(cognitoProperties.userPoolId)
+                            .username(input.email)
+                            .build(),
+                    ).userAttributes()
+                    .firstOrNull { it.name() == "name" }
+                    ?.value() ?: input.email
+            } catch (e: UserNotFoundException) {
+                return ResponseEntity.noContent().build()
+            }
         emailVerificationService.sendCode(input.email, name)
         return ResponseEntity.noContent().build()
     }
@@ -278,23 +315,26 @@ class AuthController(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): AuthSessionResponse {
-        val authResult = try {
-            cognitoClient.adminRespondToAuthChallenge(
-                AdminRespondToAuthChallengeRequest.builder()
-                    .userPoolId(cognitoProperties.userPoolId)
-                    .clientId(cognitoProperties.clientId)
-                    .challengeName(ChallengeNameType.SOFTWARE_TOKEN_MFA)
-                    .session(input.session)
-                    .challengeResponses(mapOf("USERNAME" to input.email, "SOFTWARE_TOKEN_MFA_CODE" to input.code))
-                    .build(),
-            ).authenticationResult()
-        } catch (e: CodeMismatchException) {
-            throw UnauthenticatedException("Invalid verification code")
-        } catch (e: ExpiredCodeException) {
-            throw UnauthenticatedException("This code has expired — please sign in again")
-        } catch (e: NotAuthorizedException) {
-            throw UnauthenticatedException("Your sign-in session has expired — please sign in again")
-        }
+        val authResult =
+            try {
+                cognitoClient
+                    .adminRespondToAuthChallenge(
+                        AdminRespondToAuthChallengeRequest
+                            .builder()
+                            .userPoolId(cognitoProperties.userPoolId)
+                            .clientId(cognitoProperties.clientId)
+                            .challengeName(ChallengeNameType.SOFTWARE_TOKEN_MFA)
+                            .session(input.session)
+                            .challengeResponses(mapOf("USERNAME" to input.email, "SOFTWARE_TOKEN_MFA_CODE" to input.code))
+                            .build(),
+                    ).authenticationResult()
+            } catch (e: CodeMismatchException) {
+                throw UnauthenticatedException("Invalid verification code")
+            } catch (e: ExpiredCodeException) {
+                throw UnauthenticatedException("This code has expired — please sign in again")
+            } catch (e: NotAuthorizedException) {
+                throw UnauthenticatedException("Your sign-in session has expired — please sign in again")
+            }
         return completeLogin(input.email, authResult, request, response)
     }
 
@@ -310,24 +350,32 @@ class AuthController(
         // session, even briefly. Admin-created accounts (create-admin.sh)
         // are created with email_verified=true already, so this never
         // blocks admin sign-in.
-        val attributes = cognitoClient.adminGetUser(
-            AdminGetUserRequest.builder()
-                .userPoolId(cognitoProperties.userPoolId)
-                .username(email)
-                .build(),
-        ).userAttributes().associate { it.name() to it.value() }
+        val attributes =
+            cognitoClient
+                .adminGetUser(
+                    AdminGetUserRequest
+                        .builder()
+                        .userPoolId(cognitoProperties.userPoolId)
+                        .username(email)
+                        .build(),
+                ).userAttributes()
+                .associate { it.name() to it.value() }
         if (attributes["email_verified"] != "true") {
             throw EmailNotVerifiedException("Please verify your email before signing in")
         }
 
         setAuthCookies(response, request.isSecure, authResult)
 
-        val groups = cognitoClient.adminListGroupsForUser(
-            AdminListGroupsForUserRequest.builder()
-                .userPoolId(cognitoProperties.userPoolId)
-                .username(email)
-                .build(),
-        ).groups().map { it.groupName() }
+        val groups =
+            cognitoClient
+                .adminListGroupsForUser(
+                    AdminListGroupsForUserRequest
+                        .builder()
+                        .userPoolId(cognitoProperties.userPoolId)
+                        .username(email)
+                        .build(),
+                ).groups()
+                .map { it.groupName() }
 
         val role = resolveAppRole(groups)
 
@@ -352,11 +400,17 @@ class AuthController(
     @PostMapping("/api/auth/mfa/setup")
     fun mfaSetup(): MfaSetupResponse {
         val accessToken = currentAccessToken()
-        val secret = cognitoClient.associateSoftwareToken(
-            AssociateSoftwareTokenRequest.builder().accessToken(accessToken).build(),
-        ).secretCode()
-        val email = cognitoClient.getUser(GetUserRequest.builder().accessToken(accessToken).build())
-            .userAttributes().firstOrNull { it.name() == "email" }?.value() ?: "account"
+        val secret =
+            cognitoClient
+                .associateSoftwareToken(
+                    AssociateSoftwareTokenRequest.builder().accessToken(accessToken).build(),
+                ).secretCode()
+        val email =
+            cognitoClient
+                .getUser(GetUserRequest.builder().accessToken(accessToken).build())
+                .userAttributes()
+                .firstOrNull { it.name() == "email" }
+                ?.value() ?: "account"
         val label = URLEncoder.encode("StorePilot:$email", StandardCharsets.UTF_8)
         val issuer = URLEncoder.encode("StorePilot", StandardCharsets.UTF_8)
         return MfaSetupResponse(secret = secret, otpauthUri = "otpauth://totp/$label?secret=$secret&issuer=$issuer")
@@ -364,25 +418,39 @@ class AuthController(
 
     /** Confirms the caller enrolled the secret from mfaSetup() correctly, then actually turns TOTP on as their MFA method — VerifySoftwareToken alone only proves possession, it doesn't enable it. */
     @PostMapping("/api/auth/mfa/verify")
-    fun mfaVerify(@Valid @RequestBody input: MfaVerifyInput): ResponseEntity<Void> {
+    fun mfaVerify(
+        @Valid @RequestBody input: MfaVerifyInput,
+    ): ResponseEntity<Void> {
         val accessToken = currentAccessToken()
-        val status = try {
-            cognitoClient.verifySoftwareToken(
-                VerifySoftwareTokenRequest.builder().accessToken(accessToken).userCode(input.code).build(),
-            ).status()
-        } catch (e: CodeMismatchException) {
-            throw IllegalArgumentException("Invalid verification code")
-        } catch (e: EnableSoftwareTokenMfaException) {
-            throw IllegalArgumentException("Invalid verification code")
-        }
+        val status =
+            try {
+                cognitoClient
+                    .verifySoftwareToken(
+                        VerifySoftwareTokenRequest
+                            .builder()
+                            .accessToken(accessToken)
+                            .userCode(input.code)
+                            .build(),
+                    ).status()
+            } catch (e: CodeMismatchException) {
+                throw IllegalArgumentException("Invalid verification code")
+            } catch (e: EnableSoftwareTokenMfaException) {
+                throw IllegalArgumentException("Invalid verification code")
+            }
         if (status != VerifySoftwareTokenResponseType.SUCCESS) {
             throw IllegalArgumentException("Invalid verification code")
         }
         cognitoClient.setUserMFAPreference(
-            SetUserMfaPreferenceRequest.builder()
+            SetUserMfaPreferenceRequest
+                .builder()
                 .accessToken(accessToken)
-                .softwareTokenMfaSettings(SoftwareTokenMfaSettingsType.builder().enabled(true).preferredMfa(true).build())
-                .build(),
+                .softwareTokenMfaSettings(
+                    SoftwareTokenMfaSettingsType
+                        .builder()
+                        .enabled(true)
+                        .preferredMfa(true)
+                        .build(),
+                ).build(),
         )
         return ResponseEntity.noContent().build()
     }
@@ -391,10 +459,16 @@ class AuthController(
     @PostMapping("/api/auth/mfa/disable")
     fun mfaDisable(): ResponseEntity<Void> {
         cognitoClient.setUserMFAPreference(
-            SetUserMfaPreferenceRequest.builder()
+            SetUserMfaPreferenceRequest
+                .builder()
                 .accessToken(currentAccessToken())
-                .softwareTokenMfaSettings(SoftwareTokenMfaSettingsType.builder().enabled(false).preferredMfa(false).build())
-                .build(),
+                .softwareTokenMfaSettings(
+                    SoftwareTokenMfaSettingsType
+                        .builder()
+                        .enabled(false)
+                        .preferredMfa(false)
+                        .build(),
+                ).build(),
         )
         return ResponseEntity.noContent().build()
     }
@@ -407,8 +481,9 @@ class AuthController(
 
     /** Every endpoint in this controller is permitAll (see SecurityConfig's doc comment) but still populates SecurityContext from a valid cookie — this just makes "no cookie/expired cookie" fail the same explicit way login()'s other guards do, instead of a raw NPE passing a null access token to Cognito. */
     private fun currentAccessToken(): String {
-        val auth = SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
-            ?: throw UnauthenticatedException("Not signed in")
+        val auth =
+            SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
+                ?: throw UnauthenticatedException("Not signed in")
         return auth.token.tokenValue
     }
 
@@ -418,9 +493,10 @@ class AuthController(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): AuthSessionResponse {
-        val refreshToken = request.cookies?.firstOrNull { it.name == AuthCookies.REFRESH_TOKEN }?.value
-            ?: input?.refreshToken
-            ?: throw UnauthenticatedException("No refresh token present")
+        val refreshToken =
+            request.cookies?.firstOrNull { it.name == AuthCookies.REFRESH_TOKEN }?.value
+                ?: input?.refreshToken
+                ?: throw UnauthenticatedException("No refresh token present")
 
         // Refresh tokens are bound to the app client that issued them.
         // Cookies from the email/password flow (clientId) and from Google
@@ -429,26 +505,30 @@ class AuthController(
         // email/password client first and fall back to the OAuth token
         // endpoint rather than asking the frontend to track which flow a
         // given session came from.
-        val authResult = try {
-            cognitoClient.adminInitiateAuth(
-                AdminInitiateAuthRequest.builder()
-                    .userPoolId(cognitoProperties.userPoolId)
-                    .clientId(cognitoProperties.clientId)
-                    .authFlow(AuthFlowType.REFRESH_TOKEN_AUTH)
-                    .authParameters(mapOf("REFRESH_TOKEN" to refreshToken))
-                    .build(),
-            ).authenticationResult()
-        } catch (e: NotAuthorizedException) {
-            if (cognitoProperties.oauthClientId.isBlank()) throw UnauthenticatedException("Refresh token is invalid or expired")
-            val refreshed = try {
-                exchangeOAuthToken(mapOf("grant_type" to "refresh_token", "refresh_token" to refreshToken))
-            } catch (oauthError: Exception) {
-                throw UnauthenticatedException("Refresh token is invalid or expired")
+        val authResult =
+            try {
+                cognitoClient
+                    .adminInitiateAuth(
+                        AdminInitiateAuthRequest
+                            .builder()
+                            .userPoolId(cognitoProperties.userPoolId)
+                            .clientId(cognitoProperties.clientId)
+                            .authFlow(AuthFlowType.REFRESH_TOKEN_AUTH)
+                            .authParameters(mapOf("REFRESH_TOKEN" to refreshToken))
+                            .build(),
+                    ).authenticationResult()
+            } catch (e: NotAuthorizedException) {
+                if (cognitoProperties.oauthClientId.isBlank()) throw UnauthenticatedException("Refresh token is invalid or expired")
+                val refreshed =
+                    try {
+                        exchangeOAuthToken(mapOf("grant_type" to "refresh_token", "refresh_token" to refreshToken))
+                    } catch (oauthError: Exception) {
+                        throw UnauthenticatedException("Refresh token is invalid or expired")
+                    }
+                val newAccessToken = refreshed["access_token"] as String
+                setAccessTokenCookie(response, request.isSecure, newAccessToken, (refreshed["expires_in"] as Number).toLong())
+                return AuthSessionResponse(signedIn = true, accessToken = newAccessToken)
             }
-            val newAccessToken = refreshed["access_token"] as String
-            setAccessTokenCookie(response, request.isSecure, newAccessToken, (refreshed["expires_in"] as Number).toLong())
-            return AuthSessionResponse(signedIn = true, accessToken = newAccessToken)
-        }
 
         // REFRESH_TOKEN_AUTH doesn't return a new refresh token — only the
         // access (+ID) token is refreshed; the original refresh token cookie
@@ -522,16 +602,31 @@ class AuthController(
             return
         }
         try {
-            val tokenResponse = exchangeOAuthToken(mapOf("grant_type" to "authorization_code", "code" to code, "redirect_uri" to cognitoProperties.oauthRedirectUri))
+            val tokenResponse =
+                exchangeOAuthToken(
+                    mapOf(
+                        "grant_type" to "authorization_code",
+                        "code" to code,
+                        "redirect_uri" to cognitoProperties.oauthRedirectUri,
+                    ),
+                )
             var accessToken = tokenResponse["access_token"] as String
             val refreshToken = tokenResponse["refresh_token"] as String
             var expiresIn = (tokenResponse["expires_in"] as Number).toLong()
 
-            val username = jwtDecoder.decode(accessToken).getClaimAsString("username")
-                ?: throw IllegalStateException("Google-issued access token has no username claim")
-            val groups = cognitoClient.adminListGroupsForUser(
-                AdminListGroupsForUserRequest.builder().userPoolId(cognitoProperties.userPoolId).username(username).build(),
-            ).groups().map { it.groupName() }
+            val username =
+                jwtDecoder.decode(accessToken).getClaimAsString("username")
+                    ?: throw IllegalStateException("Google-issued access token has no username claim")
+            val groups =
+                cognitoClient
+                    .adminListGroupsForUser(
+                        AdminListGroupsForUserRequest
+                            .builder()
+                            .userPoolId(cognitoProperties.userPoolId)
+                            .username(username)
+                            .build(),
+                    ).groups()
+                    .map { it.groupName() }
 
             val outcome = resolveGoogleSignInOutcome(intent, resolveAppRole(groups))
             if (outcome.rejected) {
@@ -552,18 +647,26 @@ class AuthController(
                 // instead (same accessToken/refreshToken shape login()/
                 // refresh() already return in their JSON body for mobile).
                 val role = resolveAppRole(groups) ?: outcome.groupToAssign
-                val params = listOfNotNull(
-                    "accessToken" to accessToken,
-                    "refreshToken" to refreshToken,
-                    role?.let { "role" to it },
-                ).joinToString("&") { (k, v) -> "$k=${URLEncoder.encode(v, StandardCharsets.UTF_8)}" }
+                val params =
+                    listOfNotNull(
+                        "accessToken" to accessToken,
+                        "refreshToken" to refreshToken,
+                        role?.let { "role" to it },
+                    ).joinToString("&") { (k, v) -> "$k=${URLEncoder.encode(v, StandardCharsets.UTF_8)}" }
                 response.sendRedirect("${cognitoProperties.mobileAppScheme}://auth-callback?$params")
                 return
             }
 
             setAccessTokenCookie(response, request.isSecure, accessToken, expiresIn)
-            val refreshCookie = ResponseCookie.from(AuthCookies.REFRESH_TOKEN, refreshToken)
-                .httpOnly(true).secure(request.isSecure).sameSite("Lax").path("/").maxAge(REFRESH_TOKEN_MAX_AGE_SECONDS).build()
+            val refreshCookie =
+                ResponseCookie
+                    .from(AuthCookies.REFRESH_TOKEN, refreshToken)
+                    .httpOnly(true)
+                    .secure(request.isSecure)
+                    .sameSite("Lax")
+                    .path("/")
+                    .maxAge(REFRESH_TOKEN_MAX_AGE_SECONDS)
+                    .build()
             response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString())
             response.sendRedirect(finalRedirectUrl(platform, intent, outcome.redirectPath))
         } catch (e: Exception) {
@@ -579,24 +682,33 @@ class AuthController(
      * with an error code is the closest equivalent, since the app itself
      * (not a web route) decides what UI to show for it.
      */
-    private fun finalRedirectUrl(platform: String, intent: String, webPath: String): String =
+    private fun finalRedirectUrl(
+        platform: String,
+        intent: String,
+        webPath: String,
+    ): String =
         if (platform == "mobile") {
             val errorMatch = Regex("error=([^&]+)").find(webPath)
-            if (errorMatch != null) "${cognitoProperties.mobileAppScheme}://auth-callback?error=${errorMatch.groupValues[1]}"
-            else "${cognitoProperties.mobileAppScheme}://auth-callback"
+            if (errorMatch != null) {
+                "${cognitoProperties.mobileAppScheme}://auth-callback?error=${errorMatch.groupValues[1]}"
+            } else {
+                "${cognitoProperties.mobileAppScheme}://auth-callback"
+            }
         } else {
             "${notificationProperties.frontendBaseUrl}$webPath"
         }
 
     /** POSTs to the Hosted UI's /oauth2/token endpoint — shared by the authorization_code exchange and both refresh_token paths above. */
     private fun exchangeOAuthToken(params: Map<String, String>): Map<String, Any> {
-        val credentials = Base64.getEncoder().encodeToString(
-            "${cognitoProperties.oauthClientId}:${cognitoProperties.oauthClientSecret}".toByteArray(StandardCharsets.UTF_8),
-        )
+        val credentials =
+            Base64.getEncoder().encodeToString(
+                "${cognitoProperties.oauthClientId}:${cognitoProperties.oauthClientSecret}".toByteArray(StandardCharsets.UTF_8),
+            )
         val body = LinkedMultiValueMap<String, String>()
         body.add("client_id", cognitoProperties.oauthClientId)
         params.forEach { (key, value) -> body.add(key, value) }
-        return restClient.post()
+        return restClient
+            .post()
             .uri("https://${cognitoProperties.oauthDomain}/oauth2/token")
             .header(HttpHeaders.AUTHORIZATION, "Basic $credentials")
             .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -607,7 +719,10 @@ class AuthController(
     }
 
     @PostMapping("/api/auth/logout")
-    fun logout(request: HttpServletRequest, response: HttpServletResponse): AuthSessionResponse {
+    fun logout(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): AuthSessionResponse {
         val auth = SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
         if (auth != null) {
             // Cognito's Username (required here) isn't necessarily the JWT's
@@ -616,7 +731,8 @@ class AuthController(
             val username = auth.token.getClaimAsString("username") ?: auth.token.subject
             try {
                 cognitoClient.adminUserGlobalSignOut(
-                    AdminUserGlobalSignOutRequest.builder()
+                    AdminUserGlobalSignOutRequest
+                        .builder()
                         .userPoolId(cognitoProperties.userPoolId)
                         .username(username)
                         .build(),
@@ -643,21 +759,27 @@ class AuthController(
      */
     @GetMapping("/api/auth/session")
     fun session(): AuthSessionResponse {
-        val auth = SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
-            ?: return AuthSessionResponse(signedIn = false)
+        val auth =
+            SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken
+                ?: return AuthSessionResponse(signedIn = false)
         // Not just .firstOrNull() — Spring Security's OAuth2 resource server
         // adds its own non-role authorities alongside CognitoGroupsAuthoritiesConverter's
         // ROLE_* ones (e.g. a bearer-token authentication factor marker), so
         // a groupless seller-track account (see StoreService.create's doc
         // comment) could otherwise pick up a bogus "role" here.
-        val role = auth.authorities.firstOrNull { it.authority?.startsWith("ROLE_") == true }
-            ?.authority?.removePrefix("ROLE_")?.lowercase()
-        val (email, name) = when (role) {
-            "buyer" -> currentActor.buyerOrNull()?.let { it.email to it.name }
-            "seller" -> currentActor.sellerOrNull()?.let { it.email to it.name }
-            "admin" -> currentActor.adminOrNull()?.let { it.email to it.name }
-            else -> null
-        } ?: (null to null)
+        val role =
+            auth.authorities
+                .firstOrNull { it.authority?.startsWith("ROLE_") == true }
+                ?.authority
+                ?.removePrefix("ROLE_")
+                ?.lowercase()
+        val (email, name) =
+            when (role) {
+                "buyer" -> currentActor.buyerOrNull()?.let { it.email to it.name }
+                "seller" -> currentActor.sellerOrNull()?.let { it.email to it.name }
+                "admin" -> currentActor.adminOrNull()?.let { it.email to it.name }
+                else -> null
+            } ?: (null to null)
         return AuthSessionResponse(
             signedIn = true,
             role = role,
@@ -666,10 +788,14 @@ class AuthController(
         )
     }
 
-    private fun adminInitiateAuth(email: String, password: String): AdminInitiateAuthResponse {
+    private fun adminInitiateAuth(
+        email: String,
+        password: String,
+    ): AdminInitiateAuthResponse {
         try {
             return cognitoClient.adminInitiateAuth(
-                AdminInitiateAuthRequest.builder()
+                AdminInitiateAuthRequest
+                    .builder()
                     .userPoolId(cognitoProperties.userPoolId)
                     .clientId(cognitoProperties.clientId)
                     .authFlow(AuthFlowType.ADMIN_USER_PASSWORD_AUTH)
@@ -684,11 +810,15 @@ class AuthController(
     }
 
     /** One inline retry for the Cognito-user-created-but-group-assignment-failed race (see plan notes) — no Lambda trigger needed for a gap this narrow. */
-    private fun addToGroupWithRetry(username: String, groupName: String) {
+    private fun addToGroupWithRetry(
+        username: String,
+        groupName: String,
+    ) {
         repeat(2) { attempt ->
             try {
                 cognitoClient.adminAddUserToGroup(
-                    AdminAddUserToGroupRequest.builder()
+                    AdminAddUserToGroupRequest
+                        .builder()
                         .userPoolId(cognitoProperties.userPoolId)
                         .username(username)
                         .groupName(groupName)
@@ -697,48 +827,75 @@ class AuthController(
                 return
             } catch (e: CognitoIdentityProviderException) {
                 if (attempt == 1) {
-                    log.warn("Failed to add {} to Cognito group '{}' after retry — account exists but has no role until this is fixed manually", username, groupName, e)
+                    log.warn(
+                        "Failed to add {} to Cognito group '{}' after retry — account exists but has no role until this is fixed manually",
+                        username,
+                        groupName,
+                        e,
+                    )
                 }
             }
         }
     }
 
-    private fun setAuthCookies(response: HttpServletResponse, secure: Boolean, authResult: AuthenticationResultType) {
+    private fun setAuthCookies(
+        response: HttpServletResponse,
+        secure: Boolean,
+        authResult: AuthenticationResultType,
+    ) {
         setAccessTokenCookie(response, secure, authResult)
-        val refreshCookie = ResponseCookie.from(AuthCookies.REFRESH_TOKEN, authResult.refreshToken())
-            .httpOnly(true)
-            .secure(secure)
-            .sameSite("Lax")
-            .path("/")
-            .maxAge(REFRESH_TOKEN_MAX_AGE_SECONDS)
-            .build()
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-    }
-
-    private fun setAccessTokenCookie(response: HttpServletResponse, secure: Boolean, authResult: AuthenticationResultType) {
-        setAccessTokenCookie(response, secure, authResult.accessToken(), authResult.expiresIn().toLong())
-    }
-
-    private fun setAccessTokenCookie(response: HttpServletResponse, secure: Boolean, accessToken: String, expiresInSeconds: Long) {
-        val accessCookie = ResponseCookie.from(AuthCookies.ACCESS_TOKEN, accessToken)
-            .httpOnly(true)
-            .secure(secure)
-            .sameSite("Lax")
-            .path("/")
-            .maxAge(expiresInSeconds)
-            .build()
-        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString())
-    }
-
-    private fun clearAuthCookies(response: HttpServletResponse, secure: Boolean) {
-        listOf(AuthCookies.ACCESS_TOKEN, AuthCookies.REFRESH_TOKEN).forEach { name ->
-            val expired = ResponseCookie.from(name, "")
+        val refreshCookie =
+            ResponseCookie
+                .from(AuthCookies.REFRESH_TOKEN, authResult.refreshToken())
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite("Lax")
                 .path("/")
-                .maxAge(0)
+                .maxAge(REFRESH_TOKEN_MAX_AGE_SECONDS)
                 .build()
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+    }
+
+    private fun setAccessTokenCookie(
+        response: HttpServletResponse,
+        secure: Boolean,
+        authResult: AuthenticationResultType,
+    ) {
+        setAccessTokenCookie(response, secure, authResult.accessToken(), authResult.expiresIn().toLong())
+    }
+
+    private fun setAccessTokenCookie(
+        response: HttpServletResponse,
+        secure: Boolean,
+        accessToken: String,
+        expiresInSeconds: Long,
+    ) {
+        val accessCookie =
+            ResponseCookie
+                .from(AuthCookies.ACCESS_TOKEN, accessToken)
+                .httpOnly(true)
+                .secure(secure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(expiresInSeconds)
+                .build()
+        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString())
+    }
+
+    private fun clearAuthCookies(
+        response: HttpServletResponse,
+        secure: Boolean,
+    ) {
+        listOf(AuthCookies.ACCESS_TOKEN, AuthCookies.REFRESH_TOKEN).forEach { name ->
+            val expired =
+                ResponseCookie
+                    .from(name, "")
+                    .httpOnly(true)
+                    .secure(secure)
+                    .sameSite("Lax")
+                    .path("/")
+                    .maxAge(0)
+                    .build()
             response.addHeader(HttpHeaders.SET_COOKIE, expired.toString())
         }
     }

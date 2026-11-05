@@ -8,14 +8,15 @@ fun Address.toResponse(): AddressResponse =
     AddressResponse(
         id = requireNotNull(id),
         label = label,
-        shipping = ShippingDetailsResponse(
-            fullName = shipping.fullName,
-            phone = shipping.phone,
-            addressLine1 = shipping.addressLine1,
-            city = shipping.city,
-            state = shipping.state,
-            postalCode = shipping.postalCode,
-        ),
+        shipping =
+            ShippingDetailsResponse(
+                fullName = shipping.fullName,
+                phone = shipping.phone,
+                addressLine1 = shipping.addressLine1,
+                city = shipping.city,
+                state = shipping.state,
+                postalCode = shipping.postalCode,
+            ),
         isDefault = isDefault,
         createdAt = requireNotNull(createdAt),
     )

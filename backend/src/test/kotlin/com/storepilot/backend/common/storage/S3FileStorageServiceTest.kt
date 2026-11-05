@@ -28,7 +28,8 @@ class S3FileStorageServiceTest {
     fun `store uploads to the configured bucket under the subdir and returns the object key`() {
         val file = MockMultipartFile("file", "photo.jpg", "image/jpeg", byteArrayOf(1, 2, 3))
         val requestSlot = slot<PutObjectRequest>()
-        every { s3Client.putObject(capture(requestSlot), any<software.amazon.awssdk.core.sync.RequestBody>()) } returns mockk(relaxed = true)
+        every { s3Client.putObject(capture(requestSlot), any<software.amazon.awssdk.core.sync.RequestBody>()) } returns
+            mockk(relaxed = true)
 
         val key = service.store("product-images", file, FileUploadPolicies.IMAGE_CONTENT_TYPES, FileUploadPolicies.IMAGE_MAX_BYTES)
 
@@ -51,7 +52,8 @@ class S3FileStorageServiceTest {
     @Test
     fun `resolveUrl mints a presigned URL for a stored key`() {
         val presigned = mockk<PresignedGetObjectRequest>()
-        every { presigned.url() } returns URI.create("https://storepilot-uploads.s3.amazonaws.com/product-images/photo.jpg?X-Amz-Signature=abc").toURL()
+        every { presigned.url() } returns
+            URI.create("https://storepilot-uploads.s3.amazonaws.com/product-images/photo.jpg?X-Amz-Signature=abc").toURL()
         every { s3Presigner.presignGetObject(any<GetObjectPresignRequest>()) } returns presigned
 
         val url = service.resolveUrl("product-images/photo.jpg")

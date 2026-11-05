@@ -58,7 +58,9 @@ class Message(
     var body: String,
 ) : BaseEntity()
 
-enum class SenderType(override val wireValue: String) : WireValue {
+enum class SenderType(
+    override val wireValue: String,
+) : WireValue {
     BUYER("buyer"),
     SELLER("seller"),
 }

@@ -114,10 +114,18 @@ class BuyerAccountService(
         val auth = SecurityContextHolder.getContext().authentication as JwtAuthenticationToken
         val username = auth.token.getClaimAsString("username") ?: auth.token.subject
         cognitoClient.adminUserGlobalSignOut(
-            AdminUserGlobalSignOutRequest.builder().userPoolId(cognitoProperties.userPoolId).username(username).build(),
+            AdminUserGlobalSignOutRequest
+                .builder()
+                .userPoolId(cognitoProperties.userPoolId)
+                .username(username)
+                .build(),
         )
         cognitoClient.adminDeleteUser(
-            AdminDeleteUserRequest.builder().userPoolId(cognitoProperties.userPoolId).username(username).build(),
+            AdminDeleteUserRequest
+                .builder()
+                .userPoolId(cognitoProperties.userPoolId)
+                .username(username)
+                .build(),
         )
         log.info("Buyer {} deleted their account", buyerId)
     }

@@ -69,7 +69,14 @@ class SellerAccountService(
         val settings = store?.let { storeSettingsRepository.findById(requireNotNull(it.id)).orElse(null) }
         settings?.stripeAccountId?.let { accountId ->
             runCatching { stripeConnectService.deauthorize(accountId) }
-                .onFailure { log.warn("Failed to deauthorize Stripe Connect account {} for seller {} — continuing deletion", accountId, sellerId, it) }
+                .onFailure {
+                    log.warn(
+                        "Failed to deauthorize Stripe Connect account {} for seller {} — continuing deletion",
+                        accountId,
+                        sellerId,
+                        it,
+                    )
+                }
         }
 
         // Audit before anonymizing, while the real identity still resolves
@@ -103,10 +110,18 @@ class SellerAccountService(
         val auth = SecurityContextHolder.getContext().authentication as JwtAuthenticationToken
         val username = auth.token.getClaimAsString("username") ?: auth.token.subject
         cognitoClient.adminUserGlobalSignOut(
-            AdminUserGlobalSignOutRequest.builder().userPoolId(cognitoProperties.userPoolId).username(username).build(),
+            AdminUserGlobalSignOutRequest
+                .builder()
+                .userPoolId(cognitoProperties.userPoolId)
+                .username(username)
+                .build(),
         )
         cognitoClient.adminDeleteUser(
-            AdminDeleteUserRequest.builder().userPoolId(cognitoProperties.userPoolId).username(username).build(),
+            AdminDeleteUserRequest
+                .builder()
+                .userPoolId(cognitoProperties.userPoolId)
+                .username(username)
+                .build(),
         )
         log.info("Seller {} deleted their account", sellerId)
     }

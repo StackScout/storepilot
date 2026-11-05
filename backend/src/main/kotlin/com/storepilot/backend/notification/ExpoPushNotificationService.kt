@@ -23,7 +23,12 @@ class ExpoPushNotificationService(
     private val log = LoggerFactory.getLogger(ExpoPushNotificationService::class.java)
     private val restClient = RestClient.create()
 
-    override fun send(tokens: List<String>, title: String, body: String, data: Map<String, String>) {
+    override fun send(
+        tokens: List<String>,
+        title: String,
+        body: String,
+        data: Map<String, String>,
+    ) {
         if (tokens.isEmpty()) return
 
         tokens.chunked(EXPO_BATCH_LIMIT).forEach { batch ->
@@ -31,21 +36,27 @@ class ExpoPushNotificationService(
         }
     }
 
-    private fun sendBatch(tokens: List<String>, title: String, body: String, data: Map<String, String>) {
+    private fun sendBatch(
+        tokens: List<String>,
+        title: String,
+        body: String,
+        data: Map<String, String>,
+    ) {
         val messages = tokens.map { ExpoPushMessage(to = it, title = title, body = body, data = data) }
         try {
-            val response = restClient.post()
-                .uri("https://exp.host/--/api/v2/push/send")
-                .headers { headers ->
-                    headers.set("Content-Type", "application/json")
-                    headers.set("Accept", "application/json")
-                    if (notificationProperties.expoAccessToken.isNotBlank()) {
-                        headers.setBearerAuth(notificationProperties.expoAccessToken)
-                    }
-                }
-                .body(messages)
-                .retrieve()
-                .body(ExpoPushApiResponse::class.java)
+            val response =
+                restClient
+                    .post()
+                    .uri("https://exp.host/--/api/v2/push/send")
+                    .headers { headers ->
+                        headers.set("Content-Type", "application/json")
+                        headers.set("Accept", "application/json")
+                        if (notificationProperties.expoAccessToken.isNotBlank()) {
+                            headers.setBearerAuth(notificationProperties.expoAccessToken)
+                        }
+                    }.body(messages)
+                    .retrieve()
+                    .body(ExpoPushApiResponse::class.java)
 
             response?.data.orEmpty().forEachIndexed { i, ticket ->
                 if (ticket.status != "ok") {
@@ -75,7 +86,9 @@ private data class ExpoPushMessage(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-private data class ExpoPushApiResponse(val data: List<ExpoPushTicket> = emptyList())
+private data class ExpoPushApiResponse(
+    val data: List<ExpoPushTicket> = emptyList(),
+)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class ExpoPushTicket(
@@ -85,4 +98,6 @@ private data class ExpoPushTicket(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-private data class ExpoPushTicketDetails(val error: String? = null)
+private data class ExpoPushTicketDetails(
+    val error: String? = null,
+)

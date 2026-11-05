@@ -12,7 +12,9 @@ class AdminManagementController(
     private val adminManagementService: AdminManagementService,
 ) {
     @PostMapping("/api/admin/admins")
-    fun invite(@Valid @RequestBody input: InviteAdminInput): InviteAdminResult = adminManagementService.invite(input)
+    fun invite(
+        @Valid @RequestBody input: InviteAdminInput,
+    ): InviteAdminResult = adminManagementService.invite(input)
 
     @GetMapping("/api/admin/admins")
     fun list(): List<AdminSummaryResponse> = adminManagementService.list()

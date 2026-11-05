@@ -14,15 +14,16 @@ import jakarta.persistence.Table
 import java.util.UUID
 
 /** Buyer-side mirror of SellerNotificationType — same (type, id) deep-link vocabulary, resolved to a route client-side by mobile's routeForNotification. */
-enum class BuyerNotificationType(override val wireValue: String) : WireValue {
+enum class BuyerNotificationType(
+    override val wireValue: String,
+) : WireValue {
     ORDER("order"),
     BOOKING("booking"),
     CONVERSATION("conversation"),
 }
 
 @Converter(autoApply = true)
-class BuyerNotificationTypeConverter :
-    WireValueEnumConverter<BuyerNotificationType>(BuyerNotificationType.entries.toTypedArray())
+class BuyerNotificationTypeConverter : WireValueEnumConverter<BuyerNotificationType>(BuyerNotificationType.entries.toTypedArray())
 
 /**
  * A buyer-facing notification-center entry — mirrors SellerNotification's

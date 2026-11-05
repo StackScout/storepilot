@@ -24,8 +24,10 @@ class ReviewController(
     ): PageResponse<ReviewResponse> = reviewService.listByProduct(productId, page, size)
 
     @PostMapping("/api/products/{productId}/reviews")
-    fun createProductReview(@PathVariable productId: UUID, @Valid @RequestBody input: ReviewInput): ResponseEntity<ReviewResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(reviewService.createProductReview(productId, input))
+    fun createProductReview(
+        @PathVariable productId: UUID,
+        @Valid @RequestBody input: ReviewInput,
+    ): ResponseEntity<ReviewResponse> = ResponseEntity.status(HttpStatus.CREATED).body(reviewService.createProductReview(productId, input))
 
     @GetMapping("/api/stores/{storeId}/reviews")
     fun listByStore(
@@ -35,6 +37,8 @@ class ReviewController(
     ): PageResponse<ReviewResponse> = reviewService.listByStore(storeId, page, size)
 
     @PostMapping("/api/stores/{storeId}/reviews")
-    fun createStoreReview(@PathVariable storeId: UUID, @Valid @RequestBody input: ReviewInput): ResponseEntity<ReviewResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(reviewService.createStoreReview(storeId, input))
+    fun createStoreReview(
+        @PathVariable storeId: UUID,
+        @Valid @RequestBody input: ReviewInput,
+    ): ResponseEntity<ReviewResponse> = ResponseEntity.status(HttpStatus.CREATED).body(reviewService.createStoreReview(storeId, input))
 }

@@ -60,53 +60,61 @@ class StoreServiceTest {
     private val payoutRepository = mockk<PayoutRepository>()
     private val feeCollectionRepository = mockk<FeeCollectionRepository>()
     private val categoryRepository = mockk<CategoryRepository>()
+
     // Not relaxed: findBySellerId returns a nullable object, and mockk's relaxed
     // mode fills that in with a child mock rather than null, breaking every
     // existing "no store yet" assertion — default it to null explicitly instead.
-    private val storeStaffMemberRepository = mockk<StoreStaffMemberRepository>().also {
-        every { it.findBySellerId(any()) } returns null
-    }
+    private val storeStaffMemberRepository =
+        mockk<StoreStaffMemberRepository>().also {
+            every { it.findBySellerId(any()) } returns null
+        }
 
-    private val service = StoreService(
-        storeRepository,
-        storeSettingsRepository,
-        sellerRepository,
-        currentActor,
-        cognitoClient,
-        cognitoProperties,
-        fileStorageService,
-        adminNotificationService,
-        platformConfigService,
-        auditLogService,
-        orderRepository,
-        followRepository,
-        bookingRepository,
-        payoutRepository,
-        feeCollectionRepository,
-        categoryRepository,
-        storeStaffMemberRepository,
-    )
+    private val service =
+        StoreService(
+            storeRepository,
+            storeSettingsRepository,
+            sellerRepository,
+            currentActor,
+            cognitoClient,
+            cognitoProperties,
+            fileStorageService,
+            adminNotificationService,
+            platformConfigService,
+            auditLogService,
+            orderRepository,
+            followRepository,
+            bookingRepository,
+            payoutRepository,
+            feeCollectionRepository,
+            categoryRepository,
+            storeStaffMemberRepository,
+        )
 
-    private val seller = Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply { id = UUID.randomUUID() }
+    private val seller =
+        Seller(cognitoSub = "seller-sub", email = "seller@example.com", name = "Seller", plan = SellerPlan.PRO).apply {
+            id =
+                UUID.randomUUID()
+        }
     private val storeId: UUID = UUID.randomUUID()
     private lateinit var store: Store
 
     @BeforeEach
     fun setUp() {
-        store = Store(
-            seller = seller,
-            slug = "handicrafts-store",
-            name = "Handicrafts Store",
-            tagline = "tagline",
-            description = "description",
-            category = "handicrafts",
-            address = StoreAddress(city = "Sydney", state = "NSW"),
-            whatsappNumber = "+61400000000",
-            verificationStatus = StoreVerificationStatus.PENDING,
-        ).apply {
-            id = storeId
-            createdAt = java.time.Instant.now()
-        }
+        store =
+            Store(
+                seller = seller,
+                slug = "handicrafts-store",
+                name = "Handicrafts Store",
+                tagline = "tagline",
+                description = "description",
+                category = "handicrafts",
+                address = StoreAddress(city = "Sydney", state = "NSW"),
+                whatsappNumber = "+61400000000",
+                verificationStatus = StoreVerificationStatus.PENDING,
+            ).apply {
+                id = storeId
+                createdAt = java.time.Instant.now()
+            }
 
         every { currentActor.requireSeller() } returns seller
         every { storeRepository.findById(storeId) } returns Optional.of(store)
@@ -122,41 +130,43 @@ class StoreServiceTest {
         every { categoryRepository.existsByWireValue(any()) } returns true
     }
 
-    private fun australiaSettings(proPlanEnabled: Boolean = true) = PlatformSettings(
-        name = "StorePilot",
-        tagline = "tagline",
-        countryName = "Australia",
-        countryCode = "AU",
-        currencyCode = "AUD",
-        currencySymbol = "$",
-        currencyLocale = "en-AU",
-        platformFeePercent = BigDecimal("3.5"),
-        flatShippingFee = 1000,
-        proMonthlyPriceCents = 2900,
-        defaultCodEnabled = true,
-        defaultOnlinePaymentEnabled = false,
-        defaultBankTransferEnabled = true,
-        proPlanEnabled = proPlanEnabled,
-        supportEmail = "hello@storepilot.au",
-        companyLocation = "Sydney, Australia",
-        timezone = "Australia/Sydney",
-        returnWindowDays = 14,
-    )
+    private fun australiaSettings(proPlanEnabled: Boolean = true) =
+        PlatformSettings(
+            name = "StorePilot",
+            tagline = "tagline",
+            countryName = "Australia",
+            countryCode = "AU",
+            currencyCode = "AUD",
+            currencySymbol = "$",
+            currencyLocale = "en-AU",
+            platformFeePercent = BigDecimal("3.5"),
+            flatShippingFee = 1000,
+            proMonthlyPriceCents = 2900,
+            defaultCodEnabled = true,
+            defaultOnlinePaymentEnabled = false,
+            defaultBankTransferEnabled = true,
+            proPlanEnabled = proPlanEnabled,
+            supportEmail = "hello@storepilot.au",
+            companyLocation = "Sydney, Australia",
+            timezone = "Australia/Sydney",
+            returnWindowDays = 14,
+        )
 
-    private fun storeSettings(status: StoreVerificationStatus = StoreVerificationStatus.PENDING) = StoreSettings(
-        store = store.apply { verificationStatus = status },
-        contactEmail = "store@example.com",
-        contactPhone = "+61400000001",
-        bankAccountName = "Handicrafts Store",
-        bankAccountNumber = "12345678",
-        bankName = "Test Bank",
-        transactionFeePercent = BigDecimal("5.0"),
-        sellerType = SellerType.INDIVIDUAL,
-        driverLicenceNumber = "DL123456",
-        codEnabled = true,
-        onlinePaymentEnabled = false,
-        bankTransferEnabled = true,
-    ).apply { store.id?.let { id = it } }
+    private fun storeSettings(status: StoreVerificationStatus = StoreVerificationStatus.PENDING) =
+        StoreSettings(
+            store = store.apply { verificationStatus = status },
+            contactEmail = "store@example.com",
+            contactPhone = "+61400000001",
+            bankAccountName = "Handicrafts Store",
+            bankAccountNumber = "12345678",
+            bankName = "Test Bank",
+            transactionFeePercent = BigDecimal("5.0"),
+            sellerType = SellerType.INDIVIDUAL,
+            driverLicenceNumber = "DL123456",
+            codEnabled = true,
+            onlinePaymentEnabled = false,
+            bankTransferEnabled = true,
+        ).apply { store.id?.let { id = it } }
 
     // ---- create (onboarding) ----
 
@@ -182,19 +192,28 @@ class StoreServiceTest {
         every { sellerRepository.save(any()) } answers { (firstArg() as Seller).apply { id = UUID.randomUUID() } }
         every { storeRepository.findBySellerId(any()) } returns null
         every { storeRepository.findBySlug(any()) } returns null
-        every { cognitoClient.adminAddUserToGroup(any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest>()) } returns
+        every {
+            cognitoClient.adminAddUserToGroup(
+                any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest>(),
+            )
+        } returns
             AdminAddUserToGroupResponse.builder().build()
 
         val result = service.create(applicationInput(name = "Brand New Store"))
 
         assertEquals("Brand New Store", result.name)
         assertEquals("pending", result.verificationStatus)
-        verify { cognitoClient.adminAddUserToGroup(any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest>()) }
+        verify {
+            cognitoClient.adminAddUserToGroup(
+                any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest>(),
+            )
+        }
     }
 
     @Test
     fun `create reuses the existing seller row without re-granting the Cognito group`() {
-        every { currentActor.currentIdentityOrNull() } returns CognitoIdentity(seller.cognitoSub!!, "existing-user", seller.email, seller.name)
+        every { currentActor.currentIdentityOrNull() } returns
+            CognitoIdentity(seller.cognitoSub!!, "existing-user", seller.email, seller.name)
         every { currentActor.isBuyer() } returns false
         every { sellerRepository.findByCognitoSub(seller.cognitoSub!!) } returns seller
         every { storeRepository.findBySellerId(seller.id!!) } returns null
@@ -202,7 +221,11 @@ class StoreServiceTest {
 
         service.create(applicationInput())
 
-        verify(exactly = 0) { cognitoClient.adminAddUserToGroup(any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest>()) }
+        verify(exactly = 0) {
+            cognitoClient.adminAddUserToGroup(
+                any<software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest>(),
+            )
+        }
     }
 
     @Test
@@ -230,15 +253,16 @@ class StoreServiceTest {
         verify(exactly = 0) { storeRepository.findBySlug(any()) }
     }
 
-    private fun applicationInput(name: String = "Handicrafts Store") = StoreApplicationInput(
-        name = name,
-        category = "handicrafts",
-        tagline = "tagline",
-        description = "description",
-        city = "Sydney",
-        state = "NSW",
-        whatsappNumber = "+61400000000",
-    )
+    private fun applicationInput(name: String = "Handicrafts Store") =
+        StoreApplicationInput(
+            name = name,
+            category = "handicrafts",
+            tagline = "tagline",
+            description = "description",
+            city = "Sydney",
+            state = "NSW",
+            whatsappNumber = "+61400000000",
+        )
 
     // ---- updateSettingsAsSeller (upsert) ----
 
@@ -256,10 +280,11 @@ class StoreServiceTest {
         every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
 
-        val result = service.updateSettingsAsSeller(
-            storeId,
-            StoreSettingsInput(contactEmail = "store@example.com", contactPhone = "0400000000", driverLicenceNumber = "DL999"),
-        )
+        val result =
+            service.updateSettingsAsSeller(
+                storeId,
+                StoreSettingsInput(contactEmail = "store@example.com", contactPhone = "0400000000", driverLicenceNumber = "DL999"),
+            )
 
         assertTrue(result.codEnabled) // Pro seller + platform default true
         assertFalse(result.onlinePaymentEnabled) // platform default false
@@ -271,10 +296,11 @@ class StoreServiceTest {
         every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
 
-        val result = service.updateSettingsAsSeller(
-            storeId,
-            StoreSettingsInput(driverLicenceNumber = "DL999", bankTransferEnabled = true, onlinePaymentEnabled = true),
-        )
+        val result =
+            service.updateSettingsAsSeller(
+                storeId,
+                StoreSettingsInput(driverLicenceNumber = "DL999", bankTransferEnabled = true, onlinePaymentEnabled = true),
+            )
 
         assertFalse(result.codEnabled)
         assertFalse(result.bankTransferEnabled)
@@ -287,10 +313,11 @@ class StoreServiceTest {
         every { storeSettingsRepository.findById(storeId) } returns Optional.empty()
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
 
-        val result = service.updateSettingsAsSeller(
-            storeId,
-            StoreSettingsInput(driverLicenceNumber = "DL999", bankTransferEnabled = true, onlinePaymentEnabled = true),
-        )
+        val result =
+            service.updateSettingsAsSeller(
+                storeId,
+                StoreSettingsInput(driverLicenceNumber = "DL999", bankTransferEnabled = true, onlinePaymentEnabled = true),
+            )
 
         assertTrue(result.codEnabled)
         assertTrue(result.bankTransferEnabled)
@@ -303,7 +330,12 @@ class StoreServiceTest {
         assertThrows(ConflictException::class.java) {
             service.updateSettingsAsSeller(
                 storeId,
-                StoreSettingsInput(codEnabled = false, onlinePaymentEnabled = false, bankTransferEnabled = false, driverLicenceNumber = "DL999"),
+                StoreSettingsInput(
+                    codEnabled = false,
+                    onlinePaymentEnabled = false,
+                    bankTransferEnabled = false,
+                    driverLicenceNumber = "DL999",
+                ),
             )
         }
     }
@@ -346,7 +378,15 @@ class StoreServiceTest {
         val result = service.updateSettingsAsSeller(storeId, StoreSettingsInput(contactPhone = "0499999999"))
 
         assertEquals("0499999999", result.contactPhone)
-        verify { auditLogService.recordAsSeller(seller, com.storepilot.backend.admin.AuditAction.STORE_SETTINGS_UPDATED, "store", storeId.toString(), any()) }
+        verify {
+            auditLogService.recordAsSeller(
+                seller,
+                com.storepilot.backend.admin.AuditAction.STORE_SETTINGS_UPDATED,
+                "store",
+                storeId.toString(),
+                any(),
+            )
+        }
     }
 
     @Test
@@ -390,7 +430,11 @@ class StoreServiceTest {
         every { storeSettingsRepository.findById(storeId) } returns Optional.of(settings)
         every { storeSettingsRepository.save(any()) } answers { firstArg() }
 
-        val result = service.setVerificationStatus(storeId, VerificationDecisionInput(status = "rejected", rejectionReason = "Blurry ID photo"))
+        val result =
+            service.setVerificationStatus(
+                storeId,
+                VerificationDecisionInput(status = "rejected", rejectionReason = "Blurry ID photo"),
+            )
 
         assertEquals("rejected", result.verificationStatus)
         assertFalse(result.isVerified)
@@ -420,7 +464,9 @@ class StoreServiceTest {
 
     @Test
     fun `closeStore rejects when orders are still in progress`() {
-        every { orderRepository.existsByStoreIdAndStatusIn(storeId, setOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED)) } returns true
+        every {
+            orderRepository.existsByStoreIdAndStatusIn(storeId, setOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED))
+        } returns true
 
         assertThrows(ConflictException::class.java) { service.closeStore(storeId) }
     }
@@ -463,7 +509,15 @@ class StoreServiceTest {
 
         assertEquals("closed", result.verificationStatus)
         assertFalse(result.isVerified)
-        verify { auditLogService.recordAsSeller(seller, com.storepilot.backend.admin.AuditAction.STORE_CLOSED, "store", storeId.toString(), any()) }
+        verify {
+            auditLogService.recordAsSeller(
+                seller,
+                com.storepilot.backend.admin.AuditAction.STORE_CLOSED,
+                "store",
+                storeId.toString(),
+                any(),
+            )
+        }
     }
 
     // ---- follow / unfollow ----
@@ -522,7 +576,8 @@ class StoreServiceTest {
 
     @Test
     fun `getBySlug throws for a store that isn't active`() {
-        every { storeRepository.findBySlug("handicrafts-store") } returns store.apply { verificationStatus = StoreVerificationStatus.PENDING }
+        every { storeRepository.findBySlug("handicrafts-store") } returns
+            store.apply { verificationStatus = StoreVerificationStatus.PENDING }
         assertThrows(NotFoundException::class.java) { service.getBySlug("handicrafts-store") }
     }
 
@@ -627,7 +682,9 @@ class StoreServiceTest {
 
     // ---- document uploads ----
 
-    private val file = org.springframework.mock.web.MockMultipartFile("file", "id.jpg", "image/jpeg", byteArrayOf(1))
+    private val file =
+        org.springframework.mock.web
+            .MockMultipartFile("file", "id.jpg", "image/jpeg", byteArrayOf(1))
 
     @Test
     fun `uploadDriverLicenceDocument rejects a store that's already active`() {
@@ -743,8 +800,14 @@ class StoreServiceTest {
 
     @Test
     fun `search returns a page of active stores`() {
-        every { storeRepository.findAll(any<org.springframework.data.jpa.domain.Specification<Store>>(), any<org.springframework.data.domain.Pageable>()) } returns
-            org.springframework.data.domain.PageImpl(listOf(store))
+        every {
+            storeRepository.findAll(
+                any<org.springframework.data.jpa.domain.Specification<Store>>(),
+                any<org.springframework.data.domain.Pageable>(),
+            )
+        } returns
+            org.springframework.data.domain
+                .PageImpl(listOf(store))
 
         val result = service.search(category = null, query = null, page = 0, size = 20)
 

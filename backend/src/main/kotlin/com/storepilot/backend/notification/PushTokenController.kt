@@ -21,13 +21,17 @@ class PushTokenController(
     private val pushTokenService: PushTokenService,
 ) {
     @PostMapping("/api/me/seller/push-tokens")
-    fun register(@Valid @RequestBody input: RegisterPushTokenInput): ResponseEntity<Void> {
+    fun register(
+        @Valid @RequestBody input: RegisterPushTokenInput,
+    ): ResponseEntity<Void> {
         pushTokenService.register(input)
         return ResponseEntity.status(HttpStatus.CREATED).build()
     }
 
     @DeleteMapping("/api/me/seller/push-tokens")
-    fun unregister(@Valid @RequestBody input: UnregisterPushTokenInput): ResponseEntity<Void> {
+    fun unregister(
+        @Valid @RequestBody input: UnregisterPushTokenInput,
+    ): ResponseEntity<Void> {
         pushTokenService.unregister(input)
         return ResponseEntity.noContent().build()
     }

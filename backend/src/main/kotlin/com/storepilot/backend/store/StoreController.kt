@@ -6,11 +6,10 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
@@ -31,10 +30,14 @@ class StoreController(
     ): PageResponse<StoreResponse> = storeService.search(category, query, page, size)
 
     @GetMapping("/api/stores/id/{id}")
-    fun getById(@PathVariable id: UUID): StoreResponse = storeService.getById(id)
+    fun getById(
+        @PathVariable id: UUID,
+    ): StoreResponse = storeService.getById(id)
 
     @GetMapping("/api/stores/{slug}")
-    fun getBySlug(@PathVariable slug: String): StoreResponse = storeService.getBySlug(slug)
+    fun getBySlug(
+        @PathVariable slug: String,
+    ): StoreResponse = storeService.getBySlug(slug)
 
     @GetMapping("/api/me/store")
     fun getMyStore(): ResponseEntity<StoreResponse> {
@@ -44,32 +47,42 @@ class StoreController(
 
     /** Owner-only — see StoreService.getSettings's doc comment. */
     @GetMapping("/api/stores/{storeId}/settings")
-    fun getSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {
+    fun getSettings(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<StoreSettingsResponse> {
         val settings = storeService.getSettings(storeId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(settings)
     }
 
     /** Owner-only — see StoreService.getStats's doc comment. */
     @GetMapping("/api/stores/{storeId}/stats")
-    fun getStats(@PathVariable storeId: UUID): StoreStatsResponse = storeService.getStats(storeId)
+    fun getStats(
+        @PathVariable storeId: UUID,
+    ): StoreStatsResponse = storeService.getStats(storeId)
 
     @GetMapping("/api/stores/{storeId}/follow")
-    fun getFollowStatus(@PathVariable storeId: UUID): FollowStatusResponse =
-        FollowStatusResponse(storeService.isFollowing(storeId))
+    fun getFollowStatus(
+        @PathVariable storeId: UUID,
+    ): FollowStatusResponse = FollowStatusResponse(storeService.isFollowing(storeId))
 
     @PostMapping("/api/stores/{storeId}/follow")
-    fun follow(@PathVariable storeId: UUID): FollowStatusResponse =
-        FollowStatusResponse(storeService.follow(storeId))
+    fun follow(
+        @PathVariable storeId: UUID,
+    ): FollowStatusResponse = FollowStatusResponse(storeService.follow(storeId))
 
     @DeleteMapping("/api/stores/{storeId}/follow")
-    fun unfollow(@PathVariable storeId: UUID): ResponseEntity<Void> {
+    fun unfollow(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<Void> {
         storeService.unfollow(storeId)
         return ResponseEntity.noContent().build()
     }
 
     /** Public — see StoreService.getPublicSettings's doc comment. */
     @GetMapping("/api/stores/{storeId}/public-settings")
-    fun getPublicSettings(@PathVariable storeId: UUID): ResponseEntity<StorePublicSettingsResponse> {
+    fun getPublicSettings(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<StorePublicSettingsResponse> {
         val settings = storeService.getPublicSettings(storeId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(settings)
     }
@@ -123,12 +136,15 @@ class StoreController(
     ): StoreResponse = storeService.uploadBanner(storeId, file)
 
     @PostMapping("/api/stores")
-    fun create(@Valid @RequestBody input: StoreApplicationInput): ResponseEntity<StoreResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(storeService.create(input))
+    fun create(
+        @Valid @RequestBody input: StoreApplicationInput,
+    ): ResponseEntity<StoreResponse> = ResponseEntity.status(HttpStatus.CREATED).body(storeService.create(input))
 
     /** Owner-only, permanent — see StoreService.closeStore's doc comment. */
     @PostMapping("/api/stores/{storeId}/close")
-    fun closeStore(@PathVariable storeId: UUID): StoreResponse = storeService.closeStore(storeId)
+    fun closeStore(
+        @PathVariable storeId: UUID,
+    ): StoreResponse = storeService.closeStore(storeId)
 
     @GetMapping("/api/admin/stores")
     fun adminList(
@@ -138,7 +154,9 @@ class StoreController(
     ): PageResponse<StoreResponse> = storeService.adminList(status, page, size)
 
     @GetMapping("/api/admin/stores/{storeId}/settings")
-    fun adminGetSettings(@PathVariable storeId: UUID): ResponseEntity<StoreSettingsResponse> {
+    fun adminGetSettings(
+        @PathVariable storeId: UUID,
+    ): ResponseEntity<StoreSettingsResponse> {
         val settings = storeService.adminGetSettings(storeId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(settings)
     }
